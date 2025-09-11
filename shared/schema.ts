@@ -33,7 +33,7 @@ export const userRoleEnum = pgEnum("user_role", ["manager", "team_leader", "user
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "pending"]);
 
 // Users table (required for Replit Auth)
-export const users = pgTable("users", {
+export const users: any = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
