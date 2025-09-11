@@ -9,6 +9,7 @@ import BudgetChart from "@/components/BudgetChart";
 import FundAllocationPanel from "@/components/FundAllocationPanel";
 import TransactionsList from "@/components/TransactionsList";
 import AnalyticsDashboard from "@/components/AnalyticsDashboard";
+import AdvancedAnalytics from "@/components/AdvancedAnalytics";
 import AuditLog from "@/components/AuditLog";
 import { Button } from "@/components/ui/button";
 
@@ -96,6 +97,11 @@ export default function Dashboard() {
         
         {/* Analytics Dashboard */}
         <AnalyticsDashboard />
+        
+        {/* Advanced Analytics */}
+        <div className="mb-8">
+          <AdvancedAnalytics />
+        </div>
         
         {/* Audit Log */}
         <AuditLog />
