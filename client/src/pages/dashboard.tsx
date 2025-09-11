@@ -11,6 +11,7 @@ import TransactionsList from "@/components/TransactionsList";
 import AnalyticsDashboard from "@/components/AnalyticsDashboard";
 import AdvancedAnalytics from "@/components/AdvancedAnalytics";
 import AuditLog from "@/components/AuditLog";
+import CsvImportExport from "@/components/CsvImportExport";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
@@ -101,6 +102,11 @@ export default function Dashboard() {
         {/* Advanced Analytics */}
         <div className="mb-8">
           <AdvancedAnalytics />
+        </div>
+        
+        {/* CSV Import/Export */}
+        <div className="mb-8">
+          <CsvImportExport />
         </div>
         
         {/* Audit Log */}

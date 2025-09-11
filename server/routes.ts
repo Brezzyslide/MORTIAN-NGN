@@ -5,6 +5,8 @@ import { storage } from "./storage";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { pdfExportService } from "./pdfExport";
+import { parse } from 'csv-parse/sync';
+import { stringify } from 'csv-stringify/sync';
 import { 
   insertProjectSchema,
   insertFundAllocationSchema,
@@ -431,6 +433,275 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating profit statement PDF:", error);
       res.status(500).json({ message: "Failed to generate PDF report" });
+    }
+  });
+
+  // CSV Import/Export routes
+  app.post('/api/import/transactions/csv', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      const csvData = req.body.csvData;
+      
+      if (!csvData) {
+        return res.status(400).json({ message: 'CSV data is required' });
+      }
+
+      // Parse CSV data
+      const records = parse(csvData, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+      });
+
+      const results = { success: 0, errors: [] as any[] };
+
+      for (const [index, record] of records.entries()) {
+        try {
+          // Strict amount validation using regex pattern for financial data
+          const amountRegex = /^-?\d+(\.\d{1,2})?$/;
+          if (!record.amount || !amountRegex.test(record.amount.toString().trim())) {
+            throw new Error('Invalid amount format - must be a number with max 2 decimal places (e.g., 123.45)');
+          }
+          const amount = parseFloat(record.amount);
+          if (amount === 0) {
+            throw new Error('Amount cannot be zero');
+          }
+
+          // Validate projectId exists within tenant
+          const project = await storage.getProject(record.projectId, tenantId);
+          if (!project) {
+            throw new Error(`Project not found or not accessible in your tenant: ${record.projectId}`);
+          }
+
+          // Validate and transform the record
+          const transactionData = {
+            projectId: record.projectId,
+            type: record.type,
+            amount: amount,
+            category: record.category || 'other',
+            description: record.description || '',
+            userId: userId,
+            tenantId: tenantId
+          };
+
+          // Validate with schema
+          const validated = insertTransactionSchema.parse(transactionData);
+          const transaction = await storage.createTransaction(validated);
+          
+          // Create audit log for imported transaction
+          await storage.createAuditLog({
+            userId,
+            action: "expense_submitted",
+            entityType: "transaction",
+            entityId: transaction.id,
+            projectId: transaction.projectId,
+            amount: transaction.amount,
+            tenantId,
+            details: { 
+              type: transaction.type, 
+              category: transaction.category,
+              importSource: "csv_import"
+            },
+          });
+          
+          results.success++;
+        } catch (error) {
+          results.errors.push({
+            row: index + 1,
+            data: record,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error importing transactions CSV:", error);
+      res.status(500).json({ message: "Failed to import transactions" });
+    }
+  });
+
+  app.get('/api/export/transactions/csv', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const transactions = await storage.getTransactions(tenantId);
+      
+      // Convert transactions to CSV format
+      const csvData = stringify(transactions, {
+        header: true,
+        columns: ['id', 'projectId', 'type', 'amount', 'category', 'description', 'userId', 'createdAt']
+      });
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="transactions.csv"');
+      res.send(csvData);
+    } catch (error) {
+      console.error("Error exporting transactions CSV:", error);
+      res.status(500).json({ message: "Failed to export transactions" });
+    }
+  });
+
+  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const allocations = await storage.getFundAllocations(tenantId);
+      
+      // Convert allocations to CSV format
+      const csvData = stringify(allocations, {
+        header: true,
+        columns: ['id', 'projectId', 'fromUserId', 'toUserId', 'amount', 'category', 'description', 'status', 'createdAt']
+      });
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="allocations.csv"');
+      res.send(csvData);
+    } catch (error) {
+      console.error("Error exporting allocations CSV:", error);
+      res.status(500).json({ message: "Failed to export allocations" });
+    }
+  });
+
+  app.post('/api/import/allocations/csv', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      const csvData = req.body.csvData;
+      
+      if (!csvData) {
+        return res.status(400).json({ message: 'CSV data is required' });
+      }
+
+      // Parse CSV data
+      const records = parse(csvData, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+      });
+
+      const results = { success: 0, errors: [] as any[] };
+
+      for (const [index, record] of records.entries()) {
+        try {
+          // Strict amount validation using regex pattern for financial data
+          const amountRegex = /^-?\d+(\.\d{1,2})?$/;
+          if (!record.amount || !amountRegex.test(record.amount.toString().trim())) {
+            throw new Error('Invalid amount format - must be a number with max 2 decimal places (e.g., 123.45)');
+          }
+          const amount = parseFloat(record.amount);
+          if (amount === 0) {
+            throw new Error('Amount cannot be zero');
+          }
+          if (amount < 0) {
+            throw new Error('Amount cannot be negative for fund allocations');
+          }
+
+          // Validate projectId exists within tenant
+          const project = await storage.getProject(record.projectId, tenantId);
+          if (!project) {
+            throw new Error(`Project not found or not accessible in your tenant: ${record.projectId}`);
+          }
+
+          // Validate toUserId exists within tenant (if specified)
+          if (record.toUserId && record.toUserId !== userId) {
+            const targetUser = await storage.getUser(record.toUserId);
+            if (!targetUser || targetUser.tenantId !== tenantId) {
+              throw new Error(`Target user not found or not in your tenant: ${record.toUserId}`);
+            }
+          }
+
+          // Validate and transform the record to match fundAllocations schema
+          const allocationData = {
+            projectId: record.projectId,
+            fromUserId: userId, // Current user is allocating funds
+            toUserId: record.toUserId || userId, // Default to self if not specified
+            amount: amount,
+            category: record.category as any, // Validate category enum
+            description: record.description || '',
+            tenantId: tenantId,
+            status: record.status || 'approved'
+          };
+
+          // Validate with schema
+          const validated = insertFundAllocationSchema.parse(allocationData);
+          const createdAllocation = await storage.createFundAllocation(validated);
+          
+          // Create corresponding transaction (exactly matching POST /api/fund-allocations)
+          await storage.createTransaction({
+            projectId: validated.projectId,
+            userId: validated.toUserId,
+            type: "allocation",
+            amount: validated.amount,
+            category: validated.category,
+            description: validated.description || "Fund allocation",
+            allocationId: createdAllocation.id,
+            tenantId: validated.tenantId,
+          });
+          
+          // Create audit logs for both allocation and transaction
+          await storage.createAuditLog({
+            userId,
+            action: "fund_allocated",
+            entityType: "fund_allocation",
+            entityId: createdAllocation.id,
+            projectId: createdAllocation.projectId,
+            amount: createdAllocation.amount,
+            tenantId,
+            details: { 
+              category: createdAllocation.category, 
+              toUser: createdAllocation.toUserId,
+              importSource: "csv_import"
+            },
+          });
+          
+          await storage.createAuditLog({
+            userId,
+            action: "expense_submitted",
+            entityType: "transaction",
+            entityId: transaction.id,
+            projectId: transaction.projectId,
+            amount: transaction.amount,
+            tenantId,
+            details: { 
+              type: transaction.type, 
+              category: transaction.category,
+              importSource: "csv_import",
+              linkedAllocation: createdAllocation.id
+            },
+          });
+          
+          results.success++;
+        } catch (error) {
+          results.errors.push({
+            row: index + 1,
+            data: record,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      res.json(results);
+    } catch (error) {
+      console.error("Error importing allocations CSV:", error);
+      res.status(500).json({ message: "Failed to import allocations" });
+    }
+  });
+
+  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const allocations = await storage.getFundAllocations(tenantId);
+      
+      // Convert allocations to CSV format with proper schema columns
+      const csvData = stringify(allocations, {
+        header: true,
+        columns: ['id', 'projectId', 'fromUserId', 'toUserId', 'amount', 'category', 'description', 'status', 'createdAt']
+      });
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="allocations.csv"');
+      res.send(csvData);
+    } catch (error) {
+      console.error("Error exporting allocations CSV:", error);
+      res.status(500).json({ message: "Failed to export allocations" });
     }
   });
 
