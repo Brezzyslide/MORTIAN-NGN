@@ -106,6 +106,13 @@ export default function Dashboard() {
           </div>
         </div>
         
+        {/* Debug info */}
+        <div className="p-4 bg-blue-100 rounded mb-4">
+          <p>Current location: {JSON.stringify(location)}</p>
+          <p>Location type: {typeof location}</p>
+          <p>Is root?: {String(location === '/')}</p>
+        </div>
+
         {/* Dashboard Overview */}
         {location === '/' && (
           <>
@@ -125,6 +132,7 @@ export default function Dashboard() {
             <AnalyticsDashboard />
           </>
         )}
+
 
         {/* Projects Page */}
         {location === '/projects' && (
