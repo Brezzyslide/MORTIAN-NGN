@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const [location] = useLocation();
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -108,7 +109,7 @@ export default function Dashboard() {
         
         {/* Debug info */}
         <div className="p-4 bg-blue-100 rounded mb-4">
-          <p>Current location: {JSON.stringify(location)}</p>
+          <p>Current location (raw): {String(location)}</p>
           <p>Location type: {typeof location}</p>
           <p>Is root?: {String(location === '/')}</p>
         </div>
