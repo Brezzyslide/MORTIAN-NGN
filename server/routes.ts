@@ -22,6 +22,26 @@ async function getUserData(req: any): Promise<{ userId: string; tenantId: string
   return { userId, tenantId: user.tenantId, user };
 }
 
+// Role-based authorization middleware
+function authorize(allowedRoles: string[]) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const { user } = await getUserData(req);
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ 
+          message: `Access denied. Required roles: ${allowedRoles.join(', ')}. Your role: ${user.role}` 
+        });
+      }
+      // Attach user context to request for use in route handlers
+      req.userContext = { userId: user.id, tenantId: user.tenantId, user };
+      next();
+    } catch (error) {
+      console.error('Authorization error:', error);
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -64,7 +84,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/projects', isAuthenticated, async (req: any, res) => {
+  app.post('/api/projects', isAuthenticated, authorize(['manager']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
       
@@ -110,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/fund-allocations', isAuthenticated, async (req: any, res) => {
+  app.post('/api/fund-allocations', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
       
@@ -214,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/fund-transfers', isAuthenticated, async (req: any, res) => {
+  app.post('/api/fund-transfers', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
       
@@ -284,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User hierarchy routes
-  app.get('/api/users/subordinates', isAuthenticated, async (req: any, res) => {
+  app.get('/api/users/subordinates', isAuthenticated, authorize(['manager']), async (req: any, res) => {
     try {
       const { userId: managerId, tenantId } = await getUserData(req);
       const subordinates = await storage.getSubordinates(managerId, tenantId);
