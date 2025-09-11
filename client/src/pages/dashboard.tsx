@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { useLocation } from "wouter";
 import Sidebar from "@/components/Sidebar";
 import StatsCards from "@/components/StatsCards";
 import ProjectsList from "@/components/ProjectsList";
@@ -34,8 +35,18 @@ export default function Dashboard() {
   }, [isAuthenticated, isLoading, toast]);
 
   useEffect(() => {
-    document.title = "Dashboard - ProjectFund";
-  }, []);
+    const titles = {
+      '/': 'Dashboard - ProjectFund',
+      '/projects': 'Projects - ProjectFund', 
+      '/allocations': 'Fund Allocation - ProjectFund',
+      '/transactions': 'Transactions - ProjectFund',
+      '/analytics': 'Analytics - ProjectFund',
+      '/audit': 'Audit Log - ProjectFund',
+      '/users': 'Team Members - ProjectFund',
+      '/permissions': 'Permissions - ProjectFund'
+    };
+    document.title = titles[location as keyof typeof titles] || 'ProjectFund';
+  }, [location]);
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -77,40 +88,92 @@ export default function Dashboard() {
           </div>
         </div>
         
-        {/* Stats Cards */}
-        <StatsCards />
-        
-        {/* Projects and Budget Chart Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2">
-            <ProjectsList />
-          </div>
-          <div>
+        {/* Dashboard Overview */}
+        {location === '/' && (
+          <>
+            <StatsCards />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              <div className="lg:col-span-2">
+                <ProjectsList />
+              </div>
+              <div>
+                <BudgetChart />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <FundAllocationPanel />
+              <TransactionsList />
+            </div>
+            <AnalyticsDashboard />
+          </>
+        )}
+
+        {/* Projects Page */}
+        {location === '/projects' && (
+          <>
+            <StatsCards />
+            <div className="mb-8">
+              <ProjectsList />
+            </div>
             <BudgetChart />
+          </>
+        )}
+
+        {/* Fund Allocation Page */}
+        {location === '/allocations' && (
+          <>
+            <div className="mb-8">
+              <FundAllocationPanel />
+            </div>
+            <div className="mb-8">
+              <CsvImportExport />
+            </div>
+          </>
+        )}
+
+        {/* Transactions Page */}
+        {location === '/transactions' && (
+          <>
+            <div className="mb-8">
+              <TransactionsList />
+            </div>
+            <div className="mb-8">
+              <CsvImportExport />
+            </div>
+          </>
+        )}
+
+        {/* Analytics Page */}
+        {location === '/analytics' && (
+          <>
+            <StatsCards />
+            <AnalyticsDashboard />
+            <div className="mb-8">
+              <AdvancedAnalytics />
+            </div>
+          </>
+        )}
+
+        {/* Audit Log Page */}
+        {location === '/audit' && (
+          <AuditLog />
+        )}
+
+        {/* Team Members Page */}
+        {location === '/users' && (
+          <div className="text-center py-16">
+            <h3 className="text-xl font-semibold mb-4">Team Members Management</h3>
+            <p className="text-muted-foreground">Team member management functionality coming soon.</p>
           </div>
-        </div>
-        
-        {/* Fund Allocation and Transactions Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <FundAllocationPanel />
-          <TransactionsList />
-        </div>
-        
-        {/* Analytics Dashboard */}
-        <AnalyticsDashboard />
-        
-        {/* Advanced Analytics */}
-        <div className="mb-8">
-          <AdvancedAnalytics />
-        </div>
-        
-        {/* CSV Import/Export */}
-        <div className="mb-8">
-          <CsvImportExport />
-        </div>
-        
-        {/* Audit Log */}
-        <AuditLog />
+        )}
+
+        {/* Permissions Page */}
+        {location === '/permissions' && (
+          <div className="text-center py-16">
+            <h3 className="text-xl font-semibold mb-4">Permissions Management</h3>
+            <p className="text-muted-foreground">User permissions configuration coming soon.</p>
+          </div>
+        )}
       </div>
     </div>
   );

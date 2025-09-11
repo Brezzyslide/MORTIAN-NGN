@@ -1,10 +1,16 @@
 import { useAuth } from "@/hooks/useAuth";
+import { Link, useLocation } from "wouter";
 
 export default function Sidebar() {
   const { user } = useAuth();
+  const [location] = useLocation();
 
   const handleLogout = () => {
     window.location.href = '/api/logout';
+  };
+
+  const isActive = (path: string) => {
+    return location === path;
   };
 
   return (
@@ -34,76 +40,92 @@ export default function Sidebar() {
         
         {/* Navigation Menu */}
         <nav className="space-y-2">
-          <a 
-            href="#dashboard" 
-            className="flex items-center space-x-3 p-3 rounded-lg bg-white/20 text-white"
+          <Link 
+            href="/" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
             data-testid="link-dashboard"
           >
             <i className="fas fa-chart-line w-5"></i>
             <span>Dashboard</span>
-          </a>
-          <a 
-            href="#projects" 
-            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+          </Link>
+          <Link 
+            href="/projects" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/projects') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
             data-testid="link-projects"
           >
             <i className="fas fa-folder w-5"></i>
             <span>Projects</span>
-          </a>
-          <a 
-            href="#allocations" 
-            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+          </Link>
+          <Link 
+            href="/allocations" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/allocations') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
             data-testid="link-allocations"
           >
             <i className="fas fa-coins w-5"></i>
             <span>Fund Allocation</span>
-          </a>
-          <a 
-            href="#transactions" 
-            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+          </Link>
+          <Link 
+            href="/transactions" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/transactions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
             data-testid="link-transactions"
           >
             <i className="fas fa-receipt w-5"></i>
             <span>Transactions</span>
-          </a>
-          <a 
-            href="#analytics" 
-            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+          </Link>
+          <Link 
+            href="/analytics" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/analytics') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
             data-testid="link-analytics"
           >
             <i className="fas fa-analytics w-5"></i>
             <span>Analytics</span>
-          </a>
-          <a 
-            href="#audit" 
-            className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+          </Link>
+          <Link 
+            href="/audit" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/audit') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
             data-testid="link-audit"
           >
             <i className="fas fa-clipboard-list w-5"></i>
             <span>Audit Log</span>
-          </a>
+          </Link>
         </nav>
         
         {/* User Management (Manager Only) */}
         {user?.role === 'manager' && (
           <div className="mt-8 pt-6 border-t border-white/20">
             <h3 className="text-sm font-medium opacity-75 mb-3">Management</h3>
-            <a 
-              href="#users" 
-              className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+            <Link 
+              href="/users" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/users') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
               data-testid="link-users"
             >
               <i className="fas fa-users w-5"></i>
               <span>Team Members</span>
-            </a>
-            <a 
-              href="#permissions" 
-              className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors"
+            </Link>
+            <Link 
+              href="/permissions" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/permissions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
               data-testid="link-permissions"
             >
               <i className="fas fa-shield-alt w-5"></i>
               <span>Permissions</span>
-            </a>
+            </Link>
           </div>
         )}
 

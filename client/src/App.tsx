@@ -18,6 +18,13 @@ function Router() {
       ) : (
         <>
           <Route path="/" component={Dashboard} />
+          <Route path="/projects" component={Dashboard} />
+          <Route path="/allocations" component={Dashboard} />
+          <Route path="/transactions" component={Dashboard} />
+          <Route path="/analytics" component={Dashboard} />
+          <Route path="/audit" component={Dashboard} />
+          <Route path="/users" component={Dashboard} />
+          <Route path="/permissions" component={Dashboard} />
         </>
       )}
       <Route component={NotFound} />
