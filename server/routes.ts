@@ -4,6 +4,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
+import { pdfExportService } from "./pdfExport";
 import { 
   insertProjectSchema,
   insertFundAllocationSchema,
@@ -381,6 +382,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting receipt:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // PDF Export routes
+  app.get('/api/export/project/:id/pdf', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const pdfBuffer = await pdfExportService.generateProjectSummary(req.params.id, tenantId);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="project-${req.params.id}-summary.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating project PDF:", error);
+      res.status(500).json({ message: "Failed to generate PDF report" });
+    }
+  });
+
+  app.get('/api/export/user-spend/:userId/pdf', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      
+      const pdfBuffer = await pdfExportService.generateUserSpendReport(req.params.userId, tenantId, startDate, endDate);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="user-${req.params.userId}-spend-report.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating user spend PDF:", error);
+      res.status(500).json({ message: "Failed to generate PDF report" });
+    }
+  });
+
+  app.get('/api/export/profit-statement/pdf', isAuthenticated, authorize(['manager']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      
+      const pdfBuffer = await pdfExportService.generateProfitStatement(tenantId, startDate, endDate);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="profit-statement.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating profit statement PDF:", error);
+      res.status(500).json({ message: "Failed to generate PDF report" });
     }
   });
 
