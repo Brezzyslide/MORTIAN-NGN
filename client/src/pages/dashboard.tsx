@@ -68,8 +68,26 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-2xl font-semibold text-foreground">Dashboard Overview</h2>
-            <p className="text-muted-foreground mt-1">Manage your projects and fund allocations</p>
+            <h2 className="text-2xl font-semibold text-foreground">
+              {location === '/' && 'Dashboard Overview'}
+              {location === '/projects' && 'Projects'}
+              {location === '/allocations' && 'Fund Allocation'}
+              {location === '/transactions' && 'Transactions'}
+              {location === '/analytics' && 'Analytics'}
+              {location === '/audit' && 'Audit Log'}
+              {location === '/users' && 'Team Members'}
+              {location === '/permissions' && 'Permissions'}
+            </h2>
+            <p className="text-muted-foreground mt-1">
+              {location === '/' && 'Manage your projects and fund allocations'}
+              {location === '/projects' && 'Create and manage project budgets'}
+              {location === '/allocations' && 'Allocate funds to projects and team members'}
+              {location === '/transactions' && 'Track expenses and revenue'}
+              {location === '/analytics' && 'View detailed analytics and reports'}
+              {location === '/audit' && 'Review system activity and changes'}
+              {location === '/users' && 'Manage team members and roles'}
+              {location === '/permissions' && 'Configure user permissions and access'}
+            </p>
           </div>
           <div className="flex items-center space-x-4">
             <Button
