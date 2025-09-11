@@ -57,12 +57,18 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
+  // Check if user already exists to preserve their tenantId
+  const existingUser = await storage.getUser(claims["sub"]);
+  
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    // Preserve existing tenantId for returning users, or use their own ID for new users
+    // In a real app, this could be set via invitation/onboarding flows
+    tenantId: existingUser?.tenantId ?? claims["sub"],
   });
 }
 

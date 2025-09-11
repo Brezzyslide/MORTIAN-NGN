@@ -12,6 +12,16 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
+// Helper function to get user and tenantId from authenticated request
+async function getUserData(req: any): Promise<{ userId: string; tenantId: string; user: any }> {
+  const userId = req.user.claims.sub;
+  const user = await storage.getUser(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+  return { userId, tenantId: user.tenantId, user };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
@@ -31,7 +41,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Project routes
   app.get('/api/projects', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub; // Using user ID as tenant ID for simplicity
+      const { tenantId } = await getUserData(req);
       const projects = await storage.getProjects(tenantId);
       res.json(projects);
     } catch (error) {
@@ -42,7 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/projects/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const project = await storage.getProject(req.params.id, tenantId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
@@ -56,8 +66,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/projects', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
-      const userId = req.user.claims.sub;
+      const { userId, tenantId } = await getUserData(req);
       
       const projectData = insertProjectSchema.parse({
         ...req.body,
@@ -92,7 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fund allocation routes
   app.get('/api/fund-allocations', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const allocations = await storage.getFundAllocations(tenantId);
       res.json(allocations);
     } catch (error) {
@@ -103,8 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/fund-allocations', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
-      const userId = req.user.claims.sub;
+      const { userId, tenantId } = await getUserData(req);
       
       const allocationData = insertFundAllocationSchema.parse({
         ...req.body,
@@ -151,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Transaction routes
   app.get('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const transactions = await storage.getTransactions(tenantId);
       res.json(transactions);
     } catch (error) {
@@ -162,8 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
-      const userId = req.user.claims.sub;
+      const { userId, tenantId } = await getUserData(req);
       
       const transactionData = insertTransactionSchema.parse({
         ...req.body,
@@ -198,7 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fund transfer routes
   app.get('/api/fund-transfers', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const transfers = await storage.getFundTransfers(tenantId);
       res.json(transfers);
     } catch (error) {
@@ -209,8 +216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/fund-transfers', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
-      const userId = req.user.claims.sub;
+      const { userId, tenantId } = await getUserData(req);
       
       const transferData = insertFundTransferSchema.parse({
         ...req.body,
@@ -245,7 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics routes
   app.get('/api/analytics/tenant', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const stats = await storage.getTenantStats(tenantId);
       res.json(stats);
     } catch (error) {
@@ -256,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/project/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const stats = await storage.getProjectStats(req.params.id, tenantId);
       res.json(stats);
     } catch (error) {
@@ -268,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Audit log routes
   app.get('/api/audit-logs', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const logs = await storage.getAuditLogs(tenantId);
       res.json(logs);
     } catch (error) {
@@ -280,8 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User hierarchy routes
   app.get('/api/users/subordinates', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
-      const managerId = req.user.claims.sub;
+      const { userId: managerId, tenantId } = await getUserData(req);
       const subordinates = await storage.getSubordinates(managerId, tenantId);
       res.json(subordinates);
     } catch (error) {
@@ -292,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/users/team-leaders', isAuthenticated, async (req: any, res) => {
     try {
-      const tenantId = req.user.claims.sub;
+      const { tenantId } = await getUserData(req);
       const teamLeaders = await storage.getUsersByRole("team_leader", tenantId);
       res.json(teamLeaders);
     } catch (error) {
