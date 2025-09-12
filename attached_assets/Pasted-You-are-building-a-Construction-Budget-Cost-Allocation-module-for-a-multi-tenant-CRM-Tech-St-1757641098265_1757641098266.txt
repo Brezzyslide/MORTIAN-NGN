@@ -1,0 +1,143 @@
+You are building a Construction Budget & Cost Allocation module for a multi-tenant CRM.
+
+### Tech Stack
+- **Backend**: Node.js + Express + Drizzle ORM + PostgreSQL
+- **Frontend**: React + TypeScript + Tailwind + shadcn/ui + TanStack Query
+- **Database**: Multi-tenant (companyId scoped), Composite Foreign Keys
+- **Analytics**: Aggregate queries for budget vs spend, category breakdown
+
+---
+
+### Data Models (Drizzle ORM)
+
+1. **projects**
+   - id (uuid, pk)
+   - title (string, required)
+   - budget (numeric, required)
+   - startDate (date)
+   - endDate (date, nullable)
+   - companyId (uuid, required, fk to companies)
+
+2. **line_items**
+   - id (uuid, pk)
+   - category (string: "Land", "Foundation", "Roofing", etc.)
+   - name (string, required)
+   - description (text)
+   - unit (string: m², pcs, trip, etc.)
+   - default_labour_cost (numeric, nullable)
+   - default_material_cost (numeric, nullable)
+   - companyId (uuid, required, fk)
+
+3. **cost_allocations**
+   - id (uuid, pk)
+   - projectId (fk to projects)
+   - lineItemId (fk to line_items)
+   - labour_cost (numeric)
+   - material_cost (numeric)
+   - quantity (numeric)
+   - unit_cost (computed or manually entered)
+   - total_cost (computed: (labour_cost + material_cost) * quantity)
+   - date_incurred (date)
+   - enteredBy (fk to users)
+   - companyId (uuid, required)
+
+---
+
+### Backend Requirements
+
+- **Endpoints**:
+  - `POST /api/projects` → create a project and set initial budget
+  - `GET /api/projects/:id` → fetch project with budget + total spend
+  - `POST /api/line-items` → create new line item (Admin only)
+  - `GET /api/line-items` → list line items, filterable by category
+  - `POST /api/cost-allocations` → create a new cost allocation
+  - `GET /api/cost-allocations/:projectId` → fetch all allocations for a project
+
+- **Business Logic**:
+  - Validate companyId on every request.
+  - Auto-calc total_cost before saving.
+  - Aggregate project spend per line item and return analytics in GET endpoints.
+
+---
+
+### Predetermined Line Items (Seed Data)
+
+- Land Purchase, Legal Fees, Government Approvals
+- Site Clearing, Soil Test, Temporary Structures
+- Foundation: Excavation, Footing Concrete, DPC
+- Block Molding, Block Laying, Columns, Lintels
+- Decking: Reinforcement, Formwork, Concrete Casting
+- Roofing: Trusses, Covering, Gutters
+- Electrical Rough-in, Plumbing Rough-in
+- Finishing: Plastering, Tiling, Painting, Doors, Windows
+- External Works: Paving, Fencing, Landscaping
+- Marketing & Handover: Brochures, Agent Commission
+
+Seed them into `line_items` with sensible default units (e.g., m², pcs, trips) and baseline labour/material cost.
+
+---
+
+### Frontend UI Flow
+
+1. **Manager Dashboard**
+   - Create a project + set a total budget
+   - See **Budget vs Spend** progress bar
+   - See **Cost Breakdown by Category** (bar or pie chart)
+   - Approve / reject cost allocations submitted by team leaders (if enabled)
+
+2. **Team Leader Cost Entry Form**
+   - Select project
+   - Select line item (dropdown search, category grouped)
+   - Enter labour cost (or leave default)
+   - Enter materials (multi-row table: material name, qty, price → subtotal)
+   - Enter quantity (e.g., 50 m² of blockwork)
+   - Auto-preview: shows computed total cost
+   - Click **Save** → posts to `cost_allocations`
+
+3. **Project Ledger View**
+   - Table of all entries with filters (by date, line item, user)
+   - Shows running total spend vs project budget
+   - Shows variance (budget - spend)
+
+4. **Analytics View**
+   - Chart comparing Labour vs Material spend
+   - Chart showing cost by category (foundation, roofing, finishing)
+   - Export to PDF or Excel
+
+---
+
+### Permissions
+
+- **Admin**: Create/edit/delete projects and line items, approve cost allocations
+- **Manager**: View analytics, allocate budget, approve costs
+- **Team Leader**: Submit cost allocations only
+- **Viewer**: Read-only dashboard access
+
+---
+
+### Additional Requirements
+
+- Ensure **multi-tenancy enforcement** using `companyId`
+- Include **audit trail** (enteredBy, timestamp)
+- Build reusable **CostInputCard** component with Labour/Material split
+- Show **real-time budget impact** as Team Leader fills form
+- Provide export button to download **Excel summary** of all cost allocations per project
+
+---
+
+### Deliverables
+
+- Backend API routes and Drizzle migrations for tables above
+- React pages:
+  - `/projects` → list, create, edit projects
+  - `/projects/:id/ledger` → cost allocation ledger
+  - `/projects/:id/analytics` → charts
+- Shared components:
+  - `LineItemSelector`
+  - `CostInputCard`
+  - `BudgetProgressBar`
+  - `MaterialTable` (dynamic add/remove)
+- Unit tests for:
+  - Total cost calculation
+  - Budget vs spend aggregation
+  - Multi-tenant filtering
