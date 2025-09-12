@@ -1,8 +1,10 @@
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions, ProtectedComponent } from "@/hooks/usePermissions";
 import { Link, useLocation } from "wouter";
 
 export default function Sidebar() {
   const { user } = useAuth();
+  const { permissions, normalizedRole } = usePermissions();
   const [location] = useLocation();
 
   const handleLogout = () => {
@@ -32,7 +34,7 @@ export default function Sidebar() {
                 {user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email || 'User'}
               </p>
               <p className="text-xs opacity-75" data-testid="text-user-role">
-                {user?.role?.replace('_', ' ')?.toUpperCase() || 'User'}
+                {normalizedRole?.replace('_', ' ')?.toUpperCase() || 'User'}
               </p>
             </div>
           </div>
@@ -70,16 +72,18 @@ export default function Sidebar() {
             <i className="fas fa-coins w-5"></i>
             <span>Fund Allocation</span>
           </Link>
-          <Link 
-            href="/cost-entry" 
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-              isActive('/cost-entry') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
-            }`}
-            data-testid="link-cost-entry"
-          >
-            <i className="fas fa-calculator w-5"></i>
-            <span>Cost Entry</span>
-          </Link>
+          <ProtectedComponent requiredPermission="canAccessCostEntry">
+            <Link 
+              href="/cost-entry" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/cost-entry') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
+              data-testid="link-cost-entry"
+            >
+              <i className="fas fa-calculator w-5"></i>
+              <span>Cost Entry</span>
+            </Link>
+          </ProtectedComponent>
           <Link 
             href="/transactions" 
             className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
@@ -112,8 +116,8 @@ export default function Sidebar() {
           </Link>
         </nav>
         
-        {/* User Management (Manager Only) */}
-        {user?.role === 'manager' && (
+        {/* User Management (Admin Only) */}
+        <ProtectedComponent requiredPermission="canAccessUserManagement">
           <div className="mt-8 pt-6 border-t border-white/20">
             <h3 className="text-sm font-medium opacity-75 mb-3">Management</h3>
             <Link 
@@ -126,21 +130,23 @@ export default function Sidebar() {
               <i className="fas fa-users w-5"></i>
               <span>Team Members</span>
             </Link>
-            <Link 
-              href="/permissions" 
-              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                isActive('/permissions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
-              }`}
-              data-testid="link-permissions"
-            >
-              <i className="fas fa-shield-alt w-5"></i>
-              <span>Permissions</span>
-            </Link>
+            <ProtectedComponent requiredPermission="canAccessPermissions">
+              <Link 
+                href="/permissions" 
+                className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                  isActive('/permissions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+                }`}
+                data-testid="link-permissions"
+              >
+                <i className="fas fa-shield-alt w-5"></i>
+                <span>Permissions</span>
+              </Link>
+            </ProtectedComponent>
           </div>
-        )}
+        </ProtectedComponent>
 
         {/* Console Manager Only Section */}
-        {user?.role === 'console_manager' && (
+        <ProtectedComponent requiredPermission="canAccessCompanyManagement">
           <div className="mt-8 pt-6 border-t border-white/20">
             <h3 className="text-sm font-medium opacity-75 mb-3">Console Management</h3>
             <Link 
@@ -154,7 +160,7 @@ export default function Sidebar() {
               <span>Company Management</span>
             </Link>
           </div>
-        )}
+        </ProtectedComponent>
 
         {/* Logout */}
         <div className="absolute bottom-6 left-6 right-6">

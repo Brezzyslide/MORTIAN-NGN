@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertCostAllocationSchema } from "@shared/schema";
 
@@ -68,9 +69,22 @@ const categoryLabels: Record<string, string> = {
 
 export default function CostEntryForm() {
   const { toast } = useToast();
+  const { permissions } = usePermissions();
   const [grandTotal, setGrandTotal] = useState(0);
   const [labourTotal, setLabourTotal] = useState(0);
   const [materialTotal, setMaterialTotal] = useState(0);
+
+  // Check if user has permission to create cost allocations
+  if (!permissions.canCreateCostAllocations()) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold text-gray-600 mb-2">Access Denied</h2>
+          <p className="text-gray-500">You don't have permission to create cost allocations.</p>
+        </div>
+      </div>
+    );
+  }
 
   const form = useForm<CostEntryFormData>({
     resolver: zodResolver(costEntrySchema),

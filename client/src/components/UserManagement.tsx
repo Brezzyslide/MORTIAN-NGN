@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions, ProtectedComponent } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
 import { insertUserSchema, User } from "@shared/schema";
 import {
@@ -51,12 +52,12 @@ import {
 import { Plus, Edit, UserCheck, UserX, Users, Key } from "lucide-react";
 
 
-// Create form validation schema with explicit string types
+// Create form validation schema with Sprint 5 role definitions
 const createUserSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required").max(50, "First name must be less than 50 characters"),
   lastName: z.string().min(1, "Last name is required").max(50, "Last name must be less than 50 characters"),
-  role: z.enum(["console_manager", "manager", "team_leader", "user"]).default("user"),
+  role: z.enum(["admin", "team_leader", "viewer"]).default("viewer"),
   status: z.enum(["active", "inactive", "pending"]).default("active"),
   tenantId: z.string().optional(),
 });
@@ -66,6 +67,19 @@ type CreateUserFormData = z.infer<typeof createUserSchema>;
 export default function UserManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { permissions } = usePermissions();
+
+  // Check if user has permission to manage users
+  if (!permissions.canManageUsers()) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold text-gray-600 mb-2">Access Denied</h2>
+          <p className="text-gray-500">You don't have permission to manage users.</p>
+        </div>
+      </div>
+    );
+  }
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   // Initialize form with react-hook-form and zodResolver
   const form = useForm<CreateUserFormData>({
@@ -74,7 +88,7 @@ export default function UserManagement() {
       email: "",
       firstName: "",
       lastName: "",
-      role: "user" as const,
+      role: "viewer" as const,
       status: "active" as const,
     },
   });
@@ -323,9 +337,9 @@ export default function UserManagement() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="viewer">Viewer</SelectItem>
                             <SelectItem value="team_leader">Team Leader</SelectItem>
-                            <SelectItem value="manager">Manager</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Building2, Mail, Phone, MapPin, Calendar, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -32,9 +33,19 @@ export function CompanyManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { permissions } = usePermissions();
 
   // Check if user has permission to manage companies (console managers only)
-  const hasCompanyManagementAccess = user?.role === 'console_manager';
+  if (!permissions.canManageCompanies()) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold text-gray-600 mb-2">Access Denied</h2>
+          <p className="text-gray-500">You don't have permission to manage companies.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Fetch companies
   const { data: companies = [], isLoading } = useQuery<Company[]>({
@@ -78,23 +89,6 @@ export function CompanyManagement() {
     addCompanyMutation.mutate(data);
   };
 
-  // Show unauthorized access message if user doesn't have permission
-  if (!hasCompanyManagementAccess) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center py-16">
-          <Shield className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Access Denied</h3>
-          <p className="text-gray-500 dark:text-gray-400 mb-6">
-            You don't have permission to access Company Management. This feature is only available to Console Managers.
-          </p>
-          <p className="text-sm text-gray-400 dark:text-gray-500">
-            Your current role: <span className="font-medium">{user?.role?.replace('_', ' ')?.toUpperCase()}</span>
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (

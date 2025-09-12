@@ -41,8 +41,8 @@ export const companies = pgTable("companies", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// User roles enum
-export const userRoleEnum = pgEnum("user_role", ["console_manager", "manager", "team_leader", "user"]);
+// User roles enum - Updated for Sprint 5 (keeping backward compatibility)
+export const userRoleEnum = pgEnum("user_role", ["console_manager", "manager", "admin", "team_leader", "user", "viewer"]);
 
 // User status enum
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "pending"]);

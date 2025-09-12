@@ -40,12 +40,14 @@ export interface IStorage {
   // Company operations (for console managers)
   getCompanies(): Promise<Company[]>;
   getCompany(id: string): Promise<Company | undefined>;
+  getCompanyForTenant(id: string, tenantId: string): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined>;
 
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   getUserById(id: string, tenantId: string): Promise<User | undefined>;
+  getUserWithPermissions(id: string, tenantId: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
 
   // Project operations
@@ -114,8 +116,8 @@ export interface IStorage {
     activeProjects: number;
   }>;
 
-  // New analytics operations for Sprint 4
-  getBudgetSummary(tenantId: string): Promise<Array<{
+  // New analytics operations for Sprint 4 & 5 (with enhanced security)
+  getBudgetSummary(tenantId: string, userRole?: string, userId?: string): Promise<Array<{
     projectId: string;
     projectTitle: string;
     totalBudget: number;
@@ -125,14 +127,14 @@ export interface IStorage {
     status: 'healthy' | 'warning' | 'critical';
   }>>;
 
-  getLabourMaterialSplit(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<{
+  getLabourMaterialSplit(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }, userRole?: string, userId?: string): Promise<{
     totalLabour: number;
     totalMaterial: number;
     labourPercentage: number;
     materialPercentage: number;
   }>;
 
-  getCategorySpending(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<Array<{
+  getCategorySpending(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }, userRole?: string, userId?: string): Promise<Array<{
     category: string;
     totalSpent: number;
     labourCost: number;
@@ -148,7 +150,7 @@ export interface IStorage {
     search?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{
+  }, userRole?: string, userId?: string): Promise<{
     allocations: Array<CostAllocation & { 
       lineItemName: string;
       lineItemCategory: string;
@@ -182,6 +184,12 @@ export class DatabaseStorage implements IStorage {
     return newCompany;
   }
 
+  async getCompanyForTenant(id: string, tenantId: string): Promise<Company | undefined> {
+    // For regular users, ensure they can only access their own company
+    const [company] = await db.select().from(companies).where(and(eq(companies.id, id), eq(companies.id, tenantId)));
+    return company;
+  }
+
   async updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined> {
     const [updatedCompany] = await db
       .update(companies)
@@ -202,6 +210,19 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(users)
       .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
+    return user;
+  }
+
+  async getUserWithPermissions(id: string, tenantId: string): Promise<User | undefined> {
+    // Enhanced user retrieval with strict tenant isolation and role validation
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(
+        eq(users.id, id), 
+        eq(users.tenantId, tenantId),
+        eq(users.status, 'active')
+      ));
     return user;
   }
 
@@ -523,8 +544,8 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // New analytics operations for Sprint 4
-  async getBudgetSummary(tenantId: string): Promise<Array<{
+  // New analytics operations for Sprint 4 & 5 with enhanced security
+  async getBudgetSummary(tenantId: string, userRole?: string, userId?: string): Promise<Array<{
     projectId: string;
     projectTitle: string;
     totalBudget: number;
@@ -533,6 +554,23 @@ export class DatabaseStorage implements IStorage {
     remainingBudget: number;
     status: 'healthy' | 'warning' | 'critical';
   }>> {
+    // Enhanced query with role-based filtering
+    let whereConditions = [
+      eq(projects.tenantId, tenantId),
+      eq(projects.status, "active")
+    ];
+
+    // If viewer role, only show projects they are involved with
+    if (userRole === 'viewer' && userId) {
+      whereConditions.push(
+        sql`(${projects.managerId} = ${userId} OR EXISTS (
+          SELECT 1 FROM ${fundAllocations} 
+          WHERE ${fundAllocations.projectId} = ${projects.id} 
+          AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+        ))`
+      );
+    }
+
     const projectsData = await db
       .select({
         id: projects.id,
@@ -541,10 +579,7 @@ export class DatabaseStorage implements IStorage {
         consumedAmount: projects.consumedAmount,
       })
       .from(projects)
-      .where(and(
-        eq(projects.tenantId, tenantId),
-        eq(projects.status, "active")
-      ));
+      .where(and(...whereConditions));
 
     // Get cost allocations spending for each project
     const budgetSummary = await Promise.all(
@@ -586,7 +621,7 @@ export class DatabaseStorage implements IStorage {
     return budgetSummary;
   }
 
-  async getLabourMaterialSplit(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<{
+  async getLabourMaterialSplit(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }, userRole?: string, userId?: string): Promise<{
     totalLabour: number;
     totalMaterial: number;
     labourPercentage: number;
