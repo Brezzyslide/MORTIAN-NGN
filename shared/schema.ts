@@ -26,6 +26,21 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// Companies/Tenants table
+export const companies = pgTable("companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  phone: varchar("phone", { length: 50 }),
+  address: text("address"),
+  industry: varchar("industry", { length: 100 }),
+  subscriptionPlan: varchar("subscription_plan", { length: 50 }).default("basic"),
+  status: varchar("status", { length: 50 }).default("active"),
+  createdBy: varchar("created_by"), // Console manager who created this company
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // User roles enum
 export const userRoleEnum = pgEnum("user_role", ["manager", "team_leader", "user"]);
 
@@ -423,6 +438,11 @@ export const changeOrdersRelations = relations(changeOrders, ({ one }) => ({
   }),
 }));
 
+export const companiesRelations = relations(companies, ({ many }) => ({
+  users: many(users),
+  projects: many(projects),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -498,6 +518,12 @@ export const insertChangeOrderSchema = createInsertSchema(changeOrders).omit({
   updatedAt: true,
 });
 
+export const insertCompanySchema = createInsertSchema(companies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -526,3 +552,5 @@ export type BudgetAmendment = typeof budgetAmendments.$inferSelect;
 export type InsertBudgetAmendment = z.infer<typeof insertBudgetAmendmentSchema>;
 export type ChangeOrder = typeof changeOrders.$inferSelect;
 export type InsertChangeOrder = z.infer<typeof insertChangeOrderSchema>;
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
