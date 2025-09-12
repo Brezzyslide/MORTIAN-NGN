@@ -117,6 +117,16 @@ export default function Sidebar() {
               <span>Team Members</span>
             </Link>
             <Link 
+              href="/companies" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/companies') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
+              data-testid="link-companies"
+            >
+              <i className="fas fa-building w-5"></i>
+              <span>Company Management</span>
+            </Link>
+            <Link 
               href="/permissions" 
               className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
                 isActive('/permissions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'

@@ -15,6 +15,7 @@ import AuditLog from "@/components/AuditLog";
 import CsvImportExport from "@/components/CsvImportExport";
 import NewProjectDialog from "@/components/NewProjectDialog";
 import UserManagement from "@/components/UserManagement";
+import { CompanyManagement } from "@/components/CompanyManagement";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
@@ -47,6 +48,7 @@ export default function Dashboard() {
       '/analytics': 'Analytics - ProjectFund',
       '/audit': 'Audit Log - ProjectFund',
       '/users': 'Team Members - ProjectFund',
+      '/companies': 'Company Management - ProjectFund',
       '/permissions': 'Permissions - ProjectFund'
     };
     document.title = titles[location as keyof typeof titles] || 'ProjectFund';
@@ -80,6 +82,7 @@ export default function Dashboard() {
               {location === '/analytics' && 'Analytics'}
               {location === '/audit' && 'Audit Log'}
               {location === '/users' && 'Team Members'}
+              {location === '/companies' && 'Company Management'}
               {location === '/permissions' && 'Permissions'}
             </h2>
             <p className="text-muted-foreground mt-1">
@@ -90,6 +93,7 @@ export default function Dashboard() {
               {location === '/analytics' && 'View detailed analytics and reports'}
               {location === '/audit' && 'Review system activity and changes'}
               {location === '/users' && 'Manage team members and roles'}
+              {location === '/companies' && 'Manage tenant companies and subscriptions'}
               {location === '/permissions' && 'Configure user permissions and access'}
             </p>
           </div>
@@ -187,6 +191,11 @@ export default function Dashboard() {
         {/* Team Members Page */}
         {location === '/users' && (
           <UserManagement />
+        )}
+
+        {/* Company Management Page */}
+        {location === '/companies' && (
+          <CompanyManagement />
         )}
 
         {/* Permissions Page */}

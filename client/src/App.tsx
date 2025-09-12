@@ -55,6 +55,7 @@ function Router() {
       <Route path="/analytics" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/audit" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/users" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/companies" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/permissions" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>
