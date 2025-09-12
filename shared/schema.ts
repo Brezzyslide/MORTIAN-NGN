@@ -262,6 +262,39 @@ export const changeOrders = pgTable("change_orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Budget alert types enum
+export const budgetAlertTypeEnum = pgEnum("budget_alert_type", [
+  "warning_threshold", // 80% threshold crossed
+  "critical_threshold", // 95% threshold crossed
+  "over_budget", // Project went over budget
+  "budget_allocation_denied" // Cost allocation denied due to budget
+]);
+
+// Budget alert status enum
+export const budgetAlertStatusEnum = pgEnum("budget_alert_status", [
+  "active",
+  "acknowledged", 
+  "resolved"
+]);
+
+// Budget alerts table
+export const budgetAlerts = pgTable("budget_alerts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: uuid("project_id").references(() => projects.id).notNull(),
+  type: budgetAlertTypeEnum("type").notNull(),
+  status: budgetAlertStatusEnum("status").notNull().default("active"),
+  severity: varchar("severity", { length: 20 }).notNull(), // 'warning', 'critical'
+  message: text("message").notNull(),
+  spentPercentage: decimal("spent_percentage", { precision: 5, scale: 2 }),
+  remainingBudget: decimal("remaining_budget", { precision: 15, scale: 2 }),
+  triggeredBy: varchar("triggered_by").references(() => users.id), // User who triggered the alert
+  acknowledgedBy: varchar("acknowledged_by").references(() => users.id), // Manager who acknowledged
+  acknowledgedAt: timestamp("acknowledged_at"),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Audit log actions enum - Extended for construction
 export const auditActionEnum = pgEnum("audit_action", [
   "project_created",
@@ -282,7 +315,10 @@ export const auditActionEnum = pgEnum("audit_action", [
   "line_item_updated",
   "budget_amended",
   "change_order_created",
-  "approval_workflow_updated"
+  "approval_workflow_updated",
+  // Auth audit actions
+  "manual_login_attempt",
+  "cost_allocation_submitted"
 ]);
 
 // Audit logs table
@@ -463,6 +499,23 @@ export const changeOrdersRelations = relations(changeOrders, ({ one }) => ({
   }),
 }));
 
+export const budgetAlertsRelations = relations(budgetAlerts, ({ one }) => ({
+  project: one(projects, {
+    fields: [budgetAlerts.projectId],
+    references: [projects.id],
+  }),
+  triggeredByUser: one(users, {
+    fields: [budgetAlerts.triggeredBy],
+    references: [users.id],
+    relationName: "alerts_triggered_by"
+  }),
+  acknowledgedByUser: one(users, {
+    fields: [budgetAlerts.acknowledgedBy],
+    references: [users.id],
+    relationName: "alerts_acknowledged_by"
+  }),
+}));
+
 export const companiesRelations = relations(companies, ({ many }) => ({
   users: many(users),
   projects: many(projects),
@@ -555,6 +608,12 @@ export const insertCompanySchema = createInsertSchema(companies).omit({
   updatedAt: true,
 });
 
+export const insertBudgetAlertSchema = createInsertSchema(budgetAlerts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -587,3 +646,5 @@ export type ChangeOrder = typeof changeOrders.$inferSelect;
 export type InsertChangeOrder = z.infer<typeof insertChangeOrderSchema>;
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type BudgetAlert = typeof budgetAlerts.$inferSelect;
+export type InsertBudgetAlert = z.infer<typeof insertBudgetAlertSchema>;

@@ -25,7 +25,11 @@ import {
   calcTotalCost,
   calcRemainingBudget,
   determineCostAllocationStatus,
-  determineInitialCostAllocationStatus 
+  determineInitialCostAllocationStatus,
+  calcBudgetVariance,
+  calcBudgetImpact,
+  generateBudgetAlertMessage,
+  BUDGET_THRESHOLDS 
 } from "./utils/calculations";
 import { z } from "zod";
 
@@ -597,8 +601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.categories = Array.isArray(categories) ? categories : [categories];
       }
 
-      const normalizedRole = mapLegacyRole(req.userContext.user.role);
-      const categoryData = await storage.getCategorySpending(tenantId, filters, normalizedRole, req.userContext.userId);
+      const categoryData = await storage.getCategorySpending(tenantId, filters);
       res.json(categoryData);
     } catch (error) {
       console.error("Error fetching category spending:", error);
@@ -633,8 +636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       filters.limit = limitNum;
       filters.offset = (pageNum - 1) * limitNum;
 
-      const normalizedRole = mapLegacyRole(req.userContext.user.role);
-      const result = await storage.getCostAllocationsWithFilters(tenantId, filters, normalizedRole, req.userContext.userId);
+      const result = await storage.getCostAllocationsWithFilters(tenantId, filters);
       res.json({
         ...result,
         page: pageNum,
@@ -963,9 +965,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const labourInfo = { unit_price: unitCost || 0, quantity: quantity || 0 };
       const totalCost = calcTotalCost(labourInfo, materialTotal);
       
-      // Check budget constraints and determine initial status
-      const remainingBudget = calcRemainingBudget(parseFloat(project.budget), parseFloat(project.consumedAmount));
-      const budgetInfo = determineInitialCostAllocationStatus(totalCost, remainingBudget);
+      // Enhanced budget impact validation using new calculations
+      const totalBudget = parseFloat(project.budget);
+      const currentSpent = parseFloat(project.consumedAmount);
+      
+      // Calculate current budget impact and what the new impact would be
+      const budgetImpact = calcBudgetImpact(currentSpent, totalCost, totalBudget);
+      
+      // Determine initial status based on budget thresholds
+      let initialStatus: 'draft' | 'pending' = 'draft';
+      let requiresApproval = false;
+      let budgetValidationMessage = `Budget impact: ${budgetImpact.newSpentPercentage.toFixed(1)}% of total budget`;
+      
+      if (budgetImpact.willExceedCritical) {
+        initialStatus = 'pending';
+        requiresApproval = true;
+        budgetValidationMessage = `CRITICAL: This allocation would bring spending to ${budgetImpact.newSpentPercentage.toFixed(1)}% (>${BUDGET_THRESHOLDS.CRITICAL_THRESHOLD}%). Manager approval required.`;
+      } else if (budgetImpact.willExceedWarning) {
+        initialStatus = 'pending';
+        requiresApproval = true;
+        budgetValidationMessage = `WARNING: This allocation would bring spending to ${budgetImpact.newSpentPercentage.toFixed(1)}% (>${BUDGET_THRESHOLDS.WARNING_THRESHOLD}%). Manager approval required.`;
+      }
+      
+      // Legacy support for existing budget validation logic
+      const budgetInfo = {
+        status: initialStatus,
+        exceedsBudget: budgetImpact.isOverBudget,
+        budgetValidation: budgetValidationMessage,
+        budgetImpact: budgetImpact
+      };
       
       // Prepare cost allocation data
       const costAllocationData = insertCostAllocationSchema.parse({
@@ -996,6 +1024,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create cost allocation with material allocations
       const costAllocation = await storage.createCostAllocation(costAllocationData, materialAllocationsData);
       
+      // Check and create budget alerts if thresholds are crossed
+      try {
+        const createdAlerts = await storage.checkAndCreateBudgetAlerts(projectId, tenantId);
+        if (createdAlerts.length > 0) {
+          console.log(`Created ${createdAlerts.length} budget alert(s) for project ${project.title}`);
+        }
+      } catch (alertError) {
+        console.error('Error creating budget alerts:', alertError);
+        // Don't fail the cost allocation creation if alert creation fails
+      }
+      
       // Note: Project consumed amount is only updated when cost allocation is approved through workflow
       // This ensures proper approval controls for budget management
       
@@ -1014,13 +1053,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           materialCost: materialTotal,
           status: costAllocation.status,
           exceedsBudget: budgetInfo.exceedsBudget,
-          budgetValidation: budgetInfo.budgetValidation
+          budgetValidation: budgetInfo.budgetValidation,
+          budgetImpact: {
+            spentPercentage: budgetImpact.newSpentPercentage,
+            remainingBudget: budgetImpact.remainingBudget,
+            status: budgetImpact.status,
+            requiresApproval: requiresApproval
+          }
         },
       });
       
       res.json({
         costAllocation,
-        remainingBudget: remainingBudget,
+        remainingBudget: calcRemainingBudget(parseFloat(project.budget), parseFloat(project.consumedAmount)),
         budgetValidation: budgetInfo.budgetValidation,
         exceedsBudget: budgetInfo.exceedsBudget
       });
@@ -1865,6 +1910,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid material data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update material" });
+    }
+  });
+
+  // Budget Alerts API endpoints
+  app.get('/api/budget-alerts', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { status } = req.query;
+      
+      const alerts = await storage.getBudgetAlerts(tenantId, status as 'active' | 'acknowledged' | 'resolved');
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching budget alerts:", error);
+      res.status(500).json({ message: "Failed to fetch budget alerts" });
+    }
+  });
+
+  app.get('/api/budget-alerts/project/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { projectId } = req.params;
+      
+      const alerts = await storage.getBudgetAlertsByProject(projectId, tenantId);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching project budget alerts:", error);
+      res.status(500).json({ message: "Failed to fetch project budget alerts" });
+    }
+  });
+
+  app.post('/api/budget-alerts/:alertId/acknowledge', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const { alertId } = req.params;
+      
+      const updatedAlert = await storage.acknowledgeBudgetAlert(alertId, userId, tenantId);
+      
+      if (!updatedAlert) {
+        return res.status(404).json({ message: "Budget alert not found" });
+      }
+      
+      // Create audit log for alert acknowledgment
+      await storage.createAuditLog({
+        userId,
+        action: "approval_workflow_updated",
+        entityType: "budget_alert",
+        entityId: alertId,
+        tenantId,
+        details: { action: "acknowledged", alertType: updatedAlert.type }
+      });
+      
+      res.json(updatedAlert);
+    } catch (error) {
+      console.error("Error acknowledging budget alert:", error);
+      res.status(500).json({ message: "Failed to acknowledge budget alert" });
+    }
+  });
+
+  app.post('/api/budget-alerts/:alertId/resolve', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const { alertId } = req.params;
+      
+      const updatedAlert = await storage.resolveBudgetAlert(alertId, tenantId);
+      
+      if (!updatedAlert) {
+        return res.status(404).json({ message: "Budget alert not found" });
+      }
+      
+      // Create audit log for alert resolution
+      await storage.createAuditLog({
+        userId,
+        action: "approval_workflow_updated",
+        entityType: "budget_alert",
+        entityId: alertId,
+        tenantId,
+        details: { action: "resolved", alertType: updatedAlert.type }
+      });
+      
+      res.json(updatedAlert);
+    } catch (error) {
+      console.error("Error resolving budget alert:", error);
+      res.status(500).json({ message: "Failed to resolve budget alert" });
+    }
+  });
+
+  // Enhanced budget impact validation endpoint for frontend confirmation dialogs
+  app.post('/api/budget/validate-impact', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { projectId, proposedCost } = req.body;
+      
+      if (!projectId || proposedCost == null) {
+        return res.status(400).json({ message: "Project ID and proposed cost are required" });
+      }
+      
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const totalBudget = parseFloat(project.budget);
+      const currentSpent = parseFloat(project.consumedAmount);
+      
+      // Calculate budget impact
+      const budgetImpact = calcBudgetImpact(currentSpent, parseFloat(proposedCost), totalBudget);
+      
+      // Generate alert message
+      const alertMessage = generateBudgetAlertMessage(project.title, budgetImpact);
+      
+      res.json({
+        projectId,
+        projectTitle: project.title,
+        proposedCost: parseFloat(proposedCost),
+        currentSpent,
+        totalBudget,
+        budgetImpact: {
+          ...budgetImpact,
+          alertMessage,
+          thresholds: BUDGET_THRESHOLDS
+        }
+      });
+    } catch (error) {
+      console.error("Error validating budget impact:", error);
+      res.status(500).json({ message: "Failed to validate budget impact" });
     }
   });
 

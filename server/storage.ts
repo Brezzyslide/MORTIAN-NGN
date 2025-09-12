@@ -11,6 +11,7 @@ import {
   costAllocations,
   materialAllocations,
   approvalWorkflows,
+  budgetAlerts,
   type User,
   type UpsertUser,
   type Project,
@@ -35,6 +36,8 @@ import {
   type InsertMaterialAllocation,
   type ApprovalWorkflow,
   type InsertApprovalWorkflow,
+  type BudgetAlert,
+  type InsertBudgetAlert,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
@@ -168,11 +171,37 @@ export interface IStorage {
   getApprovalWorkflows(tenantId: string): Promise<Array<ApprovalWorkflow & { approver?: User }>>;
   getPendingApprovals(tenantId: string, table?: 'cost_allocations'): Promise<Array<ApprovalWorkflow & { 
     approver?: User;
-    costAllocation?: CostAllocation & { lineItemName: string; projectTitle: string; enteredByName: string };
+    costAllocation?: {
+      id: string | null;
+      projectId: string | null;
+      lineItemId: string | null;
+      labourCost: string | null;
+      materialCost: string | null;
+      quantity: string | null;
+      unitCost: string | null;
+      totalCost: string | null;
+      dateIncurred: Date | null;
+      enteredBy: string | null;
+      tenantId: string | null;
+      status: string | null;
+      createdAt: Date | null;
+      updatedAt: Date | null;
+      lineItemName: string | null;
+      projectTitle: string | null;
+      enteredByName: string | null;
+    };
   }>>;
   createApprovalWorkflow(workflow: InsertApprovalWorkflow): Promise<ApprovalWorkflow>;
   updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, comments?: string, tenantId?: string): Promise<ApprovalWorkflow | undefined>;
   updateCostAllocationStatus(id: string, status: 'draft' | 'pending' | 'approved' | 'rejected', tenantId: string): Promise<CostAllocation | undefined>;
+
+  // Budget alert operations
+  getBudgetAlerts(tenantId: string, status?: 'active' | 'acknowledged' | 'resolved'): Promise<Array<BudgetAlert & { project: Project }>>;
+  getBudgetAlertsByProject(projectId: string, tenantId: string): Promise<Array<BudgetAlert & { project: Project }>>;
+  createBudgetAlert(alert: InsertBudgetAlert): Promise<BudgetAlert>;
+  acknowledgeBudgetAlert(alertId: string, acknowledgedBy: string, tenantId: string): Promise<BudgetAlert | undefined>;
+  resolveBudgetAlert(alertId: string, tenantId: string): Promise<BudgetAlert | undefined>;
+  checkAndCreateBudgetAlerts(projectId: string, tenantId: string): Promise<BudgetAlert[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -754,7 +783,7 @@ export class DatabaseStorage implements IStorage {
       whereConditions.push(eq(costAllocations.projectId, filters.projectId));
     }
     if (filters?.categories && filters.categories.length > 0) {
-      whereConditions.push(inArray(lineItems.category, filters.categories));
+      whereConditions.push(inArray(lineItems.category, filters.categories as any));
     }
     if (filters?.search) {
       whereConditions.push(sql`(${lineItems.name} ILIKE ${'%' + filters.search + '%'} OR ${projects.title} ILIKE ${'%' + filters.search + '%'})`);
@@ -1024,9 +1053,37 @@ export class DatabaseStorage implements IStorage {
 
   async getPendingApprovals(tenantId: string, table?: 'cost_allocations'): Promise<Array<ApprovalWorkflow & { 
     approver?: User;
-    costAllocation?: CostAllocation & { lineItemName: string; projectTitle: string; enteredByName: string };
+    costAllocation?: {
+      id: string | null;
+      projectId: string | null;
+      lineItemId: string | null;
+      labourCost: string | null;
+      materialCost: string | null;
+      quantity: string | null;
+      unitCost: string | null;
+      totalCost: string | null;
+      dateIncurred: Date | null;
+      enteredBy: string | null;
+      tenantId: string | null;
+      status: string | null;
+      createdAt: Date | null;
+      updatedAt: Date | null;
+      lineItemName: string | null;
+      projectTitle: string | null;
+      enteredByName: string | null;
+    };
   }>> {
-    let query = db
+    // Build where conditions based on parameters
+    const whereConditions = [
+      eq(approvalWorkflows.tenantId, tenantId),
+      eq(approvalWorkflows.status, 'pending')
+    ];
+
+    if (table) {
+      whereConditions.push(eq(approvalWorkflows.relatedTable, table));
+    }
+
+    const query = db
       .select({
         id: approvalWorkflows.id,
         relatedTable: approvalWorkflows.relatedTable,
@@ -1061,7 +1118,7 @@ export class DatabaseStorage implements IStorage {
           updatedAt: costAllocations.updatedAt,
           lineItemName: lineItems.name,
           projectTitle: projects.title,
-          enteredByName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+          enteredByName: sql<string | null>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
         },
       })
       .from(approvalWorkflows)
@@ -1069,20 +1126,10 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(costAllocations, eq(approvalWorkflows.recordId, costAllocations.id))
       .leftJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
       .leftJoin(projects, eq(costAllocations.projectId, projects.id))
-      .where(and(
-        eq(approvalWorkflows.tenantId, tenantId),
-        eq(approvalWorkflows.status, 'pending')
-      ));
+      .where(and(...whereConditions))
+      .orderBy(desc(approvalWorkflows.createdAt));
 
-    if (table) {
-      query = query.where(and(
-        eq(approvalWorkflows.tenantId, tenantId),
-        eq(approvalWorkflows.status, 'pending'),
-        eq(approvalWorkflows.relatedTable, table)
-      ));
-    }
-
-    return await query.orderBy(desc(approvalWorkflows.createdAt));
+    return await query;
   }
 
   async createApprovalWorkflow(workflow: InsertApprovalWorkflow): Promise<ApprovalWorkflow> {
@@ -1122,6 +1169,227 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(costAllocations.id, id), eq(costAllocations.tenantId, tenantId)))
       .returning();
     return updatedCostAllocation;
+  }
+
+  // Budget alert operations
+  async getBudgetAlerts(tenantId: string, status?: 'active' | 'acknowledged' | 'resolved'): Promise<Array<BudgetAlert & { project: Project }>> {
+    let whereConditions = [eq(budgetAlerts.tenantId, tenantId)];
+    
+    if (status) {
+      whereConditions.push(eq(budgetAlerts.status, status));
+    }
+
+    const alerts = await db
+      .select({
+        id: budgetAlerts.id,
+        projectId: budgetAlerts.projectId,
+        type: budgetAlerts.type,
+        status: budgetAlerts.status,
+        severity: budgetAlerts.severity,
+        message: budgetAlerts.message,
+        spentPercentage: budgetAlerts.spentPercentage,
+        remainingBudget: budgetAlerts.remainingBudget,
+        triggeredBy: budgetAlerts.triggeredBy,
+        acknowledgedBy: budgetAlerts.acknowledgedBy,
+        acknowledgedAt: budgetAlerts.acknowledgedAt,
+        tenantId: budgetAlerts.tenantId,
+        createdAt: budgetAlerts.createdAt,
+        updatedAt: budgetAlerts.updatedAt,
+        // Project data
+        project: {
+          id: projects.id,
+          title: projects.title,
+          description: projects.description,
+          startDate: projects.startDate,
+          endDate: projects.endDate,
+          budget: projects.budget,
+          consumedAmount: projects.consumedAmount,
+          revenue: projects.revenue,
+          managerId: projects.managerId,
+          tenantId: projects.tenantId,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        }
+      })
+      .from(budgetAlerts)
+      .innerJoin(projects, eq(budgetAlerts.projectId, projects.id))
+      .where(and(...whereConditions))
+      .orderBy(desc(budgetAlerts.createdAt));
+
+    return alerts;
+  }
+
+  async getBudgetAlertsByProject(projectId: string, tenantId: string): Promise<Array<BudgetAlert & { project: Project }>> {
+    const alerts = await db
+      .select({
+        id: budgetAlerts.id,
+        projectId: budgetAlerts.projectId,
+        type: budgetAlerts.type,
+        status: budgetAlerts.status,
+        severity: budgetAlerts.severity,
+        message: budgetAlerts.message,
+        spentPercentage: budgetAlerts.spentPercentage,
+        remainingBudget: budgetAlerts.remainingBudget,
+        triggeredBy: budgetAlerts.triggeredBy,
+        acknowledgedBy: budgetAlerts.acknowledgedBy,
+        acknowledgedAt: budgetAlerts.acknowledgedAt,
+        tenantId: budgetAlerts.tenantId,
+        createdAt: budgetAlerts.createdAt,
+        updatedAt: budgetAlerts.updatedAt,
+        // Project data
+        project: {
+          id: projects.id,
+          title: projects.title,
+          description: projects.description,
+          startDate: projects.startDate,
+          endDate: projects.endDate,
+          budget: projects.budget,
+          consumedAmount: projects.consumedAmount,
+          revenue: projects.revenue,
+          managerId: projects.managerId,
+          tenantId: projects.tenantId,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        }
+      })
+      .from(budgetAlerts)
+      .innerJoin(projects, eq(budgetAlerts.projectId, projects.id))
+      .where(and(
+        eq(budgetAlerts.projectId, projectId),
+        eq(budgetAlerts.tenantId, tenantId)
+      ))
+      .orderBy(desc(budgetAlerts.createdAt));
+
+    return alerts;
+  }
+
+  async createBudgetAlert(alert: InsertBudgetAlert): Promise<BudgetAlert> {
+    const [newAlert] = await db
+      .insert(budgetAlerts)
+      .values(alert)
+      .returning();
+    return newAlert;
+  }
+
+  async acknowledgeBudgetAlert(alertId: string, acknowledgedBy: string, tenantId: string): Promise<BudgetAlert | undefined> {
+    const [updatedAlert] = await db
+      .update(budgetAlerts)
+      .set({
+        status: 'acknowledged',
+        acknowledgedBy,
+        acknowledgedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(budgetAlerts.id, alertId),
+        eq(budgetAlerts.tenantId, tenantId)
+      ))
+      .returning();
+    return updatedAlert;
+  }
+
+  async resolveBudgetAlert(alertId: string, tenantId: string): Promise<BudgetAlert | undefined> {
+    const [updatedAlert] = await db
+      .update(budgetAlerts)
+      .set({
+        status: 'resolved',
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(budgetAlerts.id, alertId),
+        eq(budgetAlerts.tenantId, tenantId)
+      ))
+      .returning();
+    return updatedAlert;
+  }
+
+  async checkAndCreateBudgetAlerts(projectId: string, tenantId: string): Promise<BudgetAlert[]> {
+    const project = await this.getProject(projectId, tenantId);
+    if (!project) return [];
+
+    // Get current spent amount from cost allocations
+    const [spentResult] = await db
+      .select({
+        totalSpent: sum(costAllocations.totalCost),
+      })
+      .from(costAllocations)
+      .where(and(
+        eq(costAllocations.projectId, projectId),
+        eq(costAllocations.tenantId, tenantId)
+      ));
+
+    const totalBudget = parseFloat(project.budget) || 0;
+    const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
+    const spentPercentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+    const remainingBudget = totalBudget - totalSpent;
+
+    const createdAlerts: BudgetAlert[] = [];
+
+    // Check if we need to create new alerts
+    // First check for critical threshold (95%)
+    if (spentPercentage >= 95) {
+      // Check if critical alert already exists
+      const existingCriticalAlert = await db
+        .select()
+        .from(budgetAlerts)
+        .where(and(
+          eq(budgetAlerts.projectId, projectId),
+          eq(budgetAlerts.tenantId, tenantId),
+          eq(budgetAlerts.type, 'critical_threshold'),
+          eq(budgetAlerts.status, 'active')
+        ))
+        .limit(1);
+
+      if (existingCriticalAlert.length === 0) {
+        const alertMessage = totalSpent > totalBudget
+          ? `CRITICAL: Project "${project.title}" is over budget by ₦${Math.abs(remainingBudget).toLocaleString()} (${spentPercentage.toFixed(1)}% spent)`
+          : `CRITICAL: Project "${project.title}" budget critically low - ${spentPercentage.toFixed(1)}% spent, only ₦${remainingBudget.toLocaleString()} remaining`;
+
+        const newAlert = await this.createBudgetAlert({
+          projectId,
+          type: totalSpent > totalBudget ? 'over_budget' : 'critical_threshold',
+          severity: 'critical',
+          message: alertMessage,
+          spentPercentage: spentPercentage.toString(),
+          remainingBudget: remainingBudget.toString(),
+          tenantId
+        });
+        createdAlerts.push(newAlert);
+      }
+    }
+    // Check for warning threshold (80%)
+    else if (spentPercentage >= 80) {
+      // Check if warning alert already exists
+      const existingWarningAlert = await db
+        .select()
+        .from(budgetAlerts)
+        .where(and(
+          eq(budgetAlerts.projectId, projectId),
+          eq(budgetAlerts.tenantId, tenantId),
+          eq(budgetAlerts.type, 'warning_threshold'),
+          eq(budgetAlerts.status, 'active')
+        ))
+        .limit(1);
+
+      if (existingWarningAlert.length === 0) {
+        const alertMessage = `WARNING: Project "${project.title}" approaching budget limit - ${spentPercentage.toFixed(1)}% spent, ₦${remainingBudget.toLocaleString()} remaining`;
+
+        const newAlert = await this.createBudgetAlert({
+          projectId,
+          type: 'warning_threshold',
+          severity: 'warning',
+          message: alertMessage,
+          spentPercentage: spentPercentage.toString(),
+          remainingBudget: remainingBudget.toString(),
+          tenantId
+        });
+        createdAlerts.push(newAlert);
+      }
+    }
+
+    return createdAlerts;
   }
 }
 

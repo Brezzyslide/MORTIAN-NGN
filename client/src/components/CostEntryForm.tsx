@@ -6,6 +6,9 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertCostAllocationSchema } from "@shared/schema";
+import { AlertTriangle, XCircle, CheckCircle } from "lucide-react";
 
 // Material allocation schema for dynamic rows
 const materialAllocationSchema = z.object({
@@ -67,12 +71,42 @@ const categoryLabels: Record<string, string> = {
   miscellaneous: "Miscellaneous",
 };
 
+// Budget validation interface
+interface BudgetImpactValidation {
+  projectId: string;
+  projectTitle: string;
+  proposedCost: number;
+  currentSpent: number;
+  totalBudget: number;
+  budgetImpact: {
+    spentPercentage: number;
+    newSpentPercentage: number;
+    remainingBudget: number;
+    status: 'healthy' | 'warning' | 'critical';
+    isOverBudget: boolean;
+    willExceedWarning: boolean;
+    willExceedCritical: boolean;
+    requiresApproval: boolean;
+    alertMessage: string;
+    thresholds: {
+      WARNING_THRESHOLD: number;
+      CRITICAL_THRESHOLD: number;
+      HEALTHY_MAX: number;
+    };
+  };
+}
+
 export default function CostEntryForm() {
   const { toast } = useToast();
   const { permissions } = usePermissions();
   const [grandTotal, setGrandTotal] = useState(0);
   const [labourTotal, setLabourTotal] = useState(0);
   const [materialTotal, setMaterialTotal] = useState(0);
+  
+  // Budget validation state
+  const [showBudgetAlert, setShowBudgetAlert] = useState(false);
+  const [budgetValidation, setBudgetValidation] = useState<BudgetImpactValidation | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState(false);
 
   // Check if user has permission to create cost allocations
   if (!permissions.canCreateCostAllocations()) {
@@ -125,6 +159,34 @@ export default function CostEntryForm() {
     retry: false,
   });
 
+  // Budget impact validation mutation
+  const validateBudgetImpact = useMutation({
+    mutationFn: async (validationData: { projectId: string; proposedCost: number }) => {
+      const response = await apiRequest("POST", "/api/budget/validate-impact", validationData);
+      return await response.json();
+    },
+    onSuccess: (data: BudgetImpactValidation) => {
+      setBudgetValidation(data);
+      
+      // Check if this allocation requires approval or warning
+      if (data.budgetImpact.willExceedWarning || data.budgetImpact.willExceedCritical) {
+        setShowBudgetAlert(true);
+      } else {
+        // If no warnings, proceed directly with submission
+        proceedWithSubmission();
+      }
+    },
+    onError: (error: any) => {
+      console.error("Budget validation error:", error);
+      toast({
+        title: "Budget Validation Error",
+        description: "Unable to validate budget impact. Please try again.",
+        variant: "destructive",
+      });
+      setPendingSubmission(false);
+    },
+  });
+
   // Submit mutation
   const createCostAllocation = useMutation({
     mutationFn: async (data: any) => {
@@ -137,6 +199,9 @@ export default function CostEntryForm() {
         description: "Cost allocation created successfully",
       });
       form.reset();
+      setPendingSubmission(false);
+      setShowBudgetAlert(false);
+      setBudgetValidation(null);
       
       // Invalidate all analytics-related queries for real-time updates
       queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations"] });
@@ -144,6 +209,7 @@ export default function CostEntryForm() {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/labour-material-split"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/category-spending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/budget-alerts"] });
       
       // Also invalidate broader analytics queries that may contain cost allocation data
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
@@ -155,8 +221,34 @@ export default function CostEntryForm() {
         description: error.message || "Failed to create cost allocation",
         variant: "destructive",
       });
+      setPendingSubmission(false);
+      setShowBudgetAlert(false);
     },
   });
+
+  // Helper function to proceed with actual submission
+  const proceedWithSubmission = () => {
+    if (!pendingSubmission) return;
+    
+    const formData = form.getValues();
+    const { projectId, lineItemId, labourCost, quantity, unitCost, materialAllocations } = formData;
+
+    // Prepare submission data
+    const submissionData = {
+      projectId,
+      lineItemId,
+      labourCost: Number(labourCost),
+      quantity: Number(quantity),
+      unitCost: Number(unitCost),
+      materialAllocations: materialAllocations.map((allocation) => ({
+        materialId: allocation.materialId,
+        quantity: Number(allocation.quantity),
+        unitPrice: Number(allocation.unitPrice),
+      })),
+    };
+
+    createCostAllocation.mutate(submissionData);
+  };
 
   // Calculate labour total
   useEffect(() => {
@@ -196,6 +288,7 @@ export default function CostEntryForm() {
     }
   };
 
+  // Enhanced onSubmit with budget validation
   const onSubmit = (data: CostEntryFormData) => {
     const labourCost = Number(data.labourCost);
     const materialAllocations = data.materialAllocations.map(material => ({
@@ -208,18 +301,14 @@ export default function CostEntryForm() {
     const materialCost = materialAllocations.reduce((sum, material) => sum + material.total, 0);
     const totalCost = labourCost + materialCost;
 
-    const payload = {
-      projectId: data.projectId,
-      lineItemId: data.lineItemId,
-      labourCost: labourCost,
-      materialCost: materialCost,
-      quantity: Number(data.quantity),
-      unitCost: Number(data.unitCost),
-      totalCost: totalCost,
-      materialAllocations: materialAllocations,
-    };
+    // Set pending submission state
+    setPendingSubmission(true);
 
-    createCostAllocation.mutate(payload);
+    // First validate budget impact before creating cost allocation
+    validateBudgetImpact.mutate({
+      projectId: data.projectId,
+      proposedCost: totalCost,
+    });
   };
 
   if (projectsLoading || lineItemsLoading || materialsLoading) {
