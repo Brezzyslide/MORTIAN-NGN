@@ -271,10 +271,15 @@ export const auditActionEnum = pgEnum("audit_action", [
   "fund_transferred",
   "user_created",
   "user_updated",
+  "user_role_updated",
+  "user_status_updated",
   "revenue_added",
   // Construction audit actions
   "cost_allocated",
   "material_added",
+  "material_updated",
+  "line_item_created",
+  "line_item_updated",
   "budget_amended",
   "change_order_created",
   "approval_workflow_updated"

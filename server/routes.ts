@@ -16,7 +16,15 @@ import {
   insertCompanySchema,
   insertLineItemSchema,
   insertMaterialSchema,
+  insertCostAllocationSchema,
+  insertMaterialAllocationSchema,
 } from "@shared/schema";
+import { 
+  calcMaterialTotal,
+  calcTotalCost,
+  calcRemainingBudget,
+  determineCostAllocationStatus 
+} from "./utils/calculations";
 import { z } from "zod";
 
 // Helper function to get user and tenantId from authenticated request
@@ -517,7 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For this demo, we'll create an audit log entry
       await storage.createAuditLog({
         userId,
-        action: "password_reset_requested",
+        action: "user_updated",
         entityType: "user",
         entityId: userToReset.id,
         tenantId,
@@ -545,7 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Object storage routes for receipts
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
-    const userId = req.user?.claims?.sub;
+    const userId = (req as any).user?.claims?.sub;
     const objectStorageService = new ObjectStorageService();
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(
@@ -580,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: "receiptURL is required" });
     }
 
-    const userId = req.user?.claims?.sub;
+    const userId = (req as any).user?.claims?.sub;
 
     try {
       const objectStorageService = new ObjectStorageService();
@@ -598,6 +606,217 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting receipt:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Line items routes
+  app.get('/api/line-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const lineItems = await storage.getLineItems(tenantId);
+      
+      // Group by category for better organization
+      const groupedItems = lineItems.reduce((groups: any, item) => {
+        const category = item.category;
+        if (!groups[category]) {
+          groups[category] = [];
+        }
+        groups[category].push({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          category: item.category
+        });
+        return groups;
+      }, {});
+      
+      res.json(groupedItems);
+    } catch (error) {
+      console.error("Error fetching line items:", error);
+      res.status(500).json({ message: "Failed to fetch line items" });
+    }
+  });
+
+  // Materials routes
+  app.get('/api/materials', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const materials = await storage.getMaterials(tenantId);
+      
+      // Return materials with current pricing info
+      const materialsWithPricing = materials.map(material => ({
+        id: material.id,
+        name: material.name,
+        unit: material.unit,
+        currentUnitPrice: parseFloat(material.currentUnitPrice),
+        supplier: material.supplier
+      }));
+      
+      res.json(materialsWithPricing);
+    } catch (error) {
+      console.error("Error fetching materials:", error);
+      res.status(500).json({ message: "Failed to fetch materials" });
+    }
+  });
+
+  // Cost allocations routes
+  app.post('/api/cost-allocations', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const { projectId, lineItemId, labourCost = 0, quantity, unitCost, materialAllocations = [], dateIncurred } = req.body;
+      
+      // Validation: Require at least one material OR labour entry
+      if (labourCost <= 0 && materialAllocations.length === 0) {
+        return res.status(400).json({ 
+          message: "At least one material entry OR labour cost > 0 is required" 
+        });
+      }
+      
+      // Get project to check budget
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Calculate material total using helper function
+      const materialTotal = calcMaterialTotal(materialAllocations.map((allocation: any) => ({
+        unit_price: allocation.unitPrice,
+        quantity: allocation.quantity
+      })));
+      
+      // Calculate total cost using helper function
+      const labourInfo = { unit_price: unitCost || 0, quantity: quantity || 0 };
+      const totalCost = calcTotalCost(labourInfo, materialTotal);
+      
+      // Check budget constraints
+      const remainingBudget = calcRemainingBudget(parseFloat(project.budget), parseFloat(project.consumedAmount));
+      const status = determineCostAllocationStatus(totalCost, remainingBudget);
+      
+      // Prepare cost allocation data
+      const costAllocationData = insertCostAllocationSchema.parse({
+        projectId,
+        lineItemId,
+        labourCost: labourCost.toString(),
+        materialCost: materialTotal.toString(),
+        quantity: quantity?.toString() || "0",
+        unitCost: unitCost?.toString(),
+        totalCost: totalCost.toString(),
+        dateIncurred: dateIncurred ? new Date(dateIncurred) : new Date(),
+        enteredBy: userId,
+        tenantId,
+        status
+      });
+      
+      // Prepare material allocations data
+      const materialAllocationsData = materialAllocations.map((allocation: any) => 
+        insertMaterialAllocationSchema.parse({
+          materialId: allocation.materialId,
+          quantity: allocation.quantity.toString(),
+          unitPrice: allocation.unitPrice.toString(),
+          total: (allocation.quantity * allocation.unitPrice).toString(),
+          tenantId
+        })
+      );
+      
+      // Create cost allocation with material allocations
+      const costAllocation = await storage.createCostAllocation(costAllocationData, materialAllocationsData);
+      
+      // If approved (within budget), update project consumed amount
+      if (status === "approved") {
+        await storage.updateProject(projectId, {
+          consumedAmount: (parseFloat(project.consumedAmount) + totalCost).toString()
+        }, tenantId);
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "cost_allocated",
+        entityType: "cost_allocation",
+        entityId: costAllocation.id,
+        projectId: costAllocation.projectId,
+        amount: totalCost.toString(),
+        tenantId,
+        details: { 
+          lineItemId: costAllocation.lineItemId,
+          labourCost,
+          materialCost: materialTotal,
+          status: costAllocation.status
+        },
+      });
+      
+      // Calculate new remaining budget
+      const newRemainingBudget = status === "approved" 
+        ? remainingBudget - totalCost 
+        : remainingBudget;
+      
+      res.json({
+        costAllocation,
+        remainingBudget: newRemainingBudget
+      });
+    } catch (error) {
+      console.error("Error creating cost allocation:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid cost allocation data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to create cost allocation" });
+    }
+  });
+
+  app.get('/api/cost-allocations/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const projectId = req.params.projectId;
+      
+      // Verify project access
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Get cost allocations with material details (ledger view)
+      const costAllocations = await storage.getCostAllocationsByProject(projectId, tenantId);
+      
+      // Format response for ledger view
+      const ledgerData = costAllocations.map(allocation => ({
+        id: allocation.id,
+        lineItem: {
+          id: allocation.lineItemId,
+          // Note: lineItem details would need to be joined in storage method
+          // For now, we'll include the ID and let frontend resolve
+        },
+        labourCost: parseFloat(allocation.labourCost),
+        materialCost: parseFloat(allocation.materialCost),
+        totalCost: parseFloat(allocation.totalCost),
+        quantity: parseFloat(allocation.quantity),
+        unitCost: allocation.unitCost ? parseFloat(allocation.unitCost) : null,
+        dateIncurred: allocation.dateIncurred,
+        status: allocation.status,
+        materialAllocations: allocation.materialAllocations.map(matAlloc => ({
+          id: matAlloc.id,
+          material: {
+            id: matAlloc.material.id,
+            name: matAlloc.material.name,
+            unit: matAlloc.material.unit,
+            currentUnitPrice: parseFloat(matAlloc.material.currentUnitPrice),
+            supplier: matAlloc.material.supplier
+          },
+          quantity: parseFloat(matAlloc.quantity),
+          unitPrice: parseFloat(matAlloc.unitPrice),
+          total: parseFloat(matAlloc.total)
+        }))
+      }));
+      
+      res.json(ledgerData);
+    } catch (error) {
+      console.error("Error fetching cost allocations:", error);
+      res.status(500).json({ message: "Failed to fetch cost allocations" });
     }
   });
 
@@ -669,7 +888,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const results = { success: 0, errors: [] as any[] };
 
-      for (const [index, record] of records.entries()) {
+      for (let index = 0; index < records.length; index++) {
+        const record = records[index] as any;
         try {
           // Strict amount validation using regex pattern for financial data
           const amountRegex = /^-?\d+(\.\d{1,2})?$/;
@@ -793,7 +1013,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const results = { success: 0, errors: [] as any[] };
 
-      for (const [index, record] of records.entries()) {
+      for (let index = 0; index < records.length; index++) {
+        const record = records[index] as any;
         try {
           // Strict amount validation using regex pattern for financial data
           const amountRegex = /^-?\d+(\.\d{1,2})?$/;
@@ -839,7 +1060,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const createdAllocation = await storage.createFundAllocation(validated);
           
           // Create corresponding transaction (exactly matching POST /api/fund-allocations)
-          await storage.createTransaction({
+          const transaction = await storage.createTransaction({
             projectId: validated.projectId,
             userId: validated.toUserId,
             type: "allocation",

@@ -8,6 +8,8 @@ import {
   companies,
   lineItems,
   materials,
+  costAllocations,
+  materialAllocations,
   type User,
   type UpsertUser,
   type Project,
@@ -26,6 +28,10 @@ import {
   type InsertLineItem,
   type Material,
   type InsertMaterial,
+  type CostAllocation,
+  type InsertCostAllocation,
+  type MaterialAllocation,
+  type InsertMaterialAllocation,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count } from "drizzle-orm";
@@ -84,6 +90,12 @@ export interface IStorage {
   getMaterial(id: string, tenantId: string): Promise<Material | undefined>;
   createMaterial(material: InsertMaterial): Promise<Material>;
   updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined>;
+
+  // Cost allocation operations
+  getCostAllocations(tenantId: string): Promise<CostAllocation[]>;
+  getCostAllocationsByProject(projectId: string, tenantId: string): Promise<(CostAllocation & { materialAllocations: (MaterialAllocation & { material: Material })[] })[]>;
+  createCostAllocation(costAllocation: InsertCostAllocation, materialAllocations?: InsertMaterialAllocation[]): Promise<CostAllocation>;
+  updateCostAllocation(id: string, costAllocation: Partial<InsertCostAllocation>, tenantId: string): Promise<CostAllocation | undefined>;
 
   // Analytics operations
   getProjectStats(projectId: string, tenantId: string): Promise<{
@@ -151,7 +163,7 @@ export class DatabaseStorage implements IStorage {
   async upsertUser(userData: UpsertUser): Promise<User> {
     try {
       // Try to insert or update by ID first
-      const [user] = await db
+      const result = await db
         .insert(users)
         .values(userData)
         .onConflictDoUpdate({
@@ -162,6 +174,7 @@ export class DatabaseStorage implements IStorage {
           },
         })
         .returning();
+      const [user] = result as User[];
       return user;
     } catch (error: any) {
       // Handle unique email constraint violation (error code 23505)
@@ -531,6 +544,94 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(materials.id, id), eq(materials.tenantId, tenantId)))
       .returning();
     return updatedMaterial;
+  }
+
+  // Cost allocation operations
+  async getCostAllocations(tenantId: string): Promise<CostAllocation[]> {
+    return await db
+      .select()
+      .from(costAllocations)
+      .where(eq(costAllocations.tenantId, tenantId))
+      .orderBy(desc(costAllocations.createdAt));
+  }
+
+  async getCostAllocationsByProject(projectId: string, tenantId: string): Promise<(CostAllocation & { materialAllocations: (MaterialAllocation & { material: Material })[] })[]> {
+    // Get cost allocations for the project
+    const allocations = await db
+      .select()
+      .from(costAllocations)
+      .where(and(
+        eq(costAllocations.projectId, projectId),
+        eq(costAllocations.tenantId, tenantId)
+      ))
+      .orderBy(desc(costAllocations.dateIncurred));
+
+    // Get material allocations with material details for each cost allocation
+    const allocationsWithMaterials = await Promise.all(
+      allocations.map(async (allocation) => {
+        const materialAllocationResults = await db
+          .select({
+            id: materialAllocations.id,
+            costAllocationId: materialAllocations.costAllocationId,
+            materialId: materialAllocations.materialId,
+            quantity: materialAllocations.quantity,
+            unitPrice: materialAllocations.unitPrice,
+            total: materialAllocations.total,
+            tenantId: materialAllocations.tenantId,
+            createdAt: materialAllocations.createdAt,
+            material: {
+              id: materials.id,
+              name: materials.name,
+              unit: materials.unit,
+              currentUnitPrice: materials.currentUnitPrice,
+              supplier: materials.supplier,
+              tenantId: materials.tenantId,
+              createdAt: materials.createdAt,
+              updatedAt: materials.updatedAt,
+            }
+          })
+          .from(materialAllocations)
+          .innerJoin(materials, eq(materialAllocations.materialId, materials.id))
+          .where(eq(materialAllocations.costAllocationId, allocation.id));
+
+        return {
+          ...allocation,
+          materialAllocations: materialAllocationResults
+        };
+      })
+    );
+
+    return allocationsWithMaterials;
+  }
+
+  async createCostAllocation(costAllocation: InsertCostAllocation, materialAllocationsData: InsertMaterialAllocation[] = []): Promise<CostAllocation> {
+    const [newCostAllocation] = await db
+      .insert(costAllocations)
+      .values(costAllocation)
+      .returning();
+
+    // Create material allocations if provided
+    if (materialAllocationsData.length > 0) {
+      const materialAllocationsWithCostId = materialAllocationsData.map(allocation => ({
+        ...allocation,
+        costAllocationId: newCostAllocation.id,
+      }));
+
+      await db
+        .insert(materialAllocations)
+        .values(materialAllocationsWithCostId);
+    }
+
+    return newCostAllocation;
+  }
+
+  async updateCostAllocation(id: string, costAllocation: Partial<InsertCostAllocation>, tenantId: string): Promise<CostAllocation | undefined> {
+    const [updatedCostAllocation] = await db
+      .update(costAllocations)
+      .set({ ...costAllocation, updatedAt: new Date() })
+      .where(and(eq(costAllocations.id, id), eq(costAllocations.tenantId, tenantId)))
+      .returning();
+    return updatedCostAllocation;
   }
 }
 
