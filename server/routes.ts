@@ -13,6 +13,7 @@ import {
   insertTransactionSchema,
   insertFundTransferSchema,
   insertUserSchema,
+  insertCompanySchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -62,6 +63,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Company management routes (for console managers only)
+  app.get('/api/companies', isAuthenticated, async (req: any, res) => {
+    try {
+      const { user } = await getUserData(req);
+      // Check if user is console manager (highest privilege)
+      if (user.role !== 'manager' && user.role !== 'console_manager') {
+        return res.status(403).json({ message: 'Access denied. Console manager privileges required.' });
+      }
+      
+      const companies = await storage.getCompanies();
+      res.json(companies);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  app.post('/api/companies', isAuthenticated, async (req: any, res) => {
+    try {
+      const { user, userId } = await getUserData(req);
+      // Check if user is console manager (highest privilege)
+      if (user.role !== 'manager' && user.role !== 'console_manager') {
+        return res.status(403).json({ message: 'Access denied. Console manager privileges required.' });
+      }
+
+      const companyData = insertCompanySchema.parse({
+        ...req.body,
+        createdBy: userId,
+      });
+
+      const company = await storage.createCompany(companyData);
+      
+      res.json(company);
+    } catch (error) {
+      console.error("Error creating company:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid input", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to create company" });
+    }
+  });
+
+  app.put('/api/companies/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { user } = await getUserData(req);
+      // Check if user is console manager (highest privilege)
+      if (user.role !== 'manager' && user.role !== 'console_manager') {
+        return res.status(403).json({ message: 'Access denied. Console manager privileges required.' });
+      }
+
+      const companyData = insertCompanySchema.partial().parse(req.body);
+      const company = await storage.updateCompany(req.params.id, companyData);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      res.json(company);
+    } catch (error) {
+      console.error("Error updating company:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid input", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to update company" });
     }
   });
 

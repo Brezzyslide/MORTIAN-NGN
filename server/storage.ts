@@ -5,6 +5,7 @@ import {
   transactions,
   fundTransfers,
   auditLogs,
+  companies,
   type User,
   type UpsertUser,
   type Project,
@@ -17,11 +18,19 @@ import {
   type InsertFundTransfer,
   type AuditLog,
   type InsertAuditLog,
+  type Company,
+  type InsertCompany,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count } from "drizzle-orm";
 
 export interface IStorage {
+  // Company operations (for console managers)
+  getCompanies(): Promise<Company[]>;
+  getCompany(id: string): Promise<Company | undefined>;
+  createCompany(company: InsertCompany): Promise<Company>;
+  updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined>;
+
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   getUserById(id: string, tenantId: string): Promise<User | undefined>;
@@ -77,6 +86,36 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Company operations (for console managers)
+  async getCompanies(): Promise<Company[]> {
+    return await db
+      .select()
+      .from(companies)
+      .orderBy(desc(companies.createdAt));
+  }
+
+  async getCompany(id: string): Promise<Company | undefined> {
+    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    return company;
+  }
+
+  async createCompany(company: InsertCompany): Promise<Company> {
+    const [newCompany] = await db
+      .insert(companies)
+      .values(company)
+      .returning();
+    return newCompany;
+  }
+
+  async updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined> {
+    const [updatedCompany] = await db
+      .update(companies)
+      .set({ ...company, updatedAt: new Date() })
+      .where(eq(companies.id, id))
+      .returning();
+    return updatedCompany;
+  }
+
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
