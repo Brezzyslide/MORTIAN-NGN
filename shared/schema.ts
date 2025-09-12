@@ -56,7 +56,7 @@ export const users: any = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").notNull().default("user"),
   managerId: varchar("manager_id").references(() => users.id),
-  tenantId: varchar("tenant_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   status: userStatusEnum("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -70,9 +70,10 @@ export const projects = pgTable("projects", {
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   budget: decimal("budget", { precision: 15, scale: 2 }).notNull(),
+  consumedAmount: decimal("consumed_amount", { precision: 15, scale: 2 }).notNull().default("0"),
   revenue: decimal("revenue", { precision: 15, scale: 2 }).default("0"),
   managerId: varchar("manager_id").references(() => users.id).notNull(),
-  tenantId: varchar("tenant_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   status: varchar("status").default("active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -123,7 +124,7 @@ export const fundAllocations = pgTable("fund_allocations", {
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   category: lineItemCategoryEnum("category").notNull(),
   description: text("description"),
-  tenantId: varchar("tenant_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   status: varchar("status").default("approved"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -148,7 +149,7 @@ export const transactions = pgTable("transactions", {
   description: text("description"),
   receiptUrl: varchar("receipt_url"),
   allocationId: uuid("allocation_id").references(() => fundAllocations.id),
-  tenantId: varchar("tenant_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   status: varchar("status").default("completed"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -163,8 +164,19 @@ export const fundTransfers = pgTable("fund_transfers", {
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   category: lineItemCategoryEnum("category").notNull(),
   purpose: text("purpose"),
-  tenantId: varchar("tenant_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   status: varchar("status").default("completed"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Line items table
+export const lineItems = pgTable("line_items", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  category: lineItemCategoryEnum("category").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -176,7 +188,7 @@ export const materials = pgTable("materials", {
   unit: varchar("unit", { length: 50 }).notNull(), // m², pcs, kg, etc.
   currentUnitPrice: decimal("current_unit_price", { precision: 15, scale: 2 }).notNull(),
   supplier: varchar("supplier", { length: 255 }),
-  companyId: varchar("company_id").notNull(), // Using companyId for construction context
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -185,7 +197,7 @@ export const materials = pgTable("materials", {
 export const costAllocations = pgTable("cost_allocations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: uuid("project_id").references(() => projects.id).notNull(),
-  lineItemId: uuid("line_item_id"), // Will reference line_items when that table exists
+  lineItemId: uuid("line_item_id").references(() => lineItems.id).notNull(),
   labourCost: decimal("labour_cost", { precision: 15, scale: 2 }).notNull().default("0"),
   materialCost: decimal("material_cost", { precision: 15, scale: 2 }).notNull().default("0"),
   quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(),
@@ -193,7 +205,7 @@ export const costAllocations = pgTable("cost_allocations", {
   totalCost: decimal("total_cost", { precision: 15, scale: 2 }).notNull(),
   dateIncurred: timestamp("date_incurred").defaultNow(),
   enteredBy: varchar("entered_by").references(() => users.id).notNull(),
-  companyId: varchar("company_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   status: approvalStatusEnum("status").default("draft"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -207,7 +219,7 @@ export const materialAllocations = pgTable("material_allocations", {
   quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(),
   unitPrice: decimal("unit_price", { precision: 15, scale: 2 }).notNull(),
   total: decimal("total", { precision: 15, scale: 2 }).notNull(),
-  companyId: varchar("company_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -219,7 +231,7 @@ export const approvalWorkflows = pgTable("approval_workflows", {
   status: approvalStatusEnum("status").notNull().default("draft"),
   approverId: varchar("approver_id").references(() => users.id),
   comments: text("comments"),
-  companyId: varchar("company_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -232,7 +244,7 @@ export const budgetAmendments = pgTable("budget_amendments", {
   reason: text("reason").notNull(),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
-  companyId: varchar("company_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -245,7 +257,7 @@ export const changeOrders = pgTable("change_orders", {
   impactOnBudget: decimal("impact_on_budget", { precision: 15, scale: 2 }).notNull(),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
-  companyId: varchar("company_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -278,7 +290,7 @@ export const auditLogs = pgTable("audit_logs", {
   projectId: uuid("project_id").references(() => projects.id),
   amount: decimal("amount", { precision: 15, scale: 2 }),
   details: jsonb("details"),
-  tenantId: varchar("tenant_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -382,6 +394,10 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
 }));
 
 // New table relations
+export const lineItemsRelations = relations(lineItems, ({ many }) => ({
+  costAllocations: many(costAllocations),
+}));
+
 export const materialsRelations = relations(materials, ({ many }) => ({
   materialAllocations: many(materialAllocations),
 }));
@@ -390,6 +406,10 @@ export const costAllocationsRelations = relations(costAllocations, ({ one, many 
   project: one(projects, {
     fields: [costAllocations.projectId],
     references: [projects.id],
+  }),
+  lineItem: one(lineItems, {
+    fields: [costAllocations.lineItemId],
+    references: [lineItems.id],
   }),
   enteredByUser: one(users, {
     fields: [costAllocations.enteredBy],
@@ -483,6 +503,12 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
 });
 
 // New table insert schemas
+export const insertLineItemSchema = createInsertSchema(lineItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertMaterialSchema = createInsertSchema(materials).omit({
   id: true,
   createdAt: true,
@@ -540,6 +566,8 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 
 // New table types
+export type LineItem = typeof lineItems.$inferSelect;
+export type InsertLineItem = z.infer<typeof insertLineItemSchema>;
 export type Material = typeof materials.$inferSelect;
 export type InsertMaterial = z.infer<typeof insertMaterialSchema>;
 export type CostAllocation = typeof costAllocations.$inferSelect;

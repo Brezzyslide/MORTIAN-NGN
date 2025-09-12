@@ -14,6 +14,8 @@ import {
   insertFundTransferSchema,
   insertUserSchema,
   insertCompanySchema,
+  insertLineItemSchema,
+  insertMaterialSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -914,6 +916,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error exporting allocations CSV:", error);
       res.status(500).json({ message: "Failed to export allocations" });
+    }
+  });
+
+  // Line Items routes
+  app.get('/api/line-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const lineItems = await storage.getLineItems(tenantId);
+      res.json(lineItems);
+    } catch (error) {
+      console.error("Error fetching line items:", error);
+      res.status(500).json({ message: "Failed to fetch line items" });
+    }
+  });
+
+  app.get('/api/line-items/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const lineItem = await storage.getLineItem(req.params.id, tenantId);
+      if (!lineItem) {
+        return res.status(404).json({ message: "Line item not found" });
+      }
+      res.json(lineItem);
+    } catch (error) {
+      console.error("Error fetching line item:", error);
+      res.status(500).json({ message: "Failed to fetch line item" });
+    }
+  });
+
+  app.post('/api/line-items', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      
+      const lineItemData = insertLineItemSchema.parse({
+        ...req.body,
+        tenantId,
+      });
+
+      const lineItem = await storage.createLineItem(lineItemData);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "line_item_created",
+        entityType: "line_item",
+        entityId: lineItem.id,
+        tenantId,
+        details: { name: lineItem.name, category: lineItem.category },
+      });
+
+      res.json(lineItem);
+    } catch (error) {
+      console.error("Error creating line item:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid line item data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create line item" });
+    }
+  });
+
+  app.put('/api/line-items/:id', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      
+      const lineItemData = insertLineItemSchema.partial().parse(req.body);
+      const lineItem = await storage.updateLineItem(req.params.id, lineItemData, tenantId);
+      
+      if (!lineItem) {
+        return res.status(404).json({ message: "Line item not found" });
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "line_item_updated",
+        entityType: "line_item",
+        entityId: lineItem.id,
+        tenantId,
+        details: { name: lineItem.name, category: lineItem.category },
+      });
+      
+      res.json(lineItem);
+    } catch (error) {
+      console.error("Error updating line item:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid line item data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update line item" });
+    }
+  });
+
+  // Materials routes
+  app.get('/api/materials', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const materials = await storage.getMaterials(tenantId);
+      res.json(materials);
+    } catch (error) {
+      console.error("Error fetching materials:", error);
+      res.status(500).json({ message: "Failed to fetch materials" });
+    }
+  });
+
+  app.get('/api/materials/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const material = await storage.getMaterial(req.params.id, tenantId);
+      if (!material) {
+        return res.status(404).json({ message: "Material not found" });
+      }
+      res.json(material);
+    } catch (error) {
+      console.error("Error fetching material:", error);
+      res.status(500).json({ message: "Failed to fetch material" });
+    }
+  });
+
+  app.post('/api/materials', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      
+      const materialData = insertMaterialSchema.parse({
+        ...req.body,
+        tenantId,
+      });
+
+      const material = await storage.createMaterial(materialData);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "material_added",
+        entityType: "material",
+        entityId: material.id,
+        tenantId,
+        details: { name: material.name, unit: material.unit, supplier: material.supplier },
+      });
+
+      res.json(material);
+    } catch (error) {
+      console.error("Error creating material:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid material data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create material" });
+    }
+  });
+
+  app.put('/api/materials/:id', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      
+      const materialData = insertMaterialSchema.partial().parse(req.body);
+      const material = await storage.updateMaterial(req.params.id, materialData, tenantId);
+      
+      if (!material) {
+        return res.status(404).json({ message: "Material not found" });
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "material_updated",
+        entityType: "material",
+        entityId: material.id,
+        tenantId,
+        details: { name: material.name, unit: material.unit, supplier: material.supplier },
+      });
+      
+      res.json(material);
+    } catch (error) {
+      console.error("Error updating material:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid material data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update material" });
     }
   });
 

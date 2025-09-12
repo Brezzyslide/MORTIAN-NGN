@@ -6,6 +6,8 @@ import {
   fundTransfers,
   auditLogs,
   companies,
+  lineItems,
+  materials,
   type User,
   type UpsertUser,
   type Project,
@@ -20,6 +22,10 @@ import {
   type InsertAuditLog,
   type Company,
   type InsertCompany,
+  type LineItem,
+  type InsertLineItem,
+  type Material,
+  type InsertMaterial,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count } from "drizzle-orm";
@@ -66,6 +72,18 @@ export interface IStorage {
   getAllUsers(tenantId: string): Promise<User[]>;
   updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined>;
   updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
+
+  // Line items operations
+  getLineItems(tenantId: string): Promise<LineItem[]>;
+  getLineItem(id: string, tenantId: string): Promise<LineItem | undefined>;
+  createLineItem(lineItem: InsertLineItem): Promise<LineItem>;
+  updateLineItem(id: string, lineItem: Partial<InsertLineItem>, tenantId: string): Promise<LineItem | undefined>;
+
+  // Materials operations
+  getMaterials(tenantId: string): Promise<Material[]>;
+  getMaterial(id: string, tenantId: string): Promise<Material | undefined>;
+  createMaterial(material: InsertMaterial): Promise<Material>;
+  updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined>;
 
   // Analytics operations
   getProjectStats(projectId: string, tenantId: string): Promise<{
@@ -445,6 +463,74 @@ export class DatabaseStorage implements IStorage {
       netProfit,
       activeProjects,
     };
+  }
+
+  // Line items operations
+  async getLineItems(tenantId: string): Promise<LineItem[]> {
+    return await db
+      .select()
+      .from(lineItems)
+      .where(eq(lineItems.tenantId, tenantId))
+      .orderBy(lineItems.category, lineItems.name);
+  }
+
+  async getLineItem(id: string, tenantId: string): Promise<LineItem | undefined> {
+    const [lineItem] = await db
+      .select()
+      .from(lineItems)
+      .where(and(eq(lineItems.id, id), eq(lineItems.tenantId, tenantId)));
+    return lineItem;
+  }
+
+  async createLineItem(lineItem: InsertLineItem): Promise<LineItem> {
+    const [newLineItem] = await db
+      .insert(lineItems)
+      .values(lineItem)
+      .returning();
+    return newLineItem;
+  }
+
+  async updateLineItem(id: string, lineItem: Partial<InsertLineItem>, tenantId: string): Promise<LineItem | undefined> {
+    const [updatedLineItem] = await db
+      .update(lineItems)
+      .set({ ...lineItem, updatedAt: new Date() })
+      .where(and(eq(lineItems.id, id), eq(lineItems.tenantId, tenantId)))
+      .returning();
+    return updatedLineItem;
+  }
+
+  // Materials operations
+  async getMaterials(tenantId: string): Promise<Material[]> {
+    return await db
+      .select()
+      .from(materials)
+      .where(eq(materials.tenantId, tenantId))
+      .orderBy(materials.name);
+  }
+
+  async getMaterial(id: string, tenantId: string): Promise<Material | undefined> {
+    const [material] = await db
+      .select()
+      .from(materials)
+      .where(and(eq(materials.id, id), eq(materials.tenantId, tenantId)));
+    return material;
+  }
+
+  async createMaterial(material: InsertMaterial): Promise<Material> {
+    const [newMaterial] = await db
+      .insert(materials)
+      .values(material)
+      .returning();
+    return newMaterial;
+  }
+
+  async updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined> {
+    const [updatedMaterial] = await db
+      .update(materials)
+      .set({ ...material, updatedAt: new Date() })
+      .where(and(eq(materials.id, id), eq(materials.tenantId, tenantId)))
+      .returning();
+    return updatedMaterial;
   }
 }
 
