@@ -40,19 +40,19 @@ async function seedConstructionData() {
   try {
     console.log("📦 Seeding line items...");
     
-    // Comprehensive line items data - Complete construction lifecycle
+    // Comprehensive line items data - Construction lifecycle with existing categories  
     const lineItemsData: Array<{
-      category: "land_legal" | "site_preparation" | "foundation" | "blockwork" | "decking" | "roofing" | "mechanical_electrical" | "finishing" | "external_works" | "closeout";
+      category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works" | "marketing";
       name: string;
       description: string;
       tenantId: string;
     }> = [
-      // Land & Legal
-      { category: "land_legal", name: "Land Purchase", description: "Acquisition of construction land", tenantId: sampleTenantId },
-      { category: "land_legal", name: "Legal Fees", description: "Legal documentation and transfer fees", tenantId: sampleTenantId },
-      { category: "land_legal", name: "Government Approvals", description: "Planning permits and government approvals", tenantId: sampleTenantId },
+      // Land Purchase (includes Legal & Approvals)
+      { category: "land_purchase", name: "Land Purchase", description: "Acquisition of construction land", tenantId: sampleTenantId },
+      { category: "land_purchase", name: "Legal Fees", description: "Legal documentation and transfer fees", tenantId: sampleTenantId },
+      { category: "land_purchase", name: "Government Approvals", description: "Planning permits and government approvals", tenantId: sampleTenantId },
       
-      // Site Prep
+      // Site Preparation
       { category: "site_preparation", name: "Site Clearing", description: "Clearing vegetation and debris from site", tenantId: sampleTenantId },
       { category: "site_preparation", name: "Soil Test", description: "Soil testing and analysis", tenantId: sampleTenantId },
       { category: "site_preparation", name: "Survey & Pegging", description: "Site surveying and boundary pegging", tenantId: sampleTenantId },
@@ -66,17 +66,14 @@ async function seedConstructionData() {
       { category: "foundation", name: "Damp Proof Course", description: "Damp proof course installation", tenantId: sampleTenantId },
       { category: "foundation", name: "Reinforcement", description: "Steel reinforcement for foundation", tenantId: sampleTenantId },
       
-      // Blockwork
-      { category: "blockwork", name: "Block Molding", description: "Concrete block molding and preparation", tenantId: sampleTenantId },
-      { category: "blockwork", name: "Block Laying", description: "Wall construction with concrete blocks", tenantId: sampleTenantId },
-      { category: "blockwork", name: "Columns", description: "Concrete column construction", tenantId: sampleTenantId },
-      { category: "blockwork", name: "Lintels", description: "Lintel installation above openings", tenantId: sampleTenantId },
-      { category: "blockwork", name: "Scaffolding", description: "Scaffolding for blockwork construction", tenantId: sampleTenantId },
-      
-      // Decking
-      { category: "decking", name: "Formwork", description: "Formwork for concrete decking", tenantId: sampleTenantId },
-      { category: "decking", name: "Reinforcement", description: "Steel reinforcement for deck slabs", tenantId: sampleTenantId },
-      { category: "decking", name: "Concrete Casting", description: "Concrete casting for deck slabs", tenantId: sampleTenantId },
+      // Structural (includes Blockwork & Decking)
+      { category: "structural", name: "Block Molding", description: "Concrete block molding and preparation", tenantId: sampleTenantId },
+      { category: "structural", name: "Block Laying", description: "Wall construction with concrete blocks", tenantId: sampleTenantId },
+      { category: "structural", name: "Columns", description: "Concrete column construction", tenantId: sampleTenantId },
+      { category: "structural", name: "Lintels", description: "Lintel installation above openings", tenantId: sampleTenantId },
+      { category: "structural", name: "Scaffolding", description: "Scaffolding for construction", tenantId: sampleTenantId },
+      { category: "structural", name: "Formwork", description: "Formwork for concrete decking", tenantId: sampleTenantId },
+      { category: "structural", name: "Concrete Casting", description: "Concrete casting for deck slabs", tenantId: sampleTenantId },
       
       // Roofing
       { category: "roofing", name: "Trusses", description: "Roof truss installation", tenantId: sampleTenantId },
@@ -84,11 +81,17 @@ async function seedConstructionData() {
       { category: "roofing", name: "Fascia & Soffit", description: "Fascia board and soffit installation", tenantId: sampleTenantId },
       { category: "roofing", name: "Gutters", description: "Gutter and downpipe installation", tenantId: sampleTenantId },
       
-      // M&E (Mechanical & Electrical)
-      { category: "mechanical_electrical", name: "Electrical Rough-in", description: "Electrical rough-in installation", tenantId: sampleTenantId },
-      { category: "mechanical_electrical", name: "Plumbing Rough-in", description: "Plumbing rough-in installation", tenantId: sampleTenantId },
-      { category: "mechanical_electrical", name: "Septic Tank", description: "Septic tank installation", tenantId: sampleTenantId },
-      { category: "mechanical_electrical", name: "Borehole", description: "Water borehole drilling and setup", tenantId: sampleTenantId },
+      // Electrical
+      { category: "electrical", name: "Electrical Rough-in", description: "Electrical rough-in installation", tenantId: sampleTenantId },
+      { category: "electrical", name: "Electrical Final Fix", description: "Final electrical connections and testing", tenantId: sampleTenantId },
+      { category: "electrical", name: "Panel Installation", description: "Electrical panel and distribution setup", tenantId: sampleTenantId },
+      { category: "electrical", name: "Lighting Fixtures", description: "Installation of lighting fixtures", tenantId: sampleTenantId },
+      
+      // Plumbing
+      { category: "plumbing", name: "Plumbing Rough-in", description: "Plumbing rough-in installation", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Septic Tank", description: "Septic tank installation", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Borehole", description: "Water borehole drilling and setup", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Plumbing Final Fix", description: "Final plumbing connections and testing", tenantId: sampleTenantId },
       
       // Finishing
       { category: "finishing", name: "Plastering", description: "Wall and ceiling plastering", tenantId: sampleTenantId },
@@ -100,8 +103,6 @@ async function seedConstructionData() {
       { category: "finishing", name: "Painting", description: "Interior and exterior painting", tenantId: sampleTenantId },
       { category: "finishing", name: "Cabinetry", description: "Kitchen and bathroom cabinetry", tenantId: sampleTenantId },
       { category: "finishing", name: "Sanitary", description: "Sanitary ware installation", tenantId: sampleTenantId },
-      { category: "finishing", name: "Electrical Final Fix", description: "Final electrical connections and testing", tenantId: sampleTenantId },
-      { category: "finishing", name: "Plumbing Final Fix", description: "Final plumbing connections and testing", tenantId: sampleTenantId },
       
       // External Works
       { category: "external_works", name: "Driveway", description: "Driveway construction", tenantId: sampleTenantId },
@@ -109,11 +110,11 @@ async function seedConstructionData() {
       { category: "external_works", name: "Landscaping", description: "Site landscaping and gardening", tenantId: sampleTenantId },
       { category: "external_works", name: "Drainage", description: "Site drainage system", tenantId: sampleTenantId },
       
-      // Close-out
-      { category: "closeout", name: "Marketing Collateral", description: "Marketing materials and brochures", tenantId: sampleTenantId },
-      { category: "closeout", name: "Agent Commission", description: "Sales agent commission payments", tenantId: sampleTenantId },
-      { category: "closeout", name: "Final Cleaning", description: "Construction cleanup and final inspection", tenantId: sampleTenantId },
-      { category: "closeout", name: "Occupancy Certificate", description: "Final approvals and occupancy certificate", tenantId: sampleTenantId },
+      // Marketing (includes Close-out activities)
+      { category: "marketing", name: "Marketing Collateral", description: "Marketing materials and brochures", tenantId: sampleTenantId },
+      { category: "marketing", name: "Agent Commission", description: "Sales agent commission payments", tenantId: sampleTenantId },
+      { category: "marketing", name: "Final Cleaning", description: "Construction cleanup and final inspection", tenantId: sampleTenantId },
+      { category: "marketing", name: "Occupancy Certificate", description: "Final approvals and occupancy certificate", tenantId: sampleTenantId },
     ];
 
     // Insert line items
