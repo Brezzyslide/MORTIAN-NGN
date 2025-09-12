@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { db } from "../server/db";
-import { lineItems, materials, companies } from "../shared/schema";
+import { companies, lineItems, materials } from "../shared/schema";
 import { eq } from "drizzle-orm";
 
 async function seedConstructionData() {
@@ -40,8 +40,13 @@ async function seedConstructionData() {
   try {
     console.log("📦 Seeding line items...");
     
-    // Comprehensive line items data
-    const lineItemsData = [
+    // Comprehensive line items data - Land Purchase to Final Cleaning to Marketing
+    const lineItemsData: Array<{
+      category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works" | "marketing";
+      name: string;
+      description: string;
+      tenantId: string;
+    }> = [
       // Land Purchase
       { category: "land_purchase", name: "Land acquisition", description: "Purchase of construction land", tenantId: sampleTenantId },
       { category: "land_purchase", name: "Site survey", description: "Professional site surveying and planning", tenantId: sampleTenantId },
@@ -75,8 +80,8 @@ async function seedConstructionData() {
       // Electrical
       { category: "electrical", name: "Wiring installation", description: "Electrical wiring throughout building", tenantId: sampleTenantId },
       { category: "electrical", name: "Panel setup", description: "Electrical panel and distribution setup", tenantId: sampleTenantId },
-      { category: "electrical", name: "Outlet installation", description: "Installation of electrical outlets and switches", tenantId: sampleTenantId },
-      { category: "electrical", name: "Lighting fixtures", description: "Installation of lighting systems", tenantId: sampleTenantId },
+      { category: "electrical", name: "Outlet installation", description: "Power outlet and switch installation", tenantId: sampleTenantId },
+      { category: "electrical", name: "Lighting fixtures", description: "Installation of lighting fixtures", tenantId: sampleTenantId },
       
       // Plumbing
       { category: "plumbing", name: "Pipe installation", description: "Water supply and sewerage pipe installation", tenantId: sampleTenantId },
@@ -89,16 +94,14 @@ async function seedConstructionData() {
       { category: "finishing", name: "Flooring installation", description: "Installation of floor materials", tenantId: sampleTenantId },
       { category: "finishing", name: "Wall finishing", description: "Plastering and wall finishing work", tenantId: sampleTenantId },
       { category: "finishing", name: "Ceiling work", description: "Ceiling installation and finishing", tenantId: sampleTenantId },
+      { category: "finishing", name: "Final cleaning", description: "Construction cleanup and final inspection", tenantId: sampleTenantId },
+      { category: "finishing", name: "Touch-up work", description: "Final touch-ups and corrections", tenantId: sampleTenantId },
       
       // External Works
       { category: "external_works", name: "Landscaping", description: "Site landscaping and gardening", tenantId: sampleTenantId },
       { category: "external_works", name: "Paving", description: "Driveway and walkway paving", tenantId: sampleTenantId },
       { category: "external_works", name: "Fencing", description: "Perimeter fencing installation", tenantId: sampleTenantId },
       { category: "external_works", name: "Exterior lighting", description: "Outdoor lighting installation", tenantId: sampleTenantId },
-      
-      // Additional finishing categories
-      { category: "finishing", name: "Final cleaning", description: "Construction cleanup and final inspection", tenantId: sampleTenantId },
-      { category: "finishing", name: "Touch-up work", description: "Final touch-ups and corrections", tenantId: sampleTenantId },
       
       // Marketing
       { category: "marketing", name: "Sales materials", description: "Brochures and sales documentation", tenantId: sampleTenantId },
@@ -107,15 +110,12 @@ async function seedConstructionData() {
     ];
 
     // Insert line items
-    for (const lineItem of lineItemsData) {
-      await db.insert(lineItems).values(lineItem);
-    }
-    
+    await db.insert(lineItems).values(lineItemsData);
     console.log(`✅ Inserted ${lineItemsData.length} line items`);
 
     console.log("🏗️ Seeding materials...");
 
-    // Comprehensive materials data
+    // Comprehensive materials data with realistic pricing
     const materialsData = [
       // Basic construction materials
       { name: "Portland Cement", unit: "bags", currentUnitPrice: "12.50", supplier: "CemCorp Ltd", tenantId: sampleTenantId },
@@ -143,50 +143,52 @@ async function seedConstructionData() {
       { name: "Electrical Cable 4mm", unit: "meters", currentUnitPrice: "10.20", supplier: "ElectroMax", tenantId: sampleTenantId },
       { name: "Wall Switches", unit: "pieces", currentUnitPrice: "8.50", supplier: "ElectroMax", tenantId: sampleTenantId },
       { name: "Power Sockets", unit: "pieces", currentUnitPrice: "12.00", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "LED Light Bulbs", unit: "pieces", currentUnitPrice: "15.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "LED Bulbs 12W", unit: "pieces", currentUnitPrice: "15.00", supplier: "LightCorp", tenantId: sampleTenantId },
       
-      // Plumbing materials
-      { name: "PVC Pipes 110mm", unit: "meters", currentUnitPrice: "18.50", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "PVC Pipes 50mm", unit: "meters", currentUnitPrice: "8.20", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "PVC Pipes 25mm", unit: "meters", currentUnitPrice: "4.50", supplier: "PlumbPro", tenantId: sampleTenantId },
+      // Plumbing materials  
+      { name: "PVC Pipes 100mm", unit: "meters", currentUnitPrice: "18.50", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "PVC Pipes 50mm", unit: "meters", currentUnitPrice: "8.75", supplier: "PlumbPro", tenantId: sampleTenantId },
       { name: "Pipe Fittings Assorted", unit: "pieces", currentUnitPrice: "5.50", supplier: "PlumbPro", tenantId: sampleTenantId },
       { name: "Water Taps", unit: "pieces", currentUnitPrice: "45.00", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "Toilet Set Complete", unit: "pieces", currentUnitPrice: "250.00", supplier: "SaniFix Ltd", tenantId: sampleTenantId },
+      { name: "Toilet Set Complete", unit: "pieces", currentUnitPrice: "350.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
       
       // Finishing materials
-      { name: "Interior Paint White", unit: "liters", currentUnitPrice: "28.00", supplier: "ColorWorks", tenantId: sampleTenantId },
-      { name: "Interior Paint Colored", unit: "liters", currentUnitPrice: "32.00", supplier: "ColorWorks", tenantId: sampleTenantId },
-      { name: "Exterior Paint", unit: "liters", currentUnitPrice: "38.00", supplier: "ColorWorks", tenantId: sampleTenantId },
-      { name: "Ceramic Floor Tiles", unit: "square meters", currentUnitPrice: "45.00", supplier: "TileMasters", tenantId: sampleTenantId },
-      { name: "Wooden Flooring", unit: "square meters", currentUnitPrice: "85.00", supplier: "WoodFloor Ltd", tenantId: sampleTenantId },
-      { name: "Interior Doors", unit: "pieces", currentUnitPrice: "180.00", supplier: "Door & Window Co", tenantId: sampleTenantId },
-      { name: "Windows Aluminum", unit: "square meters", currentUnitPrice: "220.00", supplier: "Door & Window Co", tenantId: sampleTenantId },
+      { name: "Interior Paint White", unit: "liters", currentUnitPrice: "25.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Interior Paint Colors", unit: "liters", currentUnitPrice: "28.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Ceramic Floor Tiles", unit: "square meters", currentUnitPrice: "35.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      { name: "Laminate Flooring", unit: "square meters", currentUnitPrice: "45.00", supplier: "FloorMaster", tenantId: sampleTenantId },
+      { name: "Interior Doors", unit: "pieces", currentUnitPrice: "280.00", supplier: "DoorCraft", tenantId: sampleTenantId },
+      { name: "Windows Aluminum", unit: "square meters", currentUnitPrice: "185.00", supplier: "WindowWorks", tenantId: sampleTenantId },
       
       // External works materials
-      { name: "Concrete Paving Stones", unit: "square meters", currentUnitPrice: "35.00", supplier: "Pave Perfect", tenantId: sampleTenantId },
-      { name: "Fence Posts", unit: "pieces", currentUnitPrice: "25.00", supplier: "Fence Solutions", tenantId: sampleTenantId },
-      { name: "Chain Link Fencing", unit: "meters", currentUnitPrice: "18.00", supplier: "Fence Solutions", tenantId: sampleTenantId },
-      { name: "Garden Soil", unit: "cubic meters", currentUnitPrice: "35.00", supplier: "Garden Center", tenantId: sampleTenantId },
-      { name: "Grass Seeds", unit: "kg", currentUnitPrice: "45.00", supplier: "Garden Center", tenantId: sampleTenantId },
+      { name: "Paving Stones", unit: "square meters", currentUnitPrice: "42.00", supplier: "StoneCraft", tenantId: sampleTenantId },
+      { name: "Chain Link Fencing", unit: "meters", currentUnitPrice: "28.00", supplier: "FencePro", tenantId: sampleTenantId },
+      { name: "Garden Soil", unit: "cubic meters", currentUnitPrice: "35.00", supplier: "GardenSupply", tenantId: sampleTenantId },
+      { name: "Outdoor Light Fixtures", unit: "pieces", currentUnitPrice: "85.00", supplier: "OutdoorLights", tenantId: sampleTenantId },
       
       // Specialized materials
-      { name: "Waterproof Membrane", unit: "square meters", currentUnitPrice: "28.00", supplier: "WaterSeal Pro", tenantId: sampleTenantId },
-      { name: "Brick Blocks", unit: "pieces", currentUnitPrice: "1.20", supplier: "Brick Masters", tenantId: sampleTenantId },
-      { name: "Mortar Mix", unit: "bags", currentUnitPrice: "15.50", supplier: "CemCorp Ltd", tenantId: sampleTenantId },
-      { name: "Wall Tiles", unit: "square meters", currentUnitPrice: "55.00", supplier: "TileMasters", tenantId: sampleTenantId },
+      { name: "Waterproof Membrane", unit: "square meters", currentUnitPrice: "22.00", supplier: "WaterSeal", tenantId: sampleTenantId },
+      { name: "Construction Bricks", unit: "pieces", currentUnitPrice: "0.85", supplier: "BrickWorks", tenantId: sampleTenantId },
+      { name: "Mortar Mix", unit: "bags", currentUnitPrice: "8.50", supplier: "CemCorp Ltd", tenantId: sampleTenantId },
+      { name: "Insulation Foam", unit: "cubic meters", currentUnitPrice: "120.00", supplier: "InsulPro", tenantId: sampleTenantId },
+      { name: "Steel Beams I-Section", unit: "tons", currentUnitPrice: "1250.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Concrete Blocks", unit: "pieces", currentUnitPrice: "4.50", supplier: "BlockCorp", tenantId: sampleTenantId },
+      { name: "Roofing Nails", unit: "kg", currentUnitPrice: "4.20", supplier: "Hardware Central", tenantId: sampleTenantId },
+      { name: "Exterior Paint", unit: "liters", currentUnitPrice: "32.00", supplier: "ColorMax", tenantId: sampleTenantId }
     ];
 
     // Insert materials
-    for (const material of materialsData) {
-      await db.insert(materials).values(material);
-    }
-    
+    await db.insert(materials).values(materialsData);
     console.log(`✅ Inserted ${materialsData.length} materials`);
-    
+
     console.log("🎉 Seed data creation completed successfully!");
-    
+    console.log(`📊 Summary:`);
+    console.log(`   • Company: ${sampleCompany.name} (${sampleTenantId})`);
+    console.log(`   • Line Items: ${lineItemsData.length} items across construction lifecycle`);
+    console.log(`   • Materials: ${materialsData.length} construction materials with realistic pricing`);
+
   } catch (error) {
-    console.error("❌ Error seeding construction data:", error);
+    console.error("❌ Error during seeding:", error);
     throw error;
   }
 }
@@ -194,10 +196,10 @@ async function seedConstructionData() {
 // Run the seed function
 seedConstructionData()
   .then(() => {
-    console.log("✅ Construction seed data process completed!");
+    console.log("✨ Seeding completed successfully!");
     process.exit(0);
   })
   .catch((error) => {
-    console.error("❌ Construction seed data process failed:", error);
+    console.error("💥 Seeding failed:", error);
     process.exit(1);
   });
