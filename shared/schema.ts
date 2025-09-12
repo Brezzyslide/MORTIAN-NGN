@@ -198,6 +198,7 @@ export const costAllocations = pgTable("cost_allocations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: uuid("project_id").references(() => projects.id).notNull(),
   lineItemId: uuid("line_item_id").references(() => lineItems.id).notNull(),
+  changeOrderId: uuid("change_order_id").references(() => changeOrders.id),
   labourCost: decimal("labour_cost", { precision: 15, scale: 2 }).notNull().default("0"),
   materialCost: decimal("material_cost", { precision: 15, scale: 2 }).notNull().default("0"),
   quantity: decimal("quantity", { precision: 15, scale: 2 }).notNull(),
@@ -242,6 +243,8 @@ export const budgetAmendments = pgTable("budget_amendments", {
   projectId: uuid("project_id").references(() => projects.id).notNull(),
   amountAdded: decimal("amount_added", { precision: 15, scale: 2 }).notNull(),
   reason: text("reason").notNull(),
+  proposedBy: varchar("proposed_by").references(() => users.id).notNull(),
+  status: approvalStatusEnum("status").notNull().default("draft"),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
   tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
@@ -254,7 +257,9 @@ export const changeOrders = pgTable("change_orders", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: uuid("project_id").references(() => projects.id).notNull(),
   description: text("description").notNull(),
-  impactOnBudget: decimal("impact_on_budget", { precision: 15, scale: 2 }).notNull(),
+  costImpact: decimal("cost_impact", { precision: 15, scale: 2 }).notNull(),
+  proposedBy: varchar("proposed_by").references(() => users.id).notNull(),
+  status: approvalStatusEnum("status").notNull().default("draft"),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
   tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
@@ -371,6 +376,8 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   transactions: many(transactions),
   transfers: many(fundTransfers),
   auditLogs: many(auditLogs),
+  budgetAmendments: many(budgetAmendments),
+  changeOrders: many(changeOrders),
 }));
 
 export const fundAllocationsRelations = relations(fundAllocations, ({ one, many }) => ({
@@ -452,6 +459,10 @@ export const costAllocationsRelations = relations(costAllocations, ({ one, many 
     fields: [costAllocations.lineItemId],
     references: [lineItems.id],
   }),
+  changeOrder: one(changeOrders, {
+    fields: [costAllocations.changeOrderId],
+    references: [changeOrders.id],
+  }),
   enteredByUser: one(users, {
     fields: [costAllocations.enteredBy],
     references: [users.id],
@@ -482,21 +493,34 @@ export const budgetAmendmentsRelations = relations(budgetAmendments, ({ one }) =
     fields: [budgetAmendments.projectId],
     references: [projects.id],
   }),
+  proposer: one(users, {
+    fields: [budgetAmendments.proposedBy],
+    references: [users.id],
+    relationName: "budget_amendments_proposed"
+  }),
   approver: one(users, {
     fields: [budgetAmendments.approvedBy],
     references: [users.id],
+    relationName: "budget_amendments_approved"
   }),
 }));
 
-export const changeOrdersRelations = relations(changeOrders, ({ one }) => ({
+export const changeOrdersRelations = relations(changeOrders, ({ one, many }) => ({
   project: one(projects, {
     fields: [changeOrders.projectId],
     references: [projects.id],
   }),
+  proposer: one(users, {
+    fields: [changeOrders.proposedBy],
+    references: [users.id],
+    relationName: "change_orders_proposed"
+  }),
   approver: one(users, {
     fields: [changeOrders.approvedBy],
     references: [users.id],
+    relationName: "change_orders_approved"
   }),
+  costAllocations: many(costAllocations),
 }));
 
 export const budgetAlertsRelations = relations(budgetAlerts, ({ one }) => ({

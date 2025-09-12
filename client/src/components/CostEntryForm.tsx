@@ -34,6 +34,7 @@ const materialAllocationSchema = z.object({
 const costEntrySchema = z.object({
   projectId: z.string().min(1, "Project is required"),
   lineItemId: z.string().min(1, "Line item is required"),
+  changeOrderId: z.string().optional(),
   labourCost: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
     message: "Labour cost must be a positive number",
   }),
@@ -125,6 +126,7 @@ export default function CostEntryForm() {
     defaultValues: {
       projectId: "",
       lineItemId: "",
+      changeOrderId: "",
       labourCost: "0",
       quantity: "1",
       unitCost: "0",
@@ -140,6 +142,7 @@ export default function CostEntryForm() {
   // Watch form values for real-time calculations
   const watchedLabourCost = form.watch("labourCost");
   const watchedMaterialAllocations = form.watch("materialAllocations");
+  const watchedProjectId = form.watch("projectId");
 
   // Fetch projects
   const { data: projects, isLoading: projectsLoading } = useQuery({
@@ -156,6 +159,13 @@ export default function CostEntryForm() {
   // Fetch materials
   const { data: materials, isLoading: materialsLoading } = useQuery({
     queryKey: ["/api/materials"],
+    retry: false,
+  });
+
+  // Fetch change orders for selected project
+  const { data: changeOrders, isLoading: changeOrdersLoading } = useQuery({
+    queryKey: ["/api/change-orders", watchedProjectId ? `projectId=${watchedProjectId}` : ""],
+    enabled: !!watchedProjectId,
     retry: false,
   });
 
@@ -231,12 +241,13 @@ export default function CostEntryForm() {
     if (!pendingSubmission) return;
     
     const formData = form.getValues();
-    const { projectId, lineItemId, labourCost, quantity, unitCost, materialAllocations } = formData;
+    const { projectId, lineItemId, changeOrderId, labourCost, quantity, unitCost, materialAllocations } = formData;
 
     // Prepare submission data
     const submissionData = {
       projectId,
       lineItemId,
+      changeOrderId: changeOrderId && changeOrderId !== "none" ? changeOrderId : undefined,
       labourCost: Number(labourCost),
       quantity: Number(quantity),
       unitCost: Number(unitCost),
@@ -352,7 +363,11 @@ export default function CostEntryForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Project</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={(value) => {
+                        field.onChange(value);
+                        // Reset change order when project changes
+                        form.setValue("changeOrderId", "");
+                      }} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-project">
                             <SelectValue placeholder="Select a project" />
@@ -403,6 +418,49 @@ export default function CostEntryForm() {
                   )}
                 />
               </div>
+
+              {/* Change Order Selection */}
+              {watchedProjectId && (
+                <div className="grid grid-cols-1 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="changeOrderId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Change Order (Optional)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-change-order">
+                              <SelectValue placeholder="Link to a change order (optional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">No change order</SelectItem>
+                            {changeOrders && Array.isArray(changeOrders) ? 
+                              changeOrders
+                                .filter((co: any) => co.status === 'approved') // Only show approved change orders
+                                .map((changeOrder: any) => (
+                                  <SelectItem key={changeOrder.id} value={changeOrder.id}>
+                                    <div className="flex items-center space-x-2">
+                                      <span className="truncate max-w-xs">{changeOrder.description}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        (${parseFloat(changeOrder.costImpact || '0').toLocaleString()})
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                )) 
+                              : null}
+                          </SelectContent>
+                        </Select>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Only approved change orders are available for linking. This helps track costs related to scope changes.
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
 
               {/* Basic Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

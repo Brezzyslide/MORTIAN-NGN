@@ -58,6 +58,9 @@ function Router() {
       <Route path="/users" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/companies" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/permissions" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/budget-amendments" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/change-orders" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/budget-history" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>
   );

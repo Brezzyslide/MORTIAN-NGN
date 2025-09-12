@@ -12,6 +12,8 @@ import {
   materialAllocations,
   approvalWorkflows,
   budgetAlerts,
+  budgetAmendments,
+  changeOrders,
   type User,
   type UpsertUser,
   type Project,
@@ -38,6 +40,10 @@ import {
   type InsertApprovalWorkflow,
   type BudgetAlert,
   type InsertBudgetAlert,
+  type BudgetAmendment,
+  type InsertBudgetAmendment,
+  type ChangeOrder,
+  type InsertChangeOrder,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
@@ -152,6 +158,7 @@ export interface IStorage {
     startDate?: Date;
     endDate?: Date;
     projectId?: string;
+    changeOrderId?: string;
     category?: string;
     search?: string;
     limit?: number;
@@ -162,6 +169,8 @@ export interface IStorage {
       lineItemCategory: string;
       projectTitle: string;
       enteredByName: string;
+      changeOrderId?: string | null;
+      changeOrderDescription?: string | null;
       materialAllocations: (MaterialAllocation & { material: Material })[];
     }>;
     total: number;
@@ -202,6 +211,27 @@ export interface IStorage {
   acknowledgeBudgetAlert(alertId: string, acknowledgedBy: string, tenantId: string): Promise<BudgetAlert | undefined>;
   resolveBudgetAlert(alertId: string, tenantId: string): Promise<BudgetAlert | undefined>;
   checkAndCreateBudgetAlerts(projectId: string, tenantId: string): Promise<BudgetAlert[]>;
+
+  // Budget amendment operations
+  getBudgetAmendments(tenantId: string, projectId?: string, status?: 'draft' | 'pending' | 'approved' | 'rejected', userRole?: string, userId?: string): Promise<Array<BudgetAmendment & { project: Project; proposer: User; approver?: User }>>;
+  getBudgetAmendmentsByProject(projectId: string, tenantId: string): Promise<Array<BudgetAmendment & { proposer: User; approver?: User }>>;
+  createBudgetAmendment(amendment: InsertBudgetAmendment): Promise<BudgetAmendment>;
+  updateBudgetAmendmentStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<BudgetAmendment | undefined>;
+
+  // Change order operations
+  getChangeOrders(tenantId: string, projectId?: string, status?: 'draft' | 'pending' | 'approved' | 'rejected', userRole?: string, userId?: string): Promise<Array<ChangeOrder & { project: Project; proposer: User; approver?: User }>>;
+  getChangeOrdersByProject(projectId: string, tenantId: string): Promise<Array<ChangeOrder & { proposer: User; approver?: User }>>;
+  createChangeOrder(changeOrder: InsertChangeOrder): Promise<ChangeOrder>;
+  updateChangeOrderStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<ChangeOrder | undefined>;
+
+  // Project budget history operations
+  getProjectBudgetHistory(projectId: string, tenantId: string): Promise<{
+    originalBudget: number;
+    totalAmendments: number;
+    currentBudget: number;
+    amendments: Array<BudgetAmendment & { proposer: User; approver?: User }>;
+    changeOrders: Array<ChangeOrder & { proposer: User; approver?: User }>;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -757,6 +787,7 @@ export class DatabaseStorage implements IStorage {
     startDate?: Date;
     endDate?: Date;
     projectId?: string;
+    changeOrderId?: string;
     categories?: string[];
     search?: string;
     limit?: number;
@@ -767,6 +798,8 @@ export class DatabaseStorage implements IStorage {
       lineItemCategory: string;
       projectTitle: string;
       enteredByName: string;
+      changeOrderId?: string | null;
+      changeOrderDescription?: string | null;
       materialAllocations: (MaterialAllocation & { material: Material })[];
     }>;
     total: number;
@@ -782,11 +815,14 @@ export class DatabaseStorage implements IStorage {
     if (filters?.projectId) {
       whereConditions.push(eq(costAllocations.projectId, filters.projectId));
     }
+    if (filters?.changeOrderId) {
+      whereConditions.push(eq(costAllocations.changeOrderId, filters.changeOrderId));
+    }
     if (filters?.categories && filters.categories.length > 0) {
       whereConditions.push(inArray(lineItems.category, filters.categories as any));
     }
     if (filters?.search) {
-      whereConditions.push(sql`(${lineItems.name} ILIKE ${'%' + filters.search + '%'} OR ${projects.title} ILIKE ${'%' + filters.search + '%'})`);
+      whereConditions.push(sql`(${lineItems.name} ILIKE ${'%' + filters.search + '%'} OR ${projects.title} ILIKE ${'%' + filters.search + '%'} OR ${changeOrders.description} ILIKE ${'%' + filters.search + '%'})`);
     }
 
     // Get total count for pagination
@@ -796,6 +832,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
       .innerJoin(projects, eq(costAllocations.projectId, projects.id))
       .innerJoin(users, eq(costAllocations.enteredBy, users.id))
+      .leftJoin(changeOrders, eq(costAllocations.changeOrderId, changeOrders.id))
       .where(and(...whereConditions));
 
     // Get allocations with pagination
@@ -806,11 +843,14 @@ export class DatabaseStorage implements IStorage {
         lineItemCategory: lineItems.category,
         projectTitle: projects.title,
         enteredByName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        changeOrderId: changeOrders.id,
+        changeOrderDescription: changeOrders.description,
       })
       .from(costAllocations)
       .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
       .innerJoin(projects, eq(costAllocations.projectId, projects.id))
       .innerJoin(users, eq(costAllocations.enteredBy, users.id))
+      .leftJoin(changeOrders, eq(costAllocations.changeOrderId, changeOrders.id))
       .where(and(...whereConditions))
       .orderBy(desc(costAllocations.dateIncurred));
 
@@ -857,6 +897,8 @@ export class DatabaseStorage implements IStorage {
           lineItemCategory: item.lineItemCategory,
           projectTitle: item.projectTitle,
           enteredByName: item.enteredByName,
+          changeOrderId: item.changeOrderId,
+          changeOrderDescription: item.changeOrderDescription,
           materialAllocations: materialAllocationResults,
         };
       })
@@ -1390,6 +1432,461 @@ export class DatabaseStorage implements IStorage {
     }
 
     return createdAlerts;
+  }
+
+  // Budget amendment operations
+  async getBudgetAmendments(tenantId: string, projectId?: string, status?: 'draft' | 'pending' | 'approved' | 'rejected', userRole?: string, userId?: string): Promise<Array<BudgetAmendment & { project: Project; proposer: User; approver?: User }>> {
+    // Build where conditions with strict tenant isolation
+    let whereConditions = [eq(budgetAmendments.tenantId, tenantId)];
+    
+    if (projectId) {
+      whereConditions.push(eq(budgetAmendments.projectId, projectId));
+    }
+    
+    if (status) {
+      whereConditions.push(eq(budgetAmendments.status, status));
+    }
+
+    // Role-based filtering for data security
+    if (userRole && !['admin', 'console_manager'].includes(userRole) && userId) {
+      // Non-admin users can only see amendments for projects they are involved with
+      whereConditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM ${projects} 
+          WHERE ${projects.id} = ${budgetAmendments.projectId}
+          AND ${projects.tenantId} = ${tenantId}
+          AND (${projects.managerId} = ${userId} 
+               OR EXISTS (
+                 SELECT 1 FROM ${fundAllocations} 
+                 WHERE ${fundAllocations.projectId} = ${projects.id} 
+                 AND ${fundAllocations.tenantId} = ${tenantId}
+                 AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+               )
+               OR ${budgetAmendments.proposedBy} = ${userId})
+        )`
+      );
+    }
+
+    const results = await db
+      .select({
+        // Budget amendment fields
+        id: budgetAmendments.id,
+        projectId: budgetAmendments.projectId,
+        amountAdded: budgetAmendments.amountAdded,
+        reason: budgetAmendments.reason,
+        proposedBy: budgetAmendments.proposedBy,
+        status: budgetAmendments.status,
+        approvedBy: budgetAmendments.approvedBy,
+        approvedAt: budgetAmendments.approvedAt,
+        tenantId: budgetAmendments.tenantId,
+        createdAt: budgetAmendments.createdAt,
+        updatedAt: budgetAmendments.updatedAt,
+        // Project data
+        project: {
+          id: projects.id,
+          title: projects.title,
+          description: projects.description,
+          startDate: projects.startDate,
+          endDate: projects.endDate,
+          budget: projects.budget,
+          consumedAmount: projects.consumedAmount,
+          revenue: projects.revenue,
+          managerId: projects.managerId,
+          tenantId: projects.tenantId,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        },
+        // Proposer data
+        proposer: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+        },
+        // Approver data (using SQL for aliased table)
+        approver: {
+          id: sql<string | null>`approver_user.id`,
+          email: sql<string | null>`approver_user.email`,
+          firstName: sql<string | null>`approver_user.first_name`,
+          lastName: sql<string | null>`approver_user.last_name`,
+          role: sql<string | null>`approver_user.role`,
+        },
+      })
+      .from(budgetAmendments)
+      .leftJoin(projects, eq(budgetAmendments.projectId, projects.id))
+      .leftJoin(users, eq(budgetAmendments.proposedBy, users.id))
+      .leftJoin(sql`users as approver_user`, sql`budget_amendments.approved_by = approver_user.id`)
+      .where(and(...whereConditions))
+      .orderBy(desc(budgetAmendments.createdAt));
+    
+    return results.map(result => ({
+      id: result.id,
+      projectId: result.projectId,
+      amountAdded: result.amountAdded,
+      reason: result.reason,
+      proposedBy: result.proposedBy,
+      status: result.status,
+      approvedBy: result.approvedBy,
+      approvedAt: result.approvedAt,
+      tenantId: result.tenantId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      project: result.project!,
+      proposer: result.proposer,
+      approver: result.approver?.id ? {
+        id: result.approver.id!,
+        email: result.approver.email!,
+        firstName: result.approver.firstName!,
+        lastName: result.approver.lastName!,
+        role: result.approver.role!,
+      } as User : undefined,
+    }));
+  }
+
+  async getBudgetAmendmentsByProject(projectId: string, tenantId: string): Promise<Array<BudgetAmendment & { proposer: User; approver?: User }>> {
+    const results = await db
+      .select({
+        // Budget amendment fields
+        id: budgetAmendments.id,
+        projectId: budgetAmendments.projectId,
+        amountAdded: budgetAmendments.amountAdded,
+        reason: budgetAmendments.reason,
+        proposedBy: budgetAmendments.proposedBy,
+        status: budgetAmendments.status,
+        approvedBy: budgetAmendments.approvedBy,
+        approvedAt: budgetAmendments.approvedAt,
+        tenantId: budgetAmendments.tenantId,
+        createdAt: budgetAmendments.createdAt,
+        updatedAt: budgetAmendments.updatedAt,
+        // Proposer data
+        proposer: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+        },
+        // Approver data (using SQL for aliased table)
+        approver: {
+          id: sql<string | null>`approver_user.id`,
+          email: sql<string | null>`approver_user.email`,
+          firstName: sql<string | null>`approver_user.first_name`,
+          lastName: sql<string | null>`approver_user.last_name`,
+          role: sql<string | null>`approver_user.role`,
+        },
+      })
+      .from(budgetAmendments)
+      .leftJoin(users, eq(budgetAmendments.proposedBy, users.id))
+      .leftJoin(sql`users as approver_user`, sql`budget_amendments.approved_by = approver_user.id`)
+      .where(and(
+        eq(budgetAmendments.projectId, projectId),
+        eq(budgetAmendments.tenantId, tenantId)
+      ))
+      .orderBy(desc(budgetAmendments.createdAt));
+
+    return results.map(result => ({
+      id: result.id,
+      projectId: result.projectId,
+      amountAdded: result.amountAdded,
+      reason: result.reason,
+      proposedBy: result.proposedBy,
+      status: result.status,
+      approvedBy: result.approvedBy,
+      approvedAt: result.approvedAt,
+      tenantId: result.tenantId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      proposer: result.proposer,
+      approver: result.approver?.id ? {
+        id: result.approver.id!,
+        email: result.approver.email!,
+        firstName: result.approver.firstName!,
+        lastName: result.approver.lastName!,
+        role: result.approver.role!,
+      } as User : undefined,
+    }));
+  }
+
+  async createBudgetAmendment(amendment: InsertBudgetAmendment): Promise<BudgetAmendment> {
+    const [newAmendment] = await db
+      .insert(budgetAmendments)
+      .values(amendment)
+      .returning();
+    return newAmendment;
+  }
+
+  async updateBudgetAmendmentStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<BudgetAmendment | undefined> {
+    const updateData: any = {
+      status,
+      updatedAt: new Date(),
+    };
+
+    if (status === 'approved' && approvedBy) {
+      updateData.approvedBy = approvedBy;
+      updateData.approvedAt = new Date();
+    }
+
+    // Build where conditions
+    let whereConditions = [eq(budgetAmendments.id, id)];
+    if (tenantId) {
+      whereConditions.push(eq(budgetAmendments.tenantId, tenantId));
+    }
+
+    const [updatedAmendment] = await db
+      .update(budgetAmendments)
+      .set(updateData)
+      .where(and(...whereConditions))
+      .returning();
+      
+    return updatedAmendment;
+  }
+
+  // Change order operations
+  async getChangeOrders(tenantId: string, projectId?: string, status?: 'draft' | 'pending' | 'approved' | 'rejected', userRole?: string, userId?: string): Promise<Array<ChangeOrder & { project: Project; proposer: User; approver?: User }>> {
+    // Build where conditions with strict tenant isolation
+    let whereConditions = [eq(changeOrders.tenantId, tenantId)];
+    
+    if (projectId) {
+      whereConditions.push(eq(changeOrders.projectId, projectId));
+    }
+    
+    if (status) {
+      whereConditions.push(eq(changeOrders.status, status));
+    }
+
+    // Role-based filtering for data security
+    if (userRole && !['admin', 'console_manager'].includes(userRole) && userId) {
+      // Non-admin users can only see change orders for projects they are involved with
+      whereConditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM ${projects} 
+          WHERE ${projects.id} = ${changeOrders.projectId}
+          AND ${projects.tenantId} = ${tenantId}
+          AND (${projects.managerId} = ${userId} 
+               OR EXISTS (
+                 SELECT 1 FROM ${fundAllocations} 
+                 WHERE ${fundAllocations.projectId} = ${projects.id} 
+                 AND ${fundAllocations.tenantId} = ${tenantId}
+                 AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+               )
+               OR ${changeOrders.proposedBy} = ${userId})
+        )`
+      );
+    }
+
+    const results = await db
+      .select({
+        // Change order fields
+        id: changeOrders.id,
+        projectId: changeOrders.projectId,
+        description: changeOrders.description,
+        costImpact: changeOrders.costImpact,
+        proposedBy: changeOrders.proposedBy,
+        status: changeOrders.status,
+        approvedBy: changeOrders.approvedBy,
+        approvedAt: changeOrders.approvedAt,
+        tenantId: changeOrders.tenantId,
+        createdAt: changeOrders.createdAt,
+        updatedAt: changeOrders.updatedAt,
+        // Project data
+        project: {
+          id: projects.id,
+          title: projects.title,
+          description: projects.description,
+          startDate: projects.startDate,
+          endDate: projects.endDate,
+          budget: projects.budget,
+          consumedAmount: projects.consumedAmount,
+          revenue: projects.revenue,
+          managerId: projects.managerId,
+          tenantId: projects.tenantId,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        },
+        // Proposer data
+        proposer: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+        },
+        // Approver data (using SQL for aliased table)
+        approver: {
+          id: sql<string | null>`approver_user.id`,
+          email: sql<string | null>`approver_user.email`,
+          firstName: sql<string | null>`approver_user.first_name`,
+          lastName: sql<string | null>`approver_user.last_name`,
+          role: sql<string | null>`approver_user.role`,
+        },
+      })
+      .from(changeOrders)
+      .leftJoin(projects, eq(changeOrders.projectId, projects.id))
+      .leftJoin(users, eq(changeOrders.proposedBy, users.id))
+      .leftJoin(sql`users as approver_user`, sql`change_orders.approved_by = approver_user.id`)
+      .where(and(...whereConditions))
+      .orderBy(desc(changeOrders.createdAt));
+    
+    return results.map(result => ({
+      id: result.id,
+      projectId: result.projectId,
+      description: result.description,
+      costImpact: result.costImpact,
+      proposedBy: result.proposedBy,
+      status: result.status,
+      approvedBy: result.approvedBy,
+      approvedAt: result.approvedAt,
+      tenantId: result.tenantId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      project: result.project!,
+      proposer: result.proposer,
+      approver: result.approver?.id ? {
+        id: result.approver.id!,
+        email: result.approver.email!,
+        firstName: result.approver.firstName!,
+        lastName: result.approver.lastName!,
+        role: result.approver.role!,
+      } as User : undefined,
+    }));
+  }
+
+  async getChangeOrdersByProject(projectId: string, tenantId: string): Promise<Array<ChangeOrder & { proposer: User; approver?: User }>> {
+    const results = await db
+      .select({
+        // Change order fields
+        id: changeOrders.id,
+        projectId: changeOrders.projectId,
+        description: changeOrders.description,
+        costImpact: changeOrders.costImpact,
+        proposedBy: changeOrders.proposedBy,
+        status: changeOrders.status,
+        approvedBy: changeOrders.approvedBy,
+        approvedAt: changeOrders.approvedAt,
+        tenantId: changeOrders.tenantId,
+        createdAt: changeOrders.createdAt,
+        updatedAt: changeOrders.updatedAt,
+        // Proposer data
+        proposer: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+        },
+        // Approver data (using SQL for aliased table)
+        approver: {
+          id: sql<string | null>`approver_user.id`,
+          email: sql<string | null>`approver_user.email`,
+          firstName: sql<string | null>`approver_user.first_name`,
+          lastName: sql<string | null>`approver_user.last_name`,
+          role: sql<string | null>`approver_user.role`,
+        },
+      })
+      .from(changeOrders)
+      .leftJoin(users, eq(changeOrders.proposedBy, users.id))
+      .leftJoin(sql`users as approver_user`, sql`change_orders.approved_by = approver_user.id`)
+      .where(and(
+        eq(changeOrders.projectId, projectId),
+        eq(changeOrders.tenantId, tenantId)
+      ))
+      .orderBy(desc(changeOrders.createdAt));
+
+    return results.map(result => ({
+      id: result.id,
+      projectId: result.projectId,
+      description: result.description,
+      costImpact: result.costImpact,
+      proposedBy: result.proposedBy,
+      status: result.status,
+      approvedBy: result.approvedBy,
+      approvedAt: result.approvedAt,
+      tenantId: result.tenantId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      proposer: result.proposer,
+      approver: result.approver?.id ? {
+        id: result.approver.id!,
+        email: result.approver.email!,
+        firstName: result.approver.firstName!,
+        lastName: result.approver.lastName!,
+        role: result.approver.role!,
+      } as User : undefined,
+    }));
+  }
+
+  async createChangeOrder(changeOrder: InsertChangeOrder): Promise<ChangeOrder> {
+    const [newChangeOrder] = await db
+      .insert(changeOrders)
+      .values(changeOrder)
+      .returning();
+    return newChangeOrder;
+  }
+
+  async updateChangeOrderStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<ChangeOrder | undefined> {
+    const updateData: any = {
+      status,
+      updatedAt: new Date(),
+    };
+
+    if (status === 'approved' && approvedBy) {
+      updateData.approvedBy = approvedBy;
+      updateData.approvedAt = new Date();
+    }
+
+    // Build where conditions
+    let whereConditions = [eq(changeOrders.id, id)];
+    if (tenantId) {
+      whereConditions.push(eq(changeOrders.tenantId, tenantId));
+    }
+
+    const [updatedChangeOrder] = await db
+      .update(changeOrders)
+      .set(updateData)
+      .where(and(...whereConditions))
+      .returning();
+      
+    return updatedChangeOrder;
+  }
+
+  // Project budget history operations
+  async getProjectBudgetHistory(projectId: string, tenantId: string): Promise<{
+    originalBudget: number;
+    totalAmendments: number;
+    currentBudget: number;
+    amendments: Array<BudgetAmendment & { proposer: User; approver?: User }>;
+    changeOrders: Array<ChangeOrder & { proposer: User; approver?: User }>;
+  }> {
+    // Get project details
+    const project = await this.getProject(projectId, tenantId);
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
+    const originalBudget = parseFloat(project.budget);
+
+    // Get approved budget amendments
+    const approvedAmendments = await this.getBudgetAmendmentsByProject(projectId, tenantId);
+    const approvedAmendmentsOnly = approvedAmendments.filter(a => a.status === 'approved');
+    
+    // Calculate total amendments
+    const totalAmendments = approvedAmendmentsOnly.reduce((sum, amendment) => {
+      return sum + parseFloat(amendment.amountAdded);
+    }, 0);
+
+    // Get change orders for context
+    const projectChangeOrders = await this.getChangeOrdersByProject(projectId, tenantId);
+
+    return {
+      originalBudget,
+      totalAmendments,
+      currentBudget: originalBudget + totalAmendments,
+      amendments: approvedAmendments,
+      changeOrders: projectChangeOrders,
+    };
   }
 }
 

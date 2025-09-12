@@ -19,6 +19,8 @@ import {
   insertCostAllocationSchema,
   insertMaterialAllocationSchema,
   insertApprovalWorkflowSchema,
+  insertBudgetAmendmentSchema,
+  insertChangeOrderSchema,
 } from "@shared/schema";
 import { 
   calcMaterialTotal,
@@ -616,6 +618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startDate, 
         endDate, 
         projectId, 
+        changeOrderId,
         categories, 
         search, 
         page = 1, 
@@ -626,6 +629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (startDate) filters.startDate = new Date(startDate as string);
       if (endDate) filters.endDate = new Date(endDate as string);
       if (projectId) filters.projectId = projectId as string;
+      if (changeOrderId) filters.changeOrderId = changeOrderId as string;
       if (categories) {
         filters.categories = Array.isArray(categories) ? categories : [categories];
       }
@@ -2035,6 +2039,473 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error validating budget impact:", error);
       res.status(500).json({ message: "Failed to validate budget impact" });
+    }
+  });
+
+  // Budget Amendments API Endpoints
+  
+  // POST /api/budget-amendments - Create new budget amendment proposal
+  app.post('/api/budget-amendments', isAuthenticated, authorize(['team_leader', 'admin']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      
+      const amendmentData = insertBudgetAmendmentSchema.parse({
+        ...req.body,
+        proposedBy: userId,
+        tenantId,
+        status: 'draft', // Always start as draft
+      });
+
+      // Validate project exists and user has access
+      const project = await storage.getProject(amendmentData.projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+
+      const budgetAmendment = await storage.createBudgetAmendment(amendmentData);
+      
+      // Create audit log for budget amendment creation
+      await storage.createAuditLog({
+        userId,
+        action: "budget_amended",
+        entityType: "budget_amendment",
+        entityId: budgetAmendment.id,
+        projectId: amendmentData.projectId,
+        amount: amendmentData.amountAdded,
+        tenantId,
+        details: { 
+          reason: amendmentData.reason,
+          amountAdded: amendmentData.amountAdded,
+          status: 'draft'
+        }
+      });
+
+      res.status(201).json(budgetAmendment);
+    } catch (error) {
+      console.error("Error creating budget amendment:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid amendment data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to create budget amendment" });
+    }
+  });
+
+  // GET /api/budget-amendments - Retrieve budget amendments with optional filtering
+  app.get('/api/budget-amendments', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId, tenantId, user } = await getUserData(req);
+      const { projectId, status } = req.query;
+      
+      const filters: any = {};
+      if (projectId) filters.projectId = projectId as string;
+      if (status) filters.status = status as string;
+
+      // Role-based filtering
+      const normalizedRole = mapLegacyRole(user.role);
+
+      const budgetAmendments = await storage.getBudgetAmendments(
+        tenantId, 
+        filters.projectId, 
+        filters.status, 
+        normalizedRole, 
+        userId
+      );
+      res.json(budgetAmendments);
+    } catch (error) {
+      console.error("Error fetching budget amendments:", error);
+      res.status(500).json({ message: "Failed to fetch budget amendments" });
+    }
+  });
+
+  // GET /api/budget-amendments/:id - Get specific budget amendment by ID
+  app.get('/api/budget-amendments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId, tenantId, user } = await getUserData(req);
+      const normalizedRole = mapLegacyRole(user.role);
+      const budgetAmendments = await storage.getBudgetAmendments(tenantId, undefined, undefined, normalizedRole, userId);
+      const budgetAmendment = budgetAmendments.find(a => a.id === req.params.id);
+      
+      if (!budgetAmendment) {
+        return res.status(404).json({ message: "Budget amendment not found" });
+      }
+      
+      res.json(budgetAmendment);
+    } catch (error) {
+      console.error("Error fetching budget amendment:", error);
+      res.status(500).json({ message: "Failed to fetch budget amendment" });
+    }
+  });
+
+  // PATCH /api/budget-amendments/:id/status - Update amendment status (approve/reject)
+  app.patch('/api/budget-amendments/:id/status', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const { status, comments } = req.body;
+      
+      // Validate status
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: "Status must be 'approved' or 'rejected'" });
+      }
+
+      const budgetAmendments = await storage.getBudgetAmendments(tenantId);
+      const budgetAmendment = budgetAmendments.find(a => a.id === req.params.id);
+      if (!budgetAmendment) {
+        return res.status(404).json({ message: "Budget amendment not found" });
+      }
+
+      if (budgetAmendment.status !== 'pending' && budgetAmendment.status !== 'draft') {
+        return res.status(400).json({ message: "Amendment has already been processed" });
+      }
+
+      // Update budget amendment status
+      const updatedAmendment = await storage.updateBudgetAmendmentStatus(
+        req.params.id, 
+        status, 
+        userId,
+        tenantId
+      );
+
+      if (!updatedAmendment) {
+        return res.status(404).json({ message: "Failed to update budget amendment" });
+      }
+
+      // If approved, update project budget and trigger recalculation
+      if (status === 'approved') {
+        const project = await storage.getProject(budgetAmendment.projectId, tenantId);
+        if (project) {
+          const newBudget = parseFloat(project.budget) + parseFloat(budgetAmendment.amountAdded);
+          await storage.updateProject(budgetAmendment.projectId, { budget: newBudget.toString() }, tenantId);
+          
+          // Trigger budget variance calculation
+          const variance = calcBudgetVariance(parseFloat(project.consumedAmount), newBudget);
+          
+          // Create budget alert if needed
+          if (variance.isOverBudget || variance.status === 'warning' || variance.status === 'critical') {
+            const alertType = variance.isOverBudget ? 'over_budget' : 
+                           variance.status === 'critical' ? 'critical_threshold' : 'warning_threshold';
+            
+            await storage.createBudgetAlert({
+              projectId: budgetAmendment.projectId,
+              type: alertType,
+              severity: alertType === 'over_budget' ? 'critical' : (alertType === 'critical_threshold' ? 'critical' : 'warning'),
+              message: generateBudgetAlertMessage(project.title, variance),
+              tenantId
+            });
+          }
+        }
+      }
+      
+      // Create audit log for status change
+      await storage.createAuditLog({
+        userId,
+        action: "budget_amended",
+        entityType: "budget_amendment",
+        entityId: req.params.id,
+        projectId: budgetAmendment.projectId,
+        amount: budgetAmendment.amountAdded,
+        tenantId,
+        details: { 
+          previousStatus: budgetAmendment.status,
+          newStatus: status,
+          comments: comments || null,
+          approvedBy: userId
+        }
+      });
+
+      res.json(updatedAmendment);
+    } catch (error) {
+      console.error("Error updating budget amendment status:", error);
+      res.status(500).json({ message: "Failed to update budget amendment status" });
+    }
+  });
+
+  // Change Orders API Endpoints
+  
+  // POST /api/change-orders - Create new change order proposal
+  app.post('/api/change-orders', isAuthenticated, authorize(['team_leader', 'admin']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      
+      const changeOrderData = insertChangeOrderSchema.parse({
+        ...req.body,
+        proposedBy: userId,
+        tenantId,
+        status: 'draft', // Always start as draft
+      });
+
+      // Validate project exists and user has access
+      const project = await storage.getProject(changeOrderData.projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+
+      const changeOrder = await storage.createChangeOrder(changeOrderData);
+      
+      // Create audit log for change order creation
+      await storage.createAuditLog({
+        userId,
+        action: "change_order_created",
+        entityType: "change_order",
+        entityId: changeOrder.id,
+        projectId: changeOrderData.projectId,
+        amount: changeOrderData.costImpact,
+        tenantId,
+        details: { 
+          description: changeOrderData.description,
+          costImpact: changeOrderData.costImpact,
+          status: 'draft'
+        }
+      });
+
+      res.status(201).json(changeOrder);
+    } catch (error) {
+      console.error("Error creating change order:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid change order data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to create change order" });
+    }
+  });
+
+  // GET /api/change-orders - Retrieve change orders with optional filtering
+  app.get('/api/change-orders', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId, tenantId, user } = await getUserData(req);
+      const { projectId, status } = req.query;
+      
+      const filters: any = {};
+      if (projectId) filters.projectId = projectId as string;
+      if (status) filters.status = status as string;
+
+      // Role-based filtering
+      const normalizedRole = mapLegacyRole(user.role);
+
+      const changeOrders = await storage.getChangeOrders(
+        tenantId, 
+        filters.projectId, 
+        filters.status, 
+        normalizedRole, 
+        userId
+      );
+      res.json(changeOrders);
+    } catch (error) {
+      console.error("Error fetching change orders:", error);
+      res.status(500).json({ message: "Failed to fetch change orders" });
+    }
+  });
+
+  // GET /api/change-orders/:id - Get specific change order by ID
+  app.get('/api/change-orders/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId, tenantId, user } = await getUserData(req);
+      const normalizedRole = mapLegacyRole(user.role);
+      const changeOrders = await storage.getChangeOrders(tenantId, undefined, undefined, normalizedRole, userId);
+      const changeOrder = changeOrders.find(c => c.id === req.params.id);
+      
+      if (!changeOrder) {
+        return res.status(404).json({ message: "Change order not found" });
+      }
+      
+      res.json(changeOrder);
+    } catch (error) {
+      console.error("Error fetching change order:", error);
+      res.status(500).json({ message: "Failed to fetch change order" });
+    }
+  });
+
+  // PATCH /api/change-orders/:id/status - Update change order status (approve/reject)
+  app.patch('/api/change-orders/:id/status', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const { status, comments } = req.body;
+      
+      // Validate status
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: "Status must be 'approved' or 'rejected'" });
+      }
+
+      const changeOrders = await storage.getChangeOrders(tenantId);
+      const changeOrder = changeOrders.find(c => c.id === req.params.id);
+      if (!changeOrder) {
+        return res.status(404).json({ message: "Change order not found" });
+      }
+
+      if (changeOrder.status !== 'pending' && changeOrder.status !== 'draft') {
+        return res.status(400).json({ message: "Change order has already been processed" });
+      }
+
+      // Update change order status
+      const updatedChangeOrder = await storage.updateChangeOrderStatus(
+        req.params.id, 
+        status, 
+        userId,
+        tenantId
+      );
+
+      if (!updatedChangeOrder) {
+        return res.status(404).json({ message: "Failed to update change order" });
+      }
+
+      // If approved and has cost impact, update project budget
+      if (status === 'approved' && parseFloat(changeOrder.costImpact) !== 0) {
+        const project = await storage.getProject(changeOrder.projectId, tenantId);
+        if (project) {
+          const newBudget = parseFloat(project.budget) + parseFloat(changeOrder.costImpact);
+          await storage.updateProject(changeOrder.projectId, { budget: newBudget.toString() }, tenantId);
+          
+          // Trigger budget variance calculation if cost impact is positive
+          if (parseFloat(changeOrder.costImpact) > 0) {
+            const variance = calcBudgetVariance(parseFloat(project.consumedAmount), newBudget);
+            
+            // Create budget alert if needed
+            if (variance.isOverBudget || variance.status === 'warning' || variance.status === 'critical') {
+              const alertType = variance.isOverBudget ? 'over_budget' : 
+                             variance.status === 'critical' ? 'critical_threshold' : 'warning_threshold';
+              
+              await storage.createBudgetAlert({
+                projectId: changeOrder.projectId,
+                type: alertType,
+                severity: alertType === 'over_budget' ? 'critical' : (alertType === 'critical_threshold' ? 'critical' : 'warning'),
+                message: generateBudgetAlertMessage(project.title, variance),
+                tenantId
+              });
+            }
+          }
+        }
+      }
+      
+      // Create audit log for status change
+      await storage.createAuditLog({
+        userId,
+        action: "change_order_created",
+        entityType: "change_order",
+        entityId: req.params.id,
+        projectId: changeOrder.projectId,
+        amount: changeOrder.costImpact,
+        tenantId,
+        details: { 
+          previousStatus: changeOrder.status,
+          newStatus: status,
+          comments: comments || null,
+          approvedBy: userId,
+          description: changeOrder.description
+        }
+      });
+
+      res.json(updatedChangeOrder);
+    } catch (error) {
+      console.error("Error updating change order status:", error);
+      res.status(500).json({ message: "Failed to update change order status" });
+    }
+  });
+
+  // GET /api/projects/:id/budget-history - Get complete budget history
+  app.get('/api/projects/:id/budget-history', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const projectId = req.params.id;
+      
+      // Validate project exists and user has access
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+
+      // Get all budget amendments and change orders for this project
+      const [budgetAmendments, changeOrders] = await Promise.all([
+        storage.getBudgetAmendments(tenantId, projectId, 'approved'),
+        storage.getChangeOrders(tenantId, projectId, 'approved')
+      ]);
+
+      // Calculate budget history timeline
+      const originalBudget = parseFloat(project.budget);
+      let runningTotal = originalBudget;
+      
+      const history = [
+        {
+          id: 'original',
+          type: 'original_budget',
+          date: project.createdAt,
+          description: 'Original project budget',
+          amount: originalBudget,
+          runningTotal: originalBudget,
+          details: null
+        }
+      ];
+
+      // Combine and sort amendments and change orders by date
+      const allChanges = [
+        ...budgetAmendments.map(amendment => ({
+          id: amendment.id,
+          type: 'budget_amendment',
+          date: amendment.approvedAt || amendment.createdAt,
+          description: amendment.reason,
+          amount: parseFloat(amendment.amountAdded),
+          details: amendment
+        })),
+        ...changeOrders.map(order => ({
+          id: order.id,
+          type: 'change_order',
+          date: order.approvedAt || order.createdAt,
+          description: order.description,
+          amount: parseFloat(order.costImpact),
+          details: order
+        }))
+      ].sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateA - dateB;
+      });
+
+      // Build history with running totals
+      allChanges.forEach(change => {
+        runningTotal += change.amount;
+        history.push({
+          id: change.id,
+          type: change.type,
+          date: change.date,
+          description: change.description,
+          amount: change.amount,
+          runningTotal,
+          details: null
+        });
+      });
+
+      // Calculate summary
+      const totalAmendments = budgetAmendments.reduce((sum, amendment) => 
+        sum + parseFloat(amendment.amountAdded), 0);
+      const totalChangeOrders = changeOrders.reduce((sum, order) => 
+        sum + parseFloat(order.costImpact), 0);
+      const currentBudget = runningTotal;
+
+      res.json({
+        projectId,
+        projectTitle: project.title,
+        summary: {
+          originalBudget,
+          totalAmendments,
+          totalChangeOrders,
+          currentBudget,
+          currentSpent: parseFloat(project.consumedAmount),
+          remainingBudget: currentBudget - parseFloat(project.consumedAmount)
+        },
+        history
+      });
+    } catch (error) {
+      console.error("Error fetching project budget history:", error);
+      res.status(500).json({ message: "Failed to fetch project budget history" });
     }
   });
 

@@ -24,11 +24,19 @@ import CostAllocationsTable from "@/components/CostAllocationsTable";
 import SpendingCharts from "@/components/SpendingCharts";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
 import PendingApprovalsWidget from "@/components/PendingApprovalsWidget";
+// Sprint 3 Budget Amendments & Change Orders Components
+import BudgetAmendmentForm from "@/components/BudgetAmendmentForm";
+import BudgetAmendmentsTable from "@/components/BudgetAmendmentsTable";
+import ChangeOrderForm from "@/components/ChangeOrderForm";
+import ChangeOrdersTable from "@/components/ChangeOrdersTable";
+import BudgetHistoryView from "@/components/BudgetHistoryView";
+import PendingAmendmentsWidget from "@/components/PendingAmendmentsWidget";
+import ChangeOrdersSummaryWidget from "@/components/ChangeOrdersSummaryWidget";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   
   // Sprint 4 Analytics Filters State
@@ -65,7 +73,10 @@ export default function Dashboard() {
       '/audit': 'Audit Log - ProjectFund',
       '/users': 'Team Members - ProjectFund',
       '/companies': 'Company Management - ProjectFund',
-      '/permissions': 'Permissions - ProjectFund'
+      '/permissions': 'Permissions - ProjectFund',
+      '/budget-amendments': 'Budget Amendments - ProjectFund',
+      '/change-orders': 'Change Orders - ProjectFund',
+      '/budget-history': 'Budget History - ProjectFund'
     };
     document.title = titles[location as keyof typeof titles] || 'ProjectFund';
   }, [location]);
@@ -101,6 +112,9 @@ export default function Dashboard() {
               {location === '/users' && 'Team Members'}
               {location === '/companies' && 'Company Management'}
               {location === '/permissions' && 'Permissions'}
+              {location === '/budget-amendments' && 'Budget Amendments'}
+              {location === '/change-orders' && 'Change Orders'}
+              {location === '/budget-history' && 'Budget History'}
             </h2>
             <p className="text-muted-foreground mt-1">
               {location === '/' && 'Manage your projects and fund allocations'}
@@ -113,6 +127,9 @@ export default function Dashboard() {
               {location === '/users' && 'Manage team members and roles'}
               {location === '/companies' && 'Manage tenant companies and subscriptions'}
               {location === '/permissions' && 'Configure user permissions and access'}
+              {location === '/budget-amendments' && 'Propose and manage budget amendments'}
+              {location === '/change-orders' && 'Create and track project scope changes'}
+              {location === '/budget-history' && 'View chronological budget change timeline'}
             </p>
           </div>
           <div className="flex items-center space-x-4">
@@ -153,6 +170,10 @@ export default function Dashboard() {
               <div>
                 <PendingApprovalsWidget />
               </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              <PendingAmendmentsWidget onViewAll={() => setLocation("/budget-amendments")} />
+              <ChangeOrdersSummaryWidget onViewAll={() => setLocation("/change-orders")} />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <TransactionsList />
@@ -284,6 +305,27 @@ export default function Dashboard() {
         {/* Company Management Page */}
         {location === '/companies' && (
           <CompanyManagement />
+        )}
+
+        {/* Budget Amendments Page */}
+        {location === '/budget-amendments' && (
+          <div className="space-y-8">
+            <BudgetAmendmentForm />
+            <BudgetAmendmentsTable />
+          </div>
+        )}
+
+        {/* Change Orders Page */}
+        {location === '/change-orders' && (
+          <div className="space-y-8">
+            <ChangeOrderForm />
+            <ChangeOrdersTable />
+          </div>
+        )}
+
+        {/* Budget History Page */}
+        {location === '/budget-history' && (
+          <BudgetHistoryView />
         )}
 
         {/* Permissions Page */}

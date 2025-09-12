@@ -12,7 +12,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Search, Download, ChevronUp, ChevronDown, Calendar, User, Building, Check, X, Clock, FileText } from "lucide-react";
+import { Search, Download, ChevronUp, ChevronDown, Calendar, User, Building, Check, X, Clock, FileText, Layers, Filter } from "lucide-react";
 
 interface CostAllocation {
   id: string;
@@ -33,6 +33,8 @@ interface CostAllocation {
   lineItemCategory: string;
   projectTitle: string;
   enteredByName: string;
+  changeOrderId?: string | null;
+  changeOrderDescription?: string | null;
   materialAllocations: Array<{
     id: string;
     materialId: string;
@@ -60,6 +62,7 @@ interface CostAllocationsTableProps {
     startDate?: Date;
     endDate?: Date;
     projectId?: string;
+    changeOrderId?: string;
     categories?: string[];
   };
 }
@@ -73,6 +76,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
   const [sortField, setSortField] = useState<string>("dateIncurred");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [rejectComments, setRejectComments] = useState("");
+  const [changeOrderFilter, setChangeOrderFilter] = useState<string>("");
 
   // Build query parameters
   const queryParams = useMemo(() => {
@@ -95,6 +99,18 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
     if (filters?.projectId) {
       params.set("projectId", filters.projectId);
     }
+
+    if (filters?.changeOrderId) {
+      params.set("changeOrderId", filters.changeOrderId);
+    }
+
+    if (changeOrderFilter) {
+      if (changeOrderFilter === "linked") {
+        params.set("hasChangeOrder", "true");
+      } else if (changeOrderFilter === "unlinked") {
+        params.set("hasChangeOrder", "false");
+      }
+    }
     
     if (filters?.categories && filters.categories.length > 0) {
       filters.categories.forEach(category => {
@@ -103,7 +119,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
     }
     
     return params.toString();
-  }, [currentPage, pageSize, searchQuery, filters]);
+  }, [currentPage, pageSize, searchQuery, filters, changeOrderFilter]);
 
   const { data: costAllocationsData, isLoading, error } = useQuery<CostAllocationsResponse>({
     queryKey: ["/api/cost-allocations-filtered", queryParams],
@@ -125,10 +141,10 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
     }
   }, [error, toast]);
 
-  // Reset page when search query changes
+  // Reset page when search query or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filters]);
+  }, [searchQuery, filters, changeOrderFilter]);
 
   const formatCurrency = (amount: string | number) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -241,6 +257,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       "Total Cost",
       "Date",
       "Entered By",
+      "Change Order",
       "Materials Used"
     ];
 
@@ -253,6 +270,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       parseFloat(allocation.totalCost).toFixed(2),
       formatDate(allocation.dateIncurred),
       allocation.enteredByName,
+      allocation.changeOrderDescription || "None",
       allocation.materialAllocations.map(m => 
         `${m.material.name} (${m.quantity} ${m.material.unit})`
       ).join('; ')
@@ -460,13 +478,36 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Search by line item or project..."
+                placeholder="Search by line item, project, or change order..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
                 data-testid="input-search-allocations"
               />
             </div>
+            <Select
+              value={changeOrderFilter}
+              onValueChange={setChangeOrderFilter}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by change order..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All costs</SelectItem>
+                <SelectItem value="linked">
+                  <div className="flex items-center space-x-2">
+                    <Layers className="h-4 w-4 text-blue-600" />
+                    <span>Linked to change orders</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="unlinked">
+                  <div className="flex items-center space-x-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <span>Not linked to change orders</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center space-x-2">
             <Select
@@ -558,6 +599,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
                     {getSortIcon("enteredByName")}
                   </div>
                 </TableHead>
+                <TableHead>Change Order</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Materials</TableHead>
                 {(isAdmin || isTeamLeader) && <TableHead>Actions</TableHead>}
@@ -590,6 +632,25 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
                     </TableCell>
                     <TableCell>
                       <span className="text-sm">{allocation.enteredByName}</span>
+                    </TableCell>
+                    <TableCell>
+                      {allocation.changeOrderId && allocation.changeOrderDescription ? (
+                        <div className="flex items-center space-x-2">
+                          <Badge 
+                            variant="outline" 
+                            className="bg-blue-50 text-blue-700 border-blue-300"
+                            data-testid={`badge-change-order-${allocation.id}`}
+                          >
+                            <Layers className="h-3 w-3 mr-1" />
+                            CO
+                          </Badge>
+                          <div className="text-xs text-muted-foreground max-w-32 truncate" title={allocation.changeOrderDescription}>
+                            {allocation.changeOrderDescription}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(allocation.status)}
