@@ -76,10 +76,10 @@ function authorize(allowedRoles: string[]) {
 function mapLegacyRole(role: string): string {
   const roleMapping: { [key: string]: string } = {
     'manager': 'admin',      // Legacy manager becomes admin
-    'user': 'viewer',        // Legacy user becomes viewer
+    'user': 'user',          // Keep user as is (now has cost entry access)
     'admin': 'admin',        // New admin role
     'team_leader': 'team_leader', // Keep team_leader as is
-    'viewer': 'viewer',      // New viewer role
+    'viewer': 'viewer',      // New viewer role (read-only)
     'console_manager': 'console_manager' // Keep console_manager as is
   };
   return roleMapping[role] || role;
@@ -297,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/transactions', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/transactions', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
       
@@ -786,7 +786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cost allocations routes
-  app.post('/api/cost-allocations', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+  app.post('/api/cost-allocations', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
       const { projectId, lineItemId, labourCost = 0, quantity, unitCost, materialAllocations = [], dateIncurred } = req.body;
@@ -996,7 +996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CSV Import/Export routes
-  app.post('/api/import/transactions/csv', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
+  app.post('/api/import/transactions/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId, userId } = await getUserData(req);
       const csvData = req.body.csvData;
@@ -1081,7 +1081,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/transactions/csv', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/export/transactions/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId } = await getUserData(req);
       const transactions = await storage.getTransactions(tenantId);
@@ -1101,7 +1101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId } = await getUserData(req);
       const allocations = await storage.getFundAllocations(tenantId);
@@ -1246,7 +1246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId } = await getUserData(req);
       const allocations = await storage.getFundAllocations(tenantId);
@@ -1292,7 +1292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/line-items', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/line-items', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId, userId } = await getUserData(req);
       
@@ -1323,7 +1323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/line-items/:id', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.put('/api/line-items/:id', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId, userId } = await getUserData(req);
       
@@ -1380,7 +1380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/materials', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/materials', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId, userId } = await getUserData(req);
       
@@ -1411,7 +1411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/materials/:id', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.put('/api/materials/:id', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { tenantId, userId } = await getUserData(req);
       

@@ -12,10 +12,10 @@ export function usePermissions() {
     
     const roleMapping: { [key: string]: string } = {
       'manager': 'admin',        // Legacy manager becomes admin
-      'user': 'viewer',          // Legacy user becomes viewer
+      'user': 'user',            // Keep user as is (now has cost entry access)
       'admin': 'admin',          // New admin role
       'team_leader': 'team_leader', // Keep team_leader as is
-      'viewer': 'viewer',        // New viewer role
+      'viewer': 'viewer',        // New viewer role (read-only)
       'console_manager': 'console_manager' // Keep console_manager as is
     };
     return roleMapping[role] || role;
@@ -39,23 +39,23 @@ export function usePermissions() {
     canUpdateUserStatus: () => normalizedRole === 'admin',
     canImportData: () => normalizedRole === 'admin',
     
-    // Team Leader permissions (operational access)
-    canCreateCostAllocations: () => ['admin', 'team_leader'].includes(normalizedRole),
-    canCreateTransactions: () => ['admin', 'team_leader'].includes(normalizedRole),
-    canCreateLineItems: () => ['admin', 'team_leader'].includes(normalizedRole),
-    canCreateMaterials: () => ['admin', 'team_leader'].includes(normalizedRole),
-    canExportData: () => ['admin', 'team_leader'].includes(normalizedRole),
+    // Team Leader and User permissions (operational access)
+    canCreateCostAllocations: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
+    canCreateTransactions: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
+    canCreateLineItems: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
+    canCreateMaterials: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
+    canExportData: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
     
     // Viewer permissions (read-only access)
-    canViewDashboard: () => ['admin', 'team_leader', 'viewer'].includes(normalizedRole),
-    canViewAnalytics: () => ['admin', 'team_leader', 'viewer'].includes(normalizedRole),
-    canViewProjects: () => ['admin', 'team_leader', 'viewer'].includes(normalizedRole),
-    canViewTransactions: () => ['admin', 'team_leader', 'viewer'].includes(normalizedRole),
-    canViewAuditLogs: () => ['admin', 'team_leader', 'viewer'].includes(normalizedRole),
-    canViewAllocations: () => ['admin', 'team_leader', 'viewer'].includes(normalizedRole),
+    canViewDashboard: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
+    canViewAnalytics: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
+    canViewProjects: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
+    canViewTransactions: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
+    canViewAuditLogs: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
+    canViewAllocations: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
     
     // Navigation permissions
-    canAccessCostEntry: () => ['admin', 'team_leader'].includes(normalizedRole),
+    canAccessCostEntry: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
     canAccessUserManagement: () => normalizedRole === 'admin',
     canAccessPermissions: () => normalizedRole === 'admin',
     canAccessCompanyManagement: () => normalizedRole === 'console_manager',
@@ -72,7 +72,7 @@ export function usePermissions() {
   };
 
   const isAtLeastRole = (minRole: UserRole) => {
-    const hierarchy = ['viewer', 'team_leader', 'admin', 'console_manager'];
+    const hierarchy = ['viewer', 'user', 'team_leader', 'admin', 'console_manager'];
     const userLevel = hierarchy.indexOf(normalizedRole);
     const minLevel = hierarchy.indexOf(mapLegacyRole(minRole));
     return userLevel >= minLevel;
@@ -91,11 +91,12 @@ export function usePermissions() {
     isConsoleManager: normalizedRole === 'console_manager',
     isAdmin: normalizedRole === 'admin',
     isTeamLeader: normalizedRole === 'team_leader',
+    isUser: normalizedRole === 'user',
     isViewer: normalizedRole === 'viewer',
     
     // Sprint 5: Enhanced permission checking
-    canWrite: () => ['admin', 'team_leader'].includes(normalizedRole),
-    canRead: () => ['admin', 'team_leader', 'viewer'].includes(normalizedRole),
+    canWrite: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
+    canRead: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
     canManage: () => ['admin'].includes(normalizedRole),
   };
 }
