@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { insertUserSchema } from "@shared/schema";
+import { insertUserSchema, User } from "@shared/schema";
 import {
   Card,
   CardContent,
@@ -50,23 +50,15 @@ import {
 } from "@/components/ui/form";
 import { Plus, Edit, UserCheck, UserX, Users, Key } from "lucide-react";
 
-interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: "manager" | "team_leader" | "user";
-  status: "active" | "inactive" | "pending";
-  createdAt: string;
-}
 
-// Create form validation schema based on insertUserSchema
-const createUserSchema = insertUserSchema.extend({
+// Create form validation schema with explicit string types
+const createUserSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required").max(50, "First name must be less than 50 characters"),
   lastName: z.string().min(1, "Last name is required").max(50, "Last name must be less than 50 characters"),
-  role: z.enum(["manager", "team_leader", "user"]),
-  status: z.enum(["active", "inactive", "pending"]),
+  role: z.enum(["console_manager", "manager", "team_leader", "user"]).default("user"),
+  status: z.enum(["active", "inactive", "pending"]).default("active"),
+  tenantId: z.string().optional(),
 });
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
@@ -82,13 +74,13 @@ export default function UserManagement() {
       email: "",
       firstName: "",
       lastName: "",
-      role: "user",
-      status: "active",
+      role: "user" as const,
+      status: "active" as const,
     },
   });
 
   // Fetch all users
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 

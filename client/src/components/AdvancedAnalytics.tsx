@@ -20,24 +20,33 @@ import {
   ComposedChart
 } from 'recharts';
 import { DollarSign, TrendingUp, TrendingDown, Users, Target } from "lucide-react";
+import { Project, Transaction, FundAllocation } from "@shared/schema";
+
+interface TenantStats {
+  totalBudget: number;
+  totalSpent: number;
+  totalRevenue: number;
+  activeProjects: number;
+  completedProjects: number;
+}
 
 export default function AdvancedAnalytics() {
-  const { data: tenantStats } = useQuery({
+  const { data: tenantStats } = useQuery<TenantStats>({
     queryKey: ["/api/analytics/tenant"],
     retry: false,
   });
 
-  const { data: projects } = useQuery({
+  const { data: projects } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     retry: false,
   });
 
-  const { data: transactions } = useQuery({
+  const { data: transactions } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
     retry: false,
   });
 
-  const { data: allocations } = useQuery({
+  const { data: allocations } = useQuery<FundAllocation[]>({
     queryKey: ["/api/fund-allocations"],
     retry: false,
   });

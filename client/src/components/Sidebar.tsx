@@ -71,6 +71,16 @@ export default function Sidebar() {
             <span>Fund Allocation</span>
           </Link>
           <Link 
+            href="/cost-entry" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/cost-entry') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
+            data-testid="link-cost-entry"
+          >
+            <i className="fas fa-calculator w-5"></i>
+            <span>Cost Entry</span>
+          </Link>
+          <Link 
             href="/transactions" 
             className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
               isActive('/transactions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'

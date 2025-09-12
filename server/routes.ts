@@ -372,6 +372,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New analytics endpoints for Sprint 4
+  app.get('/api/analytics/budget-summary', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const budgetSummary = await storage.getBudgetSummary(tenantId);
+      res.json(budgetSummary);
+    } catch (error) {
+      console.error("Error fetching budget summary:", error);
+      res.status(500).json({ message: "Failed to fetch budget summary" });
+    }
+  });
+
+  app.get('/api/analytics/labour-material-split', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { startDate, endDate, projectId, categories } = req.query;
+      
+      const filters: any = {};
+      if (startDate) filters.startDate = new Date(startDate as string);
+      if (endDate) filters.endDate = new Date(endDate as string);
+      if (projectId) filters.projectId = projectId as string;
+      if (categories) {
+        filters.categories = Array.isArray(categories) ? categories : [categories];
+      }
+
+      const splitData = await storage.getLabourMaterialSplit(tenantId, filters);
+      res.json(splitData);
+    } catch (error) {
+      console.error("Error fetching labour-material split:", error);
+      res.status(500).json({ message: "Failed to fetch labour-material split" });
+    }
+  });
+
+  app.get('/api/analytics/category-spending', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { startDate, endDate, projectId, categories } = req.query;
+      
+      const filters: any = {};
+      if (startDate) filters.startDate = new Date(startDate as string);
+      if (endDate) filters.endDate = new Date(endDate as string);
+      if (projectId) filters.projectId = projectId as string;
+      if (categories) {
+        filters.categories = Array.isArray(categories) ? categories : [categories];
+      }
+
+      const categoryData = await storage.getCategorySpending(tenantId, filters);
+      res.json(categoryData);
+    } catch (error) {
+      console.error("Error fetching category spending:", error);
+      res.status(500).json({ message: "Failed to fetch category spending" });
+    }
+  });
+
+  app.get('/api/cost-allocations-filtered', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { 
+        startDate, 
+        endDate, 
+        projectId, 
+        categories, 
+        search, 
+        page = 1, 
+        limit = 10 
+      } = req.query;
+      
+      const filters: any = {};
+      if (startDate) filters.startDate = new Date(startDate as string);
+      if (endDate) filters.endDate = new Date(endDate as string);
+      if (projectId) filters.projectId = projectId as string;
+      if (categories) {
+        filters.categories = Array.isArray(categories) ? categories : [categories];
+      }
+      if (search) filters.search = search as string;
+      
+      const pageNum = parseInt(page as string, 10);
+      const limitNum = parseInt(limit as string, 10);
+      filters.limit = limitNum;
+      filters.offset = (pageNum - 1) * limitNum;
+
+      const result = await storage.getCostAllocationsWithFilters(tenantId, filters);
+      res.json({
+        ...result,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(result.total / limitNum),
+      });
+    } catch (error) {
+      console.error("Error fetching filtered cost allocations:", error);
+      res.status(500).json({ message: "Failed to fetch cost allocations" });
+    }
+  });
+
   // Audit log routes
   app.get('/api/audit-logs', isAuthenticated, async (req: any, res) => {
     try {

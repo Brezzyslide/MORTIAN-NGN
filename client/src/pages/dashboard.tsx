@@ -16,13 +16,27 @@ import CsvImportExport from "@/components/CsvImportExport";
 import NewProjectDialog from "@/components/NewProjectDialog";
 import UserManagement from "@/components/UserManagement";
 import { CompanyManagement } from "@/components/CompanyManagement";
+import CostEntryForm from "@/components/CostEntryForm";
 import { Button } from "@/components/ui/button";
+// Sprint 4 Analytics Components
+import BudgetProgressBar from "@/components/BudgetProgressBar";
+import CostAllocationsTable from "@/components/CostAllocationsTable";
+import SpendingCharts from "@/components/SpendingCharts";
+import AnalyticsFilters from "@/components/AnalyticsFilters";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  
+  // Sprint 4 Analytics Filters State
+  const [analyticsFilters, setAnalyticsFilters] = useState<{
+    startDate?: Date;
+    endDate?: Date;
+    projectId?: string;
+    categories?: string[];
+  }>({});
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -44,6 +58,7 @@ export default function Dashboard() {
       '/': 'Dashboard - ProjectFund',
       '/projects': 'Projects - ProjectFund', 
       '/allocations': 'Fund Allocation - ProjectFund',
+      '/cost-entry': 'Cost Entry - ProjectFund',
       '/transactions': 'Transactions - ProjectFund',
       '/analytics': 'Analytics - ProjectFund',
       '/audit': 'Audit Log - ProjectFund',
@@ -78,6 +93,7 @@ export default function Dashboard() {
               {location === '/' && 'Dashboard Overview'}
               {location === '/projects' && 'Projects'}
               {location === '/allocations' && 'Fund Allocation'}
+              {location === '/cost-entry' && 'Cost Entry'}
               {location === '/transactions' && 'Transactions'}
               {location === '/analytics' && 'Analytics'}
               {location === '/audit' && 'Audit Log'}
@@ -89,6 +105,7 @@ export default function Dashboard() {
               {location === '/' && 'Manage your projects and fund allocations'}
               {location === '/projects' && 'Create and manage project budgets'}
               {location === '/allocations' && 'Allocate funds to projects and team members'}
+              {location === '/cost-entry' && 'Enter construction costs with labour and material tracking'}
               {location === '/transactions' && 'Track expenses and revenue'}
               {location === '/analytics' && 'View detailed analytics and reports'}
               {location === '/audit' && 'Review system activity and changes'}
@@ -160,6 +177,13 @@ export default function Dashboard() {
           </>
         )}
 
+        {/* Cost Entry Page */}
+        {location === '/cost-entry' && (
+          <div className="mb-8">
+            <CostEntryForm />
+          </div>
+        )}
+
         {/* Transactions Page */}
         {location === '/transactions' && (
           <>
@@ -172,13 +196,69 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* Analytics Page */}
+        {/* Analytics Page - Sprint 4 Enhanced */}
         {location === '/analytics' && (
           <>
-            <StatsCards />
-            <AnalyticsDashboard />
+            {/* Analytics Filters */}
             <div className="mb-8">
-              <AdvancedAnalytics />
+              <AnalyticsFilters 
+                filters={analyticsFilters}
+                onFiltersChange={setAnalyticsFilters}
+              />
+            </div>
+
+            {/* Key Metrics Overview */}
+            <StatsCards />
+
+            {/* Budget Progress and Spending Charts */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+              <div className="xl:col-span-2">
+                <BudgetProgressBar />
+              </div>
+              <div>
+                <div className="space-y-6">
+                  {/* Quick Stats Card */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                        <i className="fas fa-chart-line text-blue-600 dark:text-blue-400"></i>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-blue-900 dark:text-blue-100">Live Analytics</h3>
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          Real-time budget tracking with automatic updates every 30 seconds
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Spending Analysis Charts */}
+            <div className="mb-8">
+              <SpendingCharts filters={analyticsFilters} />
+            </div>
+
+            {/* Cost Allocations Ledger Table */}
+            <div className="mb-8">
+              <CostAllocationsTable filters={analyticsFilters} />
+            </div>
+
+            {/* Legacy Analytics Components (kept for backward compatibility) */}
+            <div className="space-y-8">
+              <div className="border-t border-border pt-8">
+                <div className="flex items-center space-x-2 mb-6">
+                  <i className="fas fa-history text-muted-foreground"></i>
+                  <h3 className="text-lg font-semibold text-foreground">Historical Analytics</h3>
+                  <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">Legacy View</span>
+                </div>
+                <AnalyticsDashboard />
+              </div>
+              
+              <div className="mb-8">
+                <AdvancedAnalytics />
+              </div>
             </div>
           </>
         )}

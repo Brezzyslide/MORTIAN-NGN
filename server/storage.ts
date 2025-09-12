@@ -34,7 +34,7 @@ import {
   type InsertMaterialAllocation,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sum, count } from "drizzle-orm";
+import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Company operations (for console managers)
@@ -112,6 +112,51 @@ export interface IStorage {
     totalRevenue: number;
     netProfit: number;
     activeProjects: number;
+  }>;
+
+  // New analytics operations for Sprint 4
+  getBudgetSummary(tenantId: string): Promise<Array<{
+    projectId: string;
+    projectTitle: string;
+    totalBudget: number;
+    totalSpent: number;
+    spentPercentage: number;
+    remainingBudget: number;
+    status: 'healthy' | 'warning' | 'critical';
+  }>>;
+
+  getLabourMaterialSplit(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<{
+    totalLabour: number;
+    totalMaterial: number;
+    labourPercentage: number;
+    materialPercentage: number;
+  }>;
+
+  getCategorySpending(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<Array<{
+    category: string;
+    totalSpent: number;
+    labourCost: number;
+    materialCost: number;
+    allocationCount: number;
+  }>>;
+
+  getCostAllocationsWithFilters(tenantId: string, filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    projectId?: string;
+    category?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    allocations: Array<CostAllocation & { 
+      lineItemName: string;
+      lineItemCategory: string;
+      projectTitle: string;
+      enteredByName: string;
+      materialAllocations: (MaterialAllocation & { material: Material })[];
+    }>;
+    total: number;
   }>;
 }
 
@@ -475,6 +520,274 @@ export class DatabaseStorage implements IStorage {
       totalRevenue,
       netProfit,
       activeProjects,
+    };
+  }
+
+  // New analytics operations for Sprint 4
+  async getBudgetSummary(tenantId: string): Promise<Array<{
+    projectId: string;
+    projectTitle: string;
+    totalBudget: number;
+    totalSpent: number;
+    spentPercentage: number;
+    remainingBudget: number;
+    status: 'healthy' | 'warning' | 'critical';
+  }>> {
+    const projectsData = await db
+      .select({
+        id: projects.id,
+        title: projects.title,
+        budget: projects.budget,
+        consumedAmount: projects.consumedAmount,
+      })
+      .from(projects)
+      .where(and(
+        eq(projects.tenantId, tenantId),
+        eq(projects.status, "active")
+      ));
+
+    // Get cost allocations spending for each project
+    const budgetSummary = await Promise.all(
+      projectsData.map(async (project) => {
+        const [spentResult] = await db
+          .select({
+            totalSpent: sum(costAllocations.totalCost),
+          })
+          .from(costAllocations)
+          .where(and(
+            eq(costAllocations.projectId, project.id),
+            eq(costAllocations.tenantId, tenantId)
+          ));
+
+        const totalBudget = parseFloat(project.budget) || 0;
+        const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
+        const spentPercentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+        const remainingBudget = totalBudget - totalSpent;
+
+        let status: 'healthy' | 'warning' | 'critical' = 'healthy';
+        if (spentPercentage >= 95) {
+          status = 'critical';
+        } else if (spentPercentage >= 80) {
+          status = 'warning';
+        }
+
+        return {
+          projectId: project.id,
+          projectTitle: project.title,
+          totalBudget,
+          totalSpent,
+          spentPercentage: Math.round(spentPercentage * 100) / 100,
+          remainingBudget,
+          status,
+        };
+      })
+    );
+
+    return budgetSummary;
+  }
+
+  async getLabourMaterialSplit(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<{
+    totalLabour: number;
+    totalMaterial: number;
+    labourPercentage: number;
+    materialPercentage: number;
+  }> {
+    let whereConditions = [eq(costAllocations.tenantId, tenantId)];
+    
+    if (filters?.startDate) {
+      whereConditions.push(sql`${costAllocations.dateIncurred} >= ${filters.startDate}`);
+    }
+    if (filters?.endDate) {
+      whereConditions.push(sql`${costAllocations.dateIncurred} <= ${filters.endDate}`);
+    }
+    if (filters?.projectId) {
+      whereConditions.push(eq(costAllocations.projectId, filters.projectId));
+    }
+    if (filters?.categories && filters.categories.length > 0) {
+      whereConditions.push(sql`${lineItems.category} = ANY(${JSON.stringify(filters.categories)})`);
+    }
+
+    const [result] = await db
+      .select({
+        totalLabour: sum(costAllocations.labourCost),
+        totalMaterial: sum(costAllocations.materialCost),
+      })
+      .from(costAllocations)
+      .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
+      .where(and(...whereConditions));
+
+    const totalLabour = parseFloat(result?.totalLabour || "0") || 0;
+    const totalMaterial = parseFloat(result?.totalMaterial || "0") || 0;
+    const totalSpent = totalLabour + totalMaterial;
+
+    const labourPercentage = totalSpent > 0 ? (totalLabour / totalSpent) * 100 : 0;
+    const materialPercentage = totalSpent > 0 ? (totalMaterial / totalSpent) * 100 : 0;
+
+    return {
+      totalLabour,
+      totalMaterial,
+      labourPercentage: Math.round(labourPercentage * 100) / 100,
+      materialPercentage: Math.round(materialPercentage * 100) / 100,
+    };
+  }
+
+  async getCategorySpending(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<Array<{
+    category: string;
+    totalSpent: number;
+    labourCost: number;
+    materialCost: number;
+    allocationCount: number;
+  }>> {
+    let whereConditions = [eq(costAllocations.tenantId, tenantId)];
+    
+    if (filters?.startDate) {
+      whereConditions.push(sql`${costAllocations.dateIncurred} >= ${filters.startDate}`);
+    }
+    if (filters?.endDate) {
+      whereConditions.push(sql`${costAllocations.dateIncurred} <= ${filters.endDate}`);
+    }
+    if (filters?.projectId) {
+      whereConditions.push(eq(costAllocations.projectId, filters.projectId));
+    }
+    if (filters?.categories && filters.categories.length > 0) {
+      whereConditions.push(sql`${lineItems.category} = ANY(${JSON.stringify(filters.categories)})`);
+    }
+
+    const results = await db
+      .select({
+        category: lineItems.category,
+        totalSpent: sum(costAllocations.totalCost),
+        labourCost: sum(costAllocations.labourCost),
+        materialCost: sum(costAllocations.materialCost),
+        allocationCount: count(costAllocations.id),
+      })
+      .from(costAllocations)
+      .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
+      .where(and(...whereConditions))
+      .groupBy(lineItems.category)
+      .orderBy(desc(sum(costAllocations.totalCost)));
+
+    return results.map(result => ({
+      category: result.category,
+      totalSpent: parseFloat(result.totalSpent || "0") || 0,
+      labourCost: parseFloat(result.labourCost || "0") || 0,
+      materialCost: parseFloat(result.materialCost || "0") || 0,
+      allocationCount: result.allocationCount || 0,
+    }));
+  }
+
+  async getCostAllocationsWithFilters(tenantId: string, filters?: {
+    startDate?: Date;
+    endDate?: Date;
+    projectId?: string;
+    categories?: string[];
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    allocations: Array<CostAllocation & { 
+      lineItemName: string;
+      lineItemCategory: string;
+      projectTitle: string;
+      enteredByName: string;
+      materialAllocations: (MaterialAllocation & { material: Material })[];
+    }>;
+    total: number;
+  }> {
+    let whereConditions = [eq(costAllocations.tenantId, tenantId)];
+    
+    if (filters?.startDate) {
+      whereConditions.push(sql`${costAllocations.dateIncurred} >= ${filters.startDate}`);
+    }
+    if (filters?.endDate) {
+      whereConditions.push(sql`${costAllocations.dateIncurred} <= ${filters.endDate}`);
+    }
+    if (filters?.projectId) {
+      whereConditions.push(eq(costAllocations.projectId, filters.projectId));
+    }
+    if (filters?.categories && filters.categories.length > 0) {
+      whereConditions.push(inArray(lineItems.category, filters.categories));
+    }
+    if (filters?.search) {
+      whereConditions.push(sql`(${lineItems.name} ILIKE ${'%' + filters.search + '%'} OR ${projects.title} ILIKE ${'%' + filters.search + '%'})`);
+    }
+
+    // Get total count for pagination
+    const [totalResult] = await db
+      .select({ count: count(costAllocations.id) })
+      .from(costAllocations)
+      .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
+      .innerJoin(projects, eq(costAllocations.projectId, projects.id))
+      .innerJoin(users, eq(costAllocations.enteredBy, users.id))
+      .where(and(...whereConditions));
+
+    // Get allocations with pagination
+    const allocationsQuery = db
+      .select({
+        allocation: costAllocations,
+        lineItemName: lineItems.name,
+        lineItemCategory: lineItems.category,
+        projectTitle: projects.title,
+        enteredByName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+      })
+      .from(costAllocations)
+      .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
+      .innerJoin(projects, eq(costAllocations.projectId, projects.id))
+      .innerJoin(users, eq(costAllocations.enteredBy, users.id))
+      .where(and(...whereConditions))
+      .orderBy(desc(costAllocations.dateIncurred));
+
+    if (filters?.limit) {
+      allocationsQuery.limit(filters.limit);
+    }
+    if (filters?.offset) {
+      allocationsQuery.offset(filters.offset);
+    }
+
+    const allocationsData = await allocationsQuery;
+
+    // Get material allocations for each cost allocation
+    const allocationsWithMaterials = await Promise.all(
+      allocationsData.map(async (item) => {
+        const materialAllocationResults = await db
+          .select({
+            id: materialAllocations.id,
+            costAllocationId: materialAllocations.costAllocationId,
+            materialId: materialAllocations.materialId,
+            quantity: materialAllocations.quantity,
+            unitPrice: materialAllocations.unitPrice,
+            total: materialAllocations.total,
+            tenantId: materialAllocations.tenantId,
+            createdAt: materialAllocations.createdAt,
+            material: {
+              id: materials.id,
+              name: materials.name,
+              unit: materials.unit,
+              currentUnitPrice: materials.currentUnitPrice,
+              supplier: materials.supplier,
+              tenantId: materials.tenantId,
+              createdAt: materials.createdAt,
+              updatedAt: materials.updatedAt,
+            }
+          })
+          .from(materialAllocations)
+          .innerJoin(materials, eq(materialAllocations.materialId, materials.id))
+          .where(eq(materialAllocations.costAllocationId, item.allocation.id));
+
+        return {
+          ...item.allocation,
+          lineItemName: item.lineItemName,
+          lineItemCategory: item.lineItemCategory,
+          projectTitle: item.projectTitle,
+          enteredByName: item.enteredByName,
+          materialAllocations: materialAllocationResults,
+        };
+      })
+    );
+
+    return {
+      allocations: allocationsWithMaterials,
+      total: totalResult?.count || 0,
     };
   }
 
