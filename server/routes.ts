@@ -12,6 +12,7 @@ import {
   insertFundAllocationSchema,
   insertTransactionSchema,
   insertFundTransferSchema,
+  insertUserSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -326,6 +327,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching team leaders:", error);
       res.status(500).json({ message: "Failed to fetch team leaders" });
+    }
+  });
+
+  // User management routes (admin/manager only)
+  app.get('/api/users', isAuthenticated, authorize(['manager']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const users = await storage.getAllUsers(tenantId);
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post('/api/users', isAuthenticated, authorize(['manager']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      
+      const userData = insertUserSchema.parse({
+        ...req.body,
+        tenantId,
+      });
+
+      const user = await storage.upsertUser(userData);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId: req.user.claims.sub,
+        action: "user_created",
+        entityType: "user",
+        entityId: user.id,
+        tenantId,
+        details: { email: user.email, role: user.role },
+      });
+
+      res.json(user);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid user data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  app.patch('/api/users/:id/role', isAuthenticated, authorize(['manager']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { role } = req.body;
+      
+      if (!['manager', 'team_leader', 'user'].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+
+      const user = await storage.updateUserRole(req.params.id, role, tenantId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId: req.user.claims.sub,
+        action: "user_role_updated",
+        entityType: "user",
+        entityId: user.id,
+        tenantId,
+        details: { newRole: role, email: user.email },
+      });
+
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      res.status(500).json({ message: "Failed to update user role" });
+    }
+  });
+
+  app.patch('/api/users/:id/status', isAuthenticated, authorize(['manager']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { status } = req.body;
+      
+      if (!['active', 'inactive', 'pending'].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+
+      const user = await storage.updateUserStatus(req.params.id, status, tenantId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId: req.user.claims.sub,
+        action: "user_status_updated",
+        entityType: "user",
+        entityId: user.id,
+        tenantId,
+        details: { newStatus: status, email: user.email },
+      });
+
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user status:", error);
+      res.status(500).json({ message: "Failed to update user status" });
+    }
+  });
+
+  app.post('/api/users/:id/reset-password', isAuthenticated, authorize(['manager']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      const userToReset = await storage.getUserById(req.params.id, tenantId);
+      
+      if (!userToReset) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // In a real system, this would trigger an email with password reset link
+      // For this demo, we'll create an audit log entry
+      await storage.createAuditLog({
+        userId,
+        action: "password_reset_requested",
+        entityType: "user",
+        entityId: userToReset.id,
+        tenantId,
+        details: { 
+          targetUserEmail: userToReset.email,
+          resetRequestedBy: userId,
+          resetMethod: "admin_requested"
+        },
+      });
+
+      res.json({ 
+        message: "Password reset initiated", 
+        user: { 
+          id: userToReset.id, 
+          email: userToReset.email,
+          firstName: userToReset.firstName,
+          lastName: userToReset.lastName
+        }
+      });
+    } catch (error) {
+      console.error("Error initiating password reset:", error);
+      res.status(500).json({ message: "Failed to initiate password reset" });
     }
   });
 

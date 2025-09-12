@@ -43,9 +43,9 @@ export default function AuditLog() {
   const formatCurrency = (amount: string | number | null) => {
     if (!amount) return '-';
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-NG', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'NGN',
       minimumFractionDigits: 0,
     }).format(numAmount);
   };

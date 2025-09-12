@@ -36,11 +36,11 @@ export class PDFExportService {
     doc.setFontSize(14);
     doc.text('Financial Summary', 20, 110);
     doc.setFontSize(12);
-    doc.text(`Total Budget: $${Number(project.budget).toLocaleString()}`, 20, 125);
-    doc.text(`Total Revenue: $${Number(project.revenue || 0).toLocaleString()}`, 20, 135);
-    doc.text(`Total Spent: $${stats.totalSpent.toLocaleString()}`, 20, 145);
-    doc.text(`Net Profit: $${stats.netProfit.toLocaleString()}`, 20, 155);
-    doc.text(`Budget Remaining: $${(stats.totalBudget - stats.totalSpent).toLocaleString()}`, 20, 165);
+    doc.text(`Total Budget: ₦${Number(project.budget).toLocaleString()}`, 20, 125);
+    doc.text(`Total Revenue: ₦${Number(project.revenue || 0).toLocaleString()}`, 20, 135);
+    doc.text(`Total Spent: ₦${stats.totalSpent.toLocaleString()}`, 20, 145);
+    doc.text(`Net Profit: ₦${stats.netProfit.toLocaleString()}`, 20, 155);
+    doc.text(`Budget Remaining: ₦${(stats.totalBudget - stats.totalSpent).toLocaleString()}`, 20, 165);
 
     // Allocations table
     if (projectAllocations.length > 0) {
@@ -51,7 +51,7 @@ export class PDFExportService {
         startY: 195,
         head: [['Amount', 'Category', 'From User', 'To User', 'Description', 'Date']],
         body: projectAllocations.map(allocation => [
-          `$${Number(allocation.amount).toLocaleString()}`,
+          `₦${Number(allocation.amount).toLocaleString()}`,
           allocation.category,
           allocation.fromUserId,
           allocation.toUserId,
@@ -72,7 +72,7 @@ export class PDFExportService {
         startY: finalY + 10,
         head: [['Amount', 'Type', 'Category', 'Description', 'Date']],
         body: projectTransactions.map(transaction => [
-          `$${Number(transaction.amount).toLocaleString()}`,
+          `₦${Number(transaction.amount).toLocaleString()}`,
           transaction.type,
           transaction.category,
           transaction.description || '',
@@ -134,7 +134,7 @@ export class PDFExportService {
     doc.text('Summary', 20, 100);
     doc.setFontSize(12);
     doc.text(`Total Transactions: ${transactions.length}`, 20, 115);
-    doc.text(`Total Amount: $${totalSpent.toLocaleString()}`, 20, 125);
+    doc.text(`Total Amount: ₦${totalSpent.toLocaleString()}`, 20, 125);
 
     // Category breakdown
     let yPos = 145;
@@ -145,7 +145,7 @@ export class PDFExportService {
       yPos = 160;
       Object.entries(categoryTotals).forEach(([category, amount]: [string, any]) => {
         doc.setFontSize(12);
-        doc.text(`${category}: $${Number(amount).toLocaleString()}`, 30, yPos);
+        doc.text(`${category}: ₦${Number(amount).toLocaleString()}`, 30, yPos);
         yPos += 10;
       });
     }
@@ -159,7 +159,7 @@ export class PDFExportService {
         startY: yPos + 30,
         head: [['Amount', 'Type', 'Category', 'Description', 'Date']],
         body: transactions.map(transaction => [
-          `$${Number(transaction.amount).toLocaleString()}`,
+          `₦${Number(transaction.amount).toLocaleString()}`,
           transaction.type,
           transaction.category,
           transaction.description || '',
@@ -210,7 +210,7 @@ export class PDFExportService {
         head: [['Description', 'Amount', 'Date']],
         body: revenueTransactions.map(t => [
           t.description || 'Revenue',
-          `$${Number(t.amount).toLocaleString()}`,
+          `₦${Number(t.amount).toLocaleString()}`,
           t.createdAt?.toLocaleDateString() || ''
         ])
       });
@@ -218,7 +218,7 @@ export class PDFExportService {
     
     const revenueY = (doc as any).lastAutoTable ? (doc as any).lastAutoTable.finalY + 10 : 90;
     doc.setFontSize(14);
-    doc.text(`Total Revenue: $${totalRevenue.toLocaleString()}`, 20, revenueY);
+    doc.text(`Total Revenue: ₦${totalRevenue.toLocaleString()}`, 20, revenueY);
 
     // Expenses section
     doc.setFontSize(16);
@@ -236,18 +236,18 @@ export class PDFExportService {
       const categoryTotal = categoryExpenses.reduce((sum: number, t: any) => sum + Number(t.amount), 0);
       
       doc.setFontSize(14);
-      doc.text(`${category}: $${categoryTotal.toLocaleString()}`, 30, currentY);
+      doc.text(`${category}: ₦${categoryTotal.toLocaleString()}`, 30, currentY);
       currentY += 15;
     });
 
     doc.setFontSize(14);
-    doc.text(`Total Expenses: $${totalExpenses.toLocaleString()}`, 20, currentY + 10);
+    doc.text(`Total Expenses: ₦${totalExpenses.toLocaleString()}`, 20, currentY + 10);
     
     // Net Profit
     doc.setFontSize(16);
     const profitColor = netProfit >= 0 ? [0, 128, 0] : [255, 0, 0];
     doc.setTextColor(profitColor[0], profitColor[1], profitColor[2]);
-    doc.text(`Net Profit: $${netProfit.toLocaleString()}`, 20, currentY + 30);
+    doc.text(`Net Profit: ₦${netProfit.toLocaleString()}`, 20, currentY + 30);
 
     return Buffer.from(doc.output('arraybuffer'));
   }

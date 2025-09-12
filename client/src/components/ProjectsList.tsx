@@ -26,9 +26,9 @@ export default function ProjectsList() {
 
   const formatCurrency = (amount: string | number) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-NG', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'NGN',
       minimumFractionDigits: 0,
     }).format(numAmount);
   };

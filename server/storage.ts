@@ -24,6 +24,7 @@ import { eq, and, desc, sum, count } from "drizzle-orm";
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserById(id: string, tenantId: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
 
   // Project operations
@@ -53,6 +54,9 @@ export interface IStorage {
   // User hierarchy operations
   getSubordinates(managerId: string, tenantId: string): Promise<User[]>;
   getUsersByRole(role: string, tenantId: string): Promise<User[]>;
+  getAllUsers(tenantId: string): Promise<User[]>;
+  updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined>;
+  updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
 
   // Analytics operations
   getProjectStats(projectId: string, tenantId: string): Promise<{
@@ -76,6 +80,14 @@ export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserById(id: string, tenantId: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
     return user;
   }
 
@@ -228,6 +240,32 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(and(eq(users.role, role), eq(users.tenantId, tenantId)))
       .orderBy(users.firstName);
+  }
+
+  async getAllUsers(tenantId: string): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(eq(users.tenantId, tenantId))
+      .orderBy(users.firstName);
+  }
+
+  async updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ role: role as any })
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .returning();
+    return updatedUser;
+  }
+
+  async updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ status: status as any })
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .returning();
+    return updatedUser;
   }
 
   // Analytics operations

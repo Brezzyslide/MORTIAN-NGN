@@ -14,6 +14,7 @@ import AdvancedAnalytics from "@/components/AdvancedAnalytics";
 import AuditLog from "@/components/AuditLog";
 import CsvImportExport from "@/components/CsvImportExport";
 import NewProjectDialog from "@/components/NewProjectDialog";
+import UserManagement from "@/components/UserManagement";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
@@ -185,10 +186,7 @@ export default function Dashboard() {
 
         {/* Team Members Page */}
         {location === '/users' && (
-          <div className="text-center py-16">
-            <h3 className="text-xl font-semibold mb-4">Team Members Management</h3>
-            <p className="text-muted-foreground">Team member management functionality coming soon.</p>
-          </div>
+          <UserManagement />
         )}
 
         {/* Permissions Page */}
