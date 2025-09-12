@@ -23,6 +23,7 @@ import BudgetProgressBar from "@/components/BudgetProgressBar";
 import CostAllocationsTable from "@/components/CostAllocationsTable";
 import SpendingCharts from "@/components/SpendingCharts";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
+import PendingApprovalsWidget from "@/components/PendingApprovalsWidget";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -145,8 +146,15 @@ export default function Dashboard() {
                 <BudgetChart />
               </div>
             </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              <div className="lg:col-span-2">
+                <FundAllocationPanel />
+              </div>
+              <div>
+                <PendingApprovalsWidget />
+              </div>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              <FundAllocationPanel />
               <TransactionsList />
             </div>
             <AnalyticsDashboard />

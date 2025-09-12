@@ -56,3 +56,24 @@ export function exceedsBudget(totalCost: number, remainingBudget: number): boole
 export function determineCostAllocationStatus(totalCost: number, remainingBudget: number): "pending" | "approved" {
   return exceedsBudget(totalCost, remainingBudget) ? "pending" : "approved";
 }
+
+/**
+ * Determine initial cost allocation status for approval workflow
+ * @param totalCost - Cost allocation total cost
+ * @param remainingBudget - Remaining budget available
+ * @returns "draft" always, but provides budget validation info
+ */
+export function determineInitialCostAllocationStatus(totalCost: number, remainingBudget: number): { 
+  status: "draft"; 
+  exceedsBudget: boolean;
+  budgetValidation: string;
+} {
+  const exceeds = exceedsBudget(totalCost, remainingBudget);
+  return {
+    status: "draft",
+    exceedsBudget: exceeds,
+    budgetValidation: exceeds 
+      ? "This allocation exceeds the remaining budget and will require approval." 
+      : "This allocation is within the remaining budget."
+  };
+}

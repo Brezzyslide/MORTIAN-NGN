@@ -18,12 +18,14 @@ import {
   insertMaterialSchema,
   insertCostAllocationSchema,
   insertMaterialAllocationSchema,
+  insertApprovalWorkflowSchema,
 } from "@shared/schema";
 import { 
   calcMaterialTotal,
   calcTotalCost,
   calcRemainingBudget,
-  determineCostAllocationStatus 
+  determineCostAllocationStatus,
+  determineInitialCostAllocationStatus 
 } from "./utils/calculations";
 import { z } from "zod";
 
@@ -961,9 +963,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const labourInfo = { unit_price: unitCost || 0, quantity: quantity || 0 };
       const totalCost = calcTotalCost(labourInfo, materialTotal);
       
-      // Check budget constraints
+      // Check budget constraints and determine initial status
       const remainingBudget = calcRemainingBudget(parseFloat(project.budget), parseFloat(project.consumedAmount));
-      const status = determineCostAllocationStatus(totalCost, remainingBudget);
+      const budgetInfo = determineInitialCostAllocationStatus(totalCost, remainingBudget);
       
       // Prepare cost allocation data
       const costAllocationData = insertCostAllocationSchema.parse({
@@ -977,7 +979,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dateIncurred: dateIncurred ? new Date(dateIncurred) : new Date(),
         enteredBy: userId,
         tenantId,
-        status
+        status: budgetInfo.status
       });
       
       // Prepare material allocations data
@@ -994,12 +996,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create cost allocation with material allocations
       const costAllocation = await storage.createCostAllocation(costAllocationData, materialAllocationsData);
       
-      // If approved (within budget), update project consumed amount
-      if (status === "approved") {
-        await storage.updateProject(projectId, {
-          consumedAmount: (parseFloat(project.consumedAmount) + totalCost).toString()
-        }, tenantId);
-      }
+      // Note: Project consumed amount is only updated when cost allocation is approved through workflow
+      // This ensures proper approval controls for budget management
       
       // Create audit log
       await storage.createAuditLog({
@@ -1014,18 +1012,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lineItemId: costAllocation.lineItemId,
           labourCost,
           materialCost: materialTotal,
-          status: costAllocation.status
+          status: costAllocation.status,
+          exceedsBudget: budgetInfo.exceedsBudget,
+          budgetValidation: budgetInfo.budgetValidation
         },
       });
       
-      // Calculate new remaining budget
-      const newRemainingBudget = status === "approved" 
-        ? remainingBudget - totalCost 
-        : remainingBudget;
-      
       res.json({
         costAllocation,
-        remainingBudget: newRemainingBudget
+        remainingBudget: remainingBudget,
+        budgetValidation: budgetInfo.budgetValidation,
+        exceedsBudget: budgetInfo.exceedsBudget
       });
     } catch (error) {
       console.error("Error creating cost allocation:", error);
@@ -1090,6 +1087,288 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching cost allocations:", error);
       res.status(500).json({ message: "Failed to fetch cost allocations" });
+    }
+  });
+
+  // Approval workflow routes
+  app.get('/api/approvals', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const table = req.query.table as string;
+      
+      const pendingApprovals = await storage.getPendingApprovals(tenantId, table === 'cost_allocations' ? 'cost_allocations' : undefined);
+      
+      res.json(pendingApprovals);
+    } catch (error) {
+      console.error("Error fetching pending approvals:", error);
+      res.status(500).json({ message: "Failed to fetch pending approvals" });
+    }
+  });
+
+  app.post('/api/approvals/:id/approve', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const recordId = req.params.id;
+      const { comments } = req.body;
+      
+      // First get the current cost allocation to validate state
+      const currentAllocations = await storage.getCostAllocations(tenantId);
+      const allocation = currentAllocations.find(a => a.id === recordId);
+      
+      if (!allocation) {
+        return res.status(404).json({ message: "Cost allocation not found" });
+      }
+      
+      // Enforce state validation: only pending items can be approved
+      if (allocation.status !== 'pending') {
+        return res.status(400).json({ 
+          message: `Cannot approve cost allocation. Current status is '${allocation.status}', but only 'pending' items can be approved.` 
+        });
+      }
+      
+      // Update approval workflow status
+      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'approved', userId, comments, tenantId);
+      
+      if (!updatedWorkflow) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+      
+      // Update cost allocation status to approved
+      const updatedCostAllocation = await storage.updateCostAllocationStatus(recordId, 'approved', tenantId);
+      
+      if (!updatedCostAllocation) {
+        return res.status(404).json({ message: "Failed to update cost allocation status" });
+      }
+      
+      // Update project consumed amount for approved cost allocations
+      if (updatedCostAllocation.status === 'approved') {
+        const project = await storage.getProject(updatedCostAllocation.projectId, tenantId);
+        if (project) {
+          const newConsumedAmount = parseFloat(project.consumedAmount) + parseFloat(updatedCostAllocation.totalCost);
+          await storage.updateProject(updatedCostAllocation.projectId, {
+            consumedAmount: newConsumedAmount.toString()
+          }, tenantId);
+        }
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "approval_workflow_updated",
+        entityType: "cost_allocation",
+        entityId: recordId,
+        projectId: updatedCostAllocation.projectId,
+        amount: updatedCostAllocation.totalCost,
+        tenantId,
+        details: { 
+          status: 'approved', 
+          approverId: userId,
+          comments: comments || null
+        },
+      });
+      
+      res.json({ 
+        message: "Cost allocation approved successfully", 
+        costAllocation: updatedCostAllocation,
+        workflow: updatedWorkflow
+      });
+    } catch (error) {
+      console.error("Error approving cost allocation:", error);
+      res.status(500).json({ message: "Failed to approve cost allocation" });
+    }
+  });
+
+  app.post('/api/approvals/:id/reject', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const recordId = req.params.id;
+      const { comments } = req.body;
+      
+      if (!comments || comments.trim() === '') {
+        return res.status(400).json({ message: "Rejection comments are required" });
+      }
+      
+      // First get the current cost allocation to validate state
+      const currentAllocations = await storage.getCostAllocations(tenantId);
+      const allocation = currentAllocations.find(a => a.id === recordId);
+      
+      if (!allocation) {
+        return res.status(404).json({ message: "Cost allocation not found" });
+      }
+      
+      // Enforce state validation: only pending items can be rejected
+      if (allocation.status !== 'pending') {
+        return res.status(400).json({ 
+          message: `Cannot reject cost allocation. Current status is '${allocation.status}', but only 'pending' items can be rejected.` 
+        });
+      }
+      
+      // Update approval workflow status
+      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'rejected', userId, comments, tenantId);
+      
+      if (!updatedWorkflow) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+      
+      // Update cost allocation status to rejected
+      const updatedCostAllocation = await storage.updateCostAllocationStatus(recordId, 'rejected', tenantId);
+      
+      if (!updatedCostAllocation) {
+        return res.status(404).json({ message: "Failed to update cost allocation status" });
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "approval_workflow_updated",
+        entityType: "cost_allocation",
+        entityId: recordId,
+        projectId: updatedCostAllocation.projectId,
+        amount: updatedCostAllocation.totalCost,
+        tenantId,
+        details: { 
+          status: 'rejected', 
+          approverId: userId,
+          comments: comments
+        },
+      });
+      
+      res.json({ 
+        message: "Cost allocation rejected successfully", 
+        costAllocation: updatedCostAllocation,
+        workflow: updatedWorkflow
+      });
+    } catch (error) {
+      console.error("Error rejecting cost allocation:", error);
+      res.status(500).json({ message: "Failed to reject cost allocation" });
+    }
+  });
+
+  app.post('/api/approvals/:id/submit', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const recordId = req.params.id;
+      
+      // First get the current cost allocation to validate state
+      const currentAllocation = await storage.getCostAllocations(tenantId);
+      const allocation = currentAllocation.find(a => a.id === recordId);
+      
+      if (!allocation) {
+        return res.status(404).json({ message: "Cost allocation not found" });
+      }
+      
+      // Enforce state validation: only draft items can be submitted
+      if (allocation.status !== 'draft') {
+        return res.status(400).json({ 
+          message: `Cannot submit cost allocation. Current status is '${allocation.status}', but only 'draft' items can be submitted.` 
+        });
+      }
+      
+      // Update cost allocation status to pending
+      const updatedCostAllocation = await storage.updateCostAllocationStatus(recordId, 'pending', tenantId);
+      
+      if (!updatedCostAllocation) {
+        return res.status(404).json({ message: "Failed to update cost allocation status" });
+      }
+      
+      // Create approval workflow record
+      const workflowData = insertApprovalWorkflowSchema.parse({
+        relatedTable: 'cost_allocations',
+        recordId: recordId,
+        status: 'pending',
+        tenantId,
+      });
+      
+      const workflow = await storage.createApprovalWorkflow(workflowData);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "approval_workflow_updated",
+        entityType: "cost_allocation",
+        entityId: recordId,
+        projectId: updatedCostAllocation.projectId,
+        amount: updatedCostAllocation.totalCost,
+        tenantId,
+        details: { 
+          status: 'pending',
+          submittedBy: userId
+        },
+      });
+      
+      res.json({ 
+        message: "Cost allocation submitted for approval", 
+        costAllocation: updatedCostAllocation,
+        workflow: workflow
+      });
+    } catch (error) {
+      console.error("Error submitting cost allocation for approval:", error);
+      res.status(500).json({ message: "Failed to submit cost allocation for approval" });
+    }
+  });
+
+  // Cost allocation submit route (clearer endpoint)
+  app.post('/api/cost-allocations/:id/submit', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const recordId = req.params.id;
+      
+      // First get the current cost allocation to validate state
+      const currentAllocations = await storage.getCostAllocations(tenantId);
+      const allocation = currentAllocations.find(a => a.id === recordId);
+      
+      if (!allocation) {
+        return res.status(404).json({ message: "Cost allocation not found" });
+      }
+      
+      // Enforce state validation: only draft items can be submitted
+      if (allocation.status !== 'draft') {
+        return res.status(400).json({ 
+          message: `Cannot submit cost allocation. Current status is '${allocation.status}', but only 'draft' items can be submitted.` 
+        });
+      }
+      
+      // Update cost allocation status to pending
+      const updatedCostAllocation = await storage.updateCostAllocationStatus(recordId, 'pending', tenantId);
+      
+      if (!updatedCostAllocation) {
+        return res.status(404).json({ message: "Failed to update cost allocation status" });
+      }
+      
+      // Create approval workflow record
+      const workflowData = insertApprovalWorkflowSchema.parse({
+        relatedTable: 'cost_allocations',
+        recordId: recordId,
+        status: 'pending',
+        tenantId,
+      });
+      
+      const workflow = await storage.createApprovalWorkflow(workflowData);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "cost_allocation_submitted",
+        entityType: "cost_allocation",
+        entityId: recordId,
+        projectId: updatedCostAllocation.projectId,
+        amount: updatedCostAllocation.totalCost,
+        tenantId,
+        details: { 
+          status: 'pending',
+          submittedBy: userId,
+          previousStatus: 'draft'
+        },
+      });
+      
+      res.json({ 
+        message: "Cost allocation submitted for approval successfully", 
+        costAllocation: updatedCostAllocation,
+        workflow: workflow
+      });
+    } catch (error) {
+      console.error("Error submitting cost allocation for approval:", error);
+      res.status(500).json({ message: "Failed to submit cost allocation for approval" });
     }
   });
 

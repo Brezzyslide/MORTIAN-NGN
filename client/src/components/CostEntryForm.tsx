@@ -243,6 +243,14 @@ export default function CostEntryForm() {
             <i className="fas fa-calculator text-primary"></i>
             <span>Cost Entry Form</span>
           </CardTitle>
+          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="flex items-start space-x-2">
+              <i className="fas fa-info-circle text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"></i>
+              <div className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Approval Workflow:</strong> New cost allocations are created as drafts and require approval from team leaders or admins before being finalized. You can view the status in the Cost Allocations table.
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Form {...form}>

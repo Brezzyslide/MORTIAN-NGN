@@ -10,6 +10,7 @@ import {
   materials,
   costAllocations,
   materialAllocations,
+  approvalWorkflows,
   type User,
   type UpsertUser,
   type Project,
@@ -32,6 +33,8 @@ import {
   type InsertCostAllocation,
   type MaterialAllocation,
   type InsertMaterialAllocation,
+  type ApprovalWorkflow,
+  type InsertApprovalWorkflow,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
@@ -160,6 +163,16 @@ export interface IStorage {
     }>;
     total: number;
   }>;
+
+  // Approval workflow operations
+  getApprovalWorkflows(tenantId: string): Promise<Array<ApprovalWorkflow & { approver?: User }>>;
+  getPendingApprovals(tenantId: string, table?: 'cost_allocations'): Promise<Array<ApprovalWorkflow & { 
+    approver?: User;
+    costAllocation?: CostAllocation & { lineItemName: string; projectTitle: string; enteredByName: string };
+  }>>;
+  createApprovalWorkflow(workflow: InsertApprovalWorkflow): Promise<ApprovalWorkflow>;
+  updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, comments?: string, tenantId?: string): Promise<ApprovalWorkflow | undefined>;
+  updateCostAllocationStatus(id: string, status: 'draft' | 'pending' | 'approved' | 'rejected', tenantId: string): Promise<CostAllocation | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -977,6 +990,135 @@ export class DatabaseStorage implements IStorage {
     const [updatedCostAllocation] = await db
       .update(costAllocations)
       .set({ ...costAllocation, updatedAt: new Date() })
+      .where(and(eq(costAllocations.id, id), eq(costAllocations.tenantId, tenantId)))
+      .returning();
+    return updatedCostAllocation;
+  }
+
+  // Approval workflow operations
+  async getApprovalWorkflows(tenantId: string): Promise<Array<ApprovalWorkflow & { approver?: User }>> {
+    return await db
+      .select({
+        id: approvalWorkflows.id,
+        relatedTable: approvalWorkflows.relatedTable,
+        recordId: approvalWorkflows.recordId,
+        status: approvalWorkflows.status,
+        approverId: approvalWorkflows.approverId,
+        comments: approvalWorkflows.comments,
+        tenantId: approvalWorkflows.tenantId,
+        createdAt: approvalWorkflows.createdAt,
+        updatedAt: approvalWorkflows.updatedAt,
+        approver: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+        },
+      })
+      .from(approvalWorkflows)
+      .leftJoin(users, eq(approvalWorkflows.approverId, users.id))
+      .where(eq(approvalWorkflows.tenantId, tenantId))
+      .orderBy(desc(approvalWorkflows.createdAt));
+  }
+
+  async getPendingApprovals(tenantId: string, table?: 'cost_allocations'): Promise<Array<ApprovalWorkflow & { 
+    approver?: User;
+    costAllocation?: CostAllocation & { lineItemName: string; projectTitle: string; enteredByName: string };
+  }>> {
+    let query = db
+      .select({
+        id: approvalWorkflows.id,
+        relatedTable: approvalWorkflows.relatedTable,
+        recordId: approvalWorkflows.recordId,
+        status: approvalWorkflows.status,
+        approverId: approvalWorkflows.approverId,
+        comments: approvalWorkflows.comments,
+        tenantId: approvalWorkflows.tenantId,
+        createdAt: approvalWorkflows.createdAt,
+        updatedAt: approvalWorkflows.updatedAt,
+        approver: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+        },
+        costAllocation: {
+          id: costAllocations.id,
+          projectId: costAllocations.projectId,
+          lineItemId: costAllocations.lineItemId,
+          labourCost: costAllocations.labourCost,
+          materialCost: costAllocations.materialCost,
+          quantity: costAllocations.quantity,
+          unitCost: costAllocations.unitCost,
+          totalCost: costAllocations.totalCost,
+          dateIncurred: costAllocations.dateIncurred,
+          enteredBy: costAllocations.enteredBy,
+          tenantId: costAllocations.tenantId,
+          status: costAllocations.status,
+          createdAt: costAllocations.createdAt,
+          updatedAt: costAllocations.updatedAt,
+          lineItemName: lineItems.name,
+          projectTitle: projects.title,
+          enteredByName: sql<string>`CONCAT(${users.firstName}, ' ', ${users.lastName})`,
+        },
+      })
+      .from(approvalWorkflows)
+      .leftJoin(users, eq(approvalWorkflows.approverId, users.id))
+      .leftJoin(costAllocations, eq(approvalWorkflows.recordId, costAllocations.id))
+      .leftJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
+      .leftJoin(projects, eq(costAllocations.projectId, projects.id))
+      .where(and(
+        eq(approvalWorkflows.tenantId, tenantId),
+        eq(approvalWorkflows.status, 'pending')
+      ));
+
+    if (table) {
+      query = query.where(and(
+        eq(approvalWorkflows.tenantId, tenantId),
+        eq(approvalWorkflows.status, 'pending'),
+        eq(approvalWorkflows.relatedTable, table)
+      ));
+    }
+
+    return await query.orderBy(desc(approvalWorkflows.createdAt));
+  }
+
+  async createApprovalWorkflow(workflow: InsertApprovalWorkflow): Promise<ApprovalWorkflow> {
+    const [newWorkflow] = await db
+      .insert(approvalWorkflows)
+      .values(workflow)
+      .returning();
+    return newWorkflow;
+  }
+
+  async updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, comments?: string, tenantId?: string): Promise<ApprovalWorkflow | undefined> {
+    const whereConditions = [eq(approvalWorkflows.recordId, recordId)];
+    if (tenantId) {
+      whereConditions.push(eq(approvalWorkflows.tenantId, tenantId));
+    }
+
+    const [updatedWorkflow] = await db
+      .update(approvalWorkflows)
+      .set({ 
+        status,
+        approverId,
+        comments,
+        updatedAt: new Date()
+      })
+      .where(and(...whereConditions))
+      .returning();
+    return updatedWorkflow;
+  }
+
+  async updateCostAllocationStatus(id: string, status: 'draft' | 'pending' | 'approved' | 'rejected', tenantId: string): Promise<CostAllocation | undefined> {
+    const [updatedCostAllocation] = await db
+      .update(costAllocations)
+      .set({ 
+        status,
+        updatedAt: new Date()
+      })
       .where(and(eq(costAllocations.id, id), eq(costAllocations.tenantId, tenantId)))
       .returning();
     return updatedCostAllocation;

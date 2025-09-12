@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Download, ChevronUp, ChevronDown, Calendar, User, Building } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Search, Download, ChevronUp, ChevronDown, Calendar, User, Building, Check, X, Clock, FileText } from "lucide-react";
 
 interface CostAllocation {
   id: string;
@@ -62,11 +66,13 @@ interface CostAllocationsTableProps {
 
 export default function CostAllocationsTable({ filters }: CostAllocationsTableProps) {
   const { toast } = useToast();
+  const { permissions, isAdmin, isTeamLeader } = usePermissions();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [sortField, setSortField] = useState<string>("dateIncurred");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [rejectComments, setRejectComments] = useState("");
 
   // Build query parameters
   const queryParams = useMemo(() => {
@@ -139,6 +145,21 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return <Badge variant="secondary" className="bg-gray-100 text-gray-600 border-gray-300" data-testid={`status-draft`}><FileText className="h-3 w-3 mr-1" />Draft</Badge>;
+      case 'pending':
+        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300" data-testid={`status-pending`}><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
+      case 'approved':
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300" data-testid={`status-approved`}><Check className="h-3 w-3 mr-1" />Approved</Badge>;
+      case 'rejected':
+        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-300" data-testid={`status-rejected`}><X className="h-3 w-3 mr-1" />Rejected</Badge>;
+      default:
+        return <Badge variant="secondary" data-testid={`status-unknown`}>{status}</Badge>;
+    }
   };
 
   const handleSort = (field: string) => {
@@ -256,6 +277,74 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       description: `Exported ${sortedAllocations.length} cost allocation records.`,
     });
   };
+
+  // Approval mutations
+  const approveAllocation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("POST", `/api/approvals/${id}/approve`, {});
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Cost allocation approved successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve cost allocation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectAllocation = useMutation({
+    mutationFn: async ({ id, comments }: { id: string; comments: string }) => {
+      const response = await apiRequest("POST", `/api/approvals/${id}/reject`, { comments });
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Cost allocation rejected successfully",
+      });
+      setRejectComments("");
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject cost allocation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const submitForApproval = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("POST", `/api/cost-allocations/${id}/submit`, {});
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Cost allocation submitted for approval",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit cost allocation for approval",
+        variant: "destructive",
+      });
+    },
+  });
 
   const renderPagination = () => {
     if (!costAllocationsData || costAllocationsData.totalPages <= 1) return null;
@@ -469,7 +558,9 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
                     {getSortIcon("enteredByName")}
                   </div>
                 </TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Materials</TableHead>
+                {(isAdmin || isTeamLeader) && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -501,6 +592,9 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
                       <span className="text-sm">{allocation.enteredByName}</span>
                     </TableCell>
                     <TableCell>
+                      {getStatusBadge(allocation.status)}
+                    </TableCell>
+                    <TableCell>
                       <div className="space-y-1">
                         {allocation.materialAllocations && allocation.materialAllocations.length > 0 ? (
                           allocation.materialAllocations.slice(0, 2).map((mat, index) => (
@@ -521,11 +615,85 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
                         )}
                       </div>
                     </TableCell>
+                    {(isAdmin || isTeamLeader) && (
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          {allocation.status === 'draft' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => submitForApproval.mutate(allocation.id)}
+                              disabled={submitForApproval.isPending}
+                              data-testid={`button-submit-${allocation.id}`}
+                            >
+                              Submit
+                            </Button>
+                          )}
+                          {allocation.status === 'pending' && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => approveAllocation.mutate(allocation.id)}
+                                disabled={approveAllocation.isPending}
+                                className="text-green-600 border-green-600 hover:bg-green-50"
+                                data-testid={`button-approve-${allocation.id}`}
+                              >
+                                <Check className="h-3 w-3 mr-1" />
+                                Approve
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={rejectAllocation.isPending}
+                                    className="text-red-600 border-red-600 hover:bg-red-50"
+                                    data-testid={`button-reject-${allocation.id}`}
+                                  >
+                                    <X className="h-3 w-3 mr-1" />
+                                    Reject
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Reject Cost Allocation</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Please provide a reason for rejecting this cost allocation. This will be recorded in the audit log.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <div className="my-4">
+                                    <Textarea
+                                      placeholder="Enter rejection reason..."
+                                      value={rejectComments}
+                                      onChange={(e) => setRejectComments(e.target.value)}
+                                      className="min-h-[100px]"
+                                      data-testid="textarea-reject-comments"
+                                    />
+                                  </div>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => rejectAllocation.mutate({ id: allocation.id, comments: rejectComments })}
+                                      disabled={!rejectComments.trim() || rejectAllocation.isPending}
+                                      className="bg-red-600 hover:bg-red-700"
+                                      data-testid="button-confirm-reject"
+                                    >
+                                      Reject with Comments
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <div className="text-muted-foreground">
                       {searchQuery ? (
                         <div>
