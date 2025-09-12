@@ -140,7 +140,14 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  // Handle manual login sessions
+  if (user?.manualLogin) {
+    // Manual login sessions don't expire for simplicity in demo/testing
+    return next();
+  }
+
+  // Handle OIDC login sessions
+  if (!req.isAuthenticated() || !user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 

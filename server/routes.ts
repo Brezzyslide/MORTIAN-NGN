@@ -29,6 +29,16 @@ import { z } from "zod";
 
 // Helper function to get user and tenantId from authenticated request
 async function getUserData(req: any): Promise<{ userId: string; tenantId: string; user: any }> {
+  // Handle manual login session
+  if (req.user?.manualLogin) {
+    const user = await storage.getUser(req.user.userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return { userId: req.user.userId, tenantId: user.tenantId, user };
+  }
+  
+  // Handle OIDC login session
   const userId = req.user.claims.sub;
   const user = await storage.getUser(userId);
   if (!user) {
@@ -93,14 +103,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', async (req: any, res) => {
     try {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      
+      // Handle manual login session
+      if (req.user?.manualLogin) {
+        const user = await storage.getUser(req.user.userId);
+        return res.status(200).json(user);
+      }
+      
+      // Handle OIDC login session
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
         const user = await storage.getUser(req.user.claims.sub);
         return res.status(200).json(user);
       }
+      
       return res.status(200).json(null);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Public endpoint to get available companies for login dropdown (sanitized)
+  app.get('/api/auth/companies', async (req: any, res) => {
+    try {
+      // Add security headers and cache control
+      res.set({
+        'Cache-Control': 'public, max-age=300', // 5 minutes cache
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY'
+      });
+      
+      const companies = await storage.getCompanies();
+      
+      // Sanitize response - only return safe public fields
+      const sanitizedCompanies = companies.map(company => ({
+        id: company.id,
+        name: company.name,
+        industry: company.industry,
+        status: company.status
+        // Deliberately exclude email and other sensitive fields
+      }));
+      
+      res.json(sanitizedCompanies);
+    } catch (error) {
+      console.error("Error fetching companies for login:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  // Manual login endpoint (development/demo only)
+  app.post('/api/auth/manual-login', async (req: any, res) => {
+    try {
+      // SECURITY: Check if manual login is enabled
+      if (process.env.ENABLE_MANUAL_LOGIN !== 'true') {
+        return res.status(403).json({ 
+          message: "Manual login is disabled. Please use OIDC authentication." 
+        });
+      }
+      
+      // Add security headers
+      res.set({
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY'
+      });
+      
+      const loginSchema = z.object({
+        email: z.string().email("Please enter a valid email address").max(255),
+        firstName: z.string().min(1, "First name is required").max(100),
+        lastName: z.string().min(1, "Last name is required").max(100),
+        tenantId: z.string().min(1, "Please select a company").max(255),
+        role: z.enum(['team_leader', 'user', 'viewer'], {
+          errorMap: () => ({ message: "Invalid role selected" })
+        })
+      });
+
+      const loginData = loginSchema.parse(req.body);
+      
+      // SECURITY: Server-side role assignment - ignore client role for privileged roles
+      // Only allow safe roles in manual login: viewer, user, team_leader
+      const safeRole = ['viewer', 'user', 'team_leader'].includes(loginData.role) 
+        ? loginData.role 
+        : 'user'; // Default to 'user' if invalid role provided
+
+      // Create or update user with manual login context
+      const userId = `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create audit log for manual login attempt
+      try {
+        await storage.createAuditLog({
+          userId: userId,
+          action: "manual_login_attempt",
+          entityType: "auth",
+          entityId: userId,
+          projectId: null,
+          amount: null,
+          tenantId: loginData.tenantId,
+          details: { 
+            email: loginData.email, 
+            requestedRole: loginData.role, 
+            assignedRole: safeRole,
+            ip: req.ip || req.connection?.remoteAddress || 'unknown'
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to create audit log for manual login:", auditError);
+        // Don't fail login if audit logging fails, but log the error
+      }
+      
+      await storage.upsertUser({
+        id: userId,
+        email: loginData.email,
+        firstName: loginData.firstName,
+        lastName: loginData.lastName,
+        role: safeRole, // Use server-assigned safe role
+        tenantId: loginData.tenantId,
+        status: 'active',
+        profileImageUrl: null,
+      });
+
+      // Set up manual login session
+      req.user = {
+        manualLogin: true,
+        userId: userId,
+      };
+
+      // Log the user in by saving session
+      req.login(req.user, (err: any) => {
+        if (err) {
+          console.error("Session login error:", err);
+          return res.status(500).json({ message: "Failed to establish session" });
+        }
+        res.json({ success: true, message: "Login successful" });
+      });
+
+    } catch (error) {
+      console.error("Manual login error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid login data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Login failed" });
     }
   });
 
