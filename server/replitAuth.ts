@@ -66,6 +66,10 @@ async function upsertUser(
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    // Map OIDC role claim to user role, default to "user" if not provided
+    role: claims["role"] || "user",
+    // Map OIDC status claim to user status, default to "active" if not provided  
+    status: claims["status"] || "active",
     // Preserve existing tenantId for returning users, or use their own ID for new users
     // In a real app, this could be set via invitation/onboarding flows
     tenantId: existingUser?.tenantId ?? claims["sub"],

@@ -43,10 +43,7 @@ export function CompanyManagement() {
 
   // Add company mutation
   const addCompanyMutation = useMutation({
-    mutationFn: (data: AddCompanyFormData) => apiRequest("/api/companies", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    mutationFn: (data: AddCompanyFormData) => apiRequest("POST", "/api/companies", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
       setIsAddDialogOpen(false);
