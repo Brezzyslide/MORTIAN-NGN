@@ -88,16 +88,17 @@ export const lineItemCategoryEnum = pgEnum("line_item_category", [
   "marketing",
   "operations",
   "miscellaneous",
-  // Construction categories
-  "land_purchase",
+  // Construction categories - Complete lifecycle
+  "land_legal",
   "site_preparation", 
   "foundation",
-  "structural",
+  "blockwork",
+  "decking",
   "roofing",
-  "electrical",
-  "plumbing",
+  "mechanical_electrical",
   "finishing",
-  "external_works"
+  "external_works",
+  "closeout"
 ]);
 
 // Approval workflow status enum

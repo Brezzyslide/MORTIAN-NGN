@@ -40,73 +40,80 @@ async function seedConstructionData() {
   try {
     console.log("📦 Seeding line items...");
     
-    // Comprehensive line items data - Land Purchase to Final Cleaning to Marketing
+    // Comprehensive line items data - Complete construction lifecycle
     const lineItemsData: Array<{
-      category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works" | "marketing";
+      category: "land_legal" | "site_preparation" | "foundation" | "blockwork" | "decking" | "roofing" | "mechanical_electrical" | "finishing" | "external_works" | "closeout";
       name: string;
       description: string;
       tenantId: string;
     }> = [
-      // Land Purchase
-      { category: "land_purchase", name: "Land acquisition", description: "Purchase of construction land", tenantId: sampleTenantId },
-      { category: "land_purchase", name: "Site survey", description: "Professional site surveying and planning", tenantId: sampleTenantId },
-      { category: "land_purchase", name: "Legal fees", description: "Legal documentation and transfer fees", tenantId: sampleTenantId },
-      { category: "land_purchase", name: "Title transfer", description: "Property title transfer processing", tenantId: sampleTenantId },
+      // Land & Legal
+      { category: "land_legal", name: "Land Purchase", description: "Acquisition of construction land", tenantId: sampleTenantId },
+      { category: "land_legal", name: "Legal Fees", description: "Legal documentation and transfer fees", tenantId: sampleTenantId },
+      { category: "land_legal", name: "Government Approvals", description: "Planning permits and government approvals", tenantId: sampleTenantId },
       
-      // Site Preparation
-      { category: "site_preparation", name: "Site clearing", description: "Clearing vegetation and debris from site", tenantId: sampleTenantId },
-      { category: "site_preparation", name: "Excavation", description: "Main excavation work for foundation", tenantId: sampleTenantId },
-      { category: "site_preparation", name: "Leveling", description: "Site leveling and grading", tenantId: sampleTenantId },
-      { category: "site_preparation", name: "Access road", description: "Construction of site access roads", tenantId: sampleTenantId },
+      // Site Prep
+      { category: "site_preparation", name: "Site Clearing", description: "Clearing vegetation and debris from site", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Soil Test", description: "Soil testing and analysis", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Survey & Pegging", description: "Site surveying and boundary pegging", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Temporary Structures", description: "Site offices and temporary facilities", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Site Fencing", description: "Temporary site security fencing", tenantId: sampleTenantId },
       
       // Foundation
-      { category: "foundation", name: "Foundation excavation", description: "Digging foundation trenches and footings", tenantId: sampleTenantId },
-      { category: "foundation", name: "Concrete pouring", description: "Pouring concrete for foundation", tenantId: sampleTenantId },
-      { category: "foundation", name: "Rebar installation", description: "Steel reinforcement placement", tenantId: sampleTenantId },
-      { category: "foundation", name: "Waterproofing", description: "Foundation waterproofing and damp proofing", tenantId: sampleTenantId },
+      { category: "foundation", name: "Excavation", description: "Foundation excavation and earthworks", tenantId: sampleTenantId },
+      { category: "foundation", name: "Blinding Concrete", description: "Blinding concrete for foundation base", tenantId: sampleTenantId },
+      { category: "foundation", name: "Footings", description: "Foundation footings and strip foundations", tenantId: sampleTenantId },
+      { category: "foundation", name: "Damp Proof Course", description: "Damp proof course installation", tenantId: sampleTenantId },
+      { category: "foundation", name: "Reinforcement", description: "Steel reinforcement for foundation", tenantId: sampleTenantId },
       
-      // Structural
-      { category: "structural", name: "Frame construction", description: "Main structural frame building", tenantId: sampleTenantId },
-      { category: "structural", name: "Beam installation", description: "Installation of structural beams", tenantId: sampleTenantId },
-      { category: "structural", name: "Column construction", description: "Concrete or steel column construction", tenantId: sampleTenantId },
-      { category: "structural", name: "Floor slabs", description: "Concrete floor slab installation", tenantId: sampleTenantId },
+      // Blockwork
+      { category: "blockwork", name: "Block Molding", description: "Concrete block molding and preparation", tenantId: sampleTenantId },
+      { category: "blockwork", name: "Block Laying", description: "Wall construction with concrete blocks", tenantId: sampleTenantId },
+      { category: "blockwork", name: "Columns", description: "Concrete column construction", tenantId: sampleTenantId },
+      { category: "blockwork", name: "Lintels", description: "Lintel installation above openings", tenantId: sampleTenantId },
+      { category: "blockwork", name: "Scaffolding", description: "Scaffolding for blockwork construction", tenantId: sampleTenantId },
+      
+      // Decking
+      { category: "decking", name: "Formwork", description: "Formwork for concrete decking", tenantId: sampleTenantId },
+      { category: "decking", name: "Reinforcement", description: "Steel reinforcement for deck slabs", tenantId: sampleTenantId },
+      { category: "decking", name: "Concrete Casting", description: "Concrete casting for deck slabs", tenantId: sampleTenantId },
       
       // Roofing
-      { category: "roofing", name: "Roof structure", description: "Roof frame and truss installation", tenantId: sampleTenantId },
-      { category: "roofing", name: "Roofing materials", description: "Installation of roofing sheets or tiles", tenantId: sampleTenantId },
+      { category: "roofing", name: "Trusses", description: "Roof truss installation", tenantId: sampleTenantId },
+      { category: "roofing", name: "Roof Covering", description: "Roof covering installation", tenantId: sampleTenantId },
+      { category: "roofing", name: "Fascia & Soffit", description: "Fascia board and soffit installation", tenantId: sampleTenantId },
       { category: "roofing", name: "Gutters", description: "Gutter and downpipe installation", tenantId: sampleTenantId },
-      { category: "roofing", name: "Insulation", description: "Roof insulation installation", tenantId: sampleTenantId },
       
-      // Electrical
-      { category: "electrical", name: "Wiring installation", description: "Electrical wiring throughout building", tenantId: sampleTenantId },
-      { category: "electrical", name: "Panel setup", description: "Electrical panel and distribution setup", tenantId: sampleTenantId },
-      { category: "electrical", name: "Outlet installation", description: "Power outlet and switch installation", tenantId: sampleTenantId },
-      { category: "electrical", name: "Lighting fixtures", description: "Installation of lighting fixtures", tenantId: sampleTenantId },
-      
-      // Plumbing
-      { category: "plumbing", name: "Pipe installation", description: "Water supply and sewerage pipe installation", tenantId: sampleTenantId },
-      { category: "plumbing", name: "Fixture installation", description: "Installation of plumbing fixtures", tenantId: sampleTenantId },
-      { category: "plumbing", name: "Water heater", description: "Water heating system installation", tenantId: sampleTenantId },
-      { category: "plumbing", name: "Drainage system", description: "Drainage and waste water system", tenantId: sampleTenantId },
+      // M&E (Mechanical & Electrical)
+      { category: "mechanical_electrical", name: "Electrical Rough-in", description: "Electrical rough-in installation", tenantId: sampleTenantId },
+      { category: "mechanical_electrical", name: "Plumbing Rough-in", description: "Plumbing rough-in installation", tenantId: sampleTenantId },
+      { category: "mechanical_electrical", name: "Septic Tank", description: "Septic tank installation", tenantId: sampleTenantId },
+      { category: "mechanical_electrical", name: "Borehole", description: "Water borehole drilling and setup", tenantId: sampleTenantId },
       
       // Finishing
-      { category: "finishing", name: "Interior painting", description: "Interior wall and ceiling painting", tenantId: sampleTenantId },
-      { category: "finishing", name: "Flooring installation", description: "Installation of floor materials", tenantId: sampleTenantId },
-      { category: "finishing", name: "Wall finishing", description: "Plastering and wall finishing work", tenantId: sampleTenantId },
-      { category: "finishing", name: "Ceiling work", description: "Ceiling installation and finishing", tenantId: sampleTenantId },
-      { category: "finishing", name: "Final cleaning", description: "Construction cleanup and final inspection", tenantId: sampleTenantId },
-      { category: "finishing", name: "Touch-up work", description: "Final touch-ups and corrections", tenantId: sampleTenantId },
+      { category: "finishing", name: "Plastering", description: "Wall and ceiling plastering", tenantId: sampleTenantId },
+      { category: "finishing", name: "Screeding", description: "Floor screeding and leveling", tenantId: sampleTenantId },
+      { category: "finishing", name: "Windows", description: "Window installation", tenantId: sampleTenantId },
+      { category: "finishing", name: "Doors", description: "Door installation", tenantId: sampleTenantId },
+      { category: "finishing", name: "Tiling", description: "Floor and wall tiling", tenantId: sampleTenantId },
+      { category: "finishing", name: "Ceiling", description: "Ceiling installation and finishing", tenantId: sampleTenantId },
+      { category: "finishing", name: "Painting", description: "Interior and exterior painting", tenantId: sampleTenantId },
+      { category: "finishing", name: "Cabinetry", description: "Kitchen and bathroom cabinetry", tenantId: sampleTenantId },
+      { category: "finishing", name: "Sanitary", description: "Sanitary ware installation", tenantId: sampleTenantId },
+      { category: "finishing", name: "Electrical Final Fix", description: "Final electrical connections and testing", tenantId: sampleTenantId },
+      { category: "finishing", name: "Plumbing Final Fix", description: "Final plumbing connections and testing", tenantId: sampleTenantId },
       
       // External Works
+      { category: "external_works", name: "Driveway", description: "Driveway construction", tenantId: sampleTenantId },
+      { category: "external_works", name: "Perimeter Fence & Gate", description: "Perimeter fencing and gate installation", tenantId: sampleTenantId },
       { category: "external_works", name: "Landscaping", description: "Site landscaping and gardening", tenantId: sampleTenantId },
-      { category: "external_works", name: "Paving", description: "Driveway and walkway paving", tenantId: sampleTenantId },
-      { category: "external_works", name: "Fencing", description: "Perimeter fencing installation", tenantId: sampleTenantId },
-      { category: "external_works", name: "Exterior lighting", description: "Outdoor lighting installation", tenantId: sampleTenantId },
+      { category: "external_works", name: "Drainage", description: "Site drainage system", tenantId: sampleTenantId },
       
-      // Marketing
-      { category: "marketing", name: "Sales materials", description: "Brochures and sales documentation", tenantId: sampleTenantId },
-      { category: "marketing", name: "Advertising", description: "Marketing and advertising campaigns", tenantId: sampleTenantId },
-      { category: "marketing", name: "Show home setup", description: "Model home preparation and setup", tenantId: sampleTenantId },
+      // Close-out
+      { category: "closeout", name: "Marketing Collateral", description: "Marketing materials and brochures", tenantId: sampleTenantId },
+      { category: "closeout", name: "Agent Commission", description: "Sales agent commission payments", tenantId: sampleTenantId },
+      { category: "closeout", name: "Final Cleaning", description: "Construction cleanup and final inspection", tenantId: sampleTenantId },
+      { category: "closeout", name: "Occupancy Certificate", description: "Final approvals and occupancy certificate", tenantId: sampleTenantId },
     ];
 
     // Insert line items
@@ -115,66 +122,46 @@ async function seedConstructionData() {
 
     console.log("🏗️ Seeding materials...");
 
-    // Comprehensive materials data with realistic pricing
+    // Comprehensive materials data - Construction materials with proper units
     const materialsData = [
       // Basic construction materials
-      { name: "Portland Cement", unit: "bags", currentUnitPrice: "12.50", supplier: "CemCorp Ltd", tenantId: sampleTenantId },
-      { name: "Fine Sand", unit: "cubic meters", currentUnitPrice: "45.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
-      { name: "Coarse Gravel", unit: "cubic meters", currentUnitPrice: "55.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
-      { name: "Steel Rebar 12mm", unit: "tons", currentUnitPrice: "850.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
-      { name: "Steel Rebar 16mm", unit: "tons", currentUnitPrice: "870.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
-      { name: "Structural Timber", unit: "cubic meters", currentUnitPrice: "650.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Cement", unit: "bag", currentUnitPrice: "12.50", supplier: "CemCorp Ltd", tenantId: sampleTenantId },
+      { name: "Sharp Sand", unit: "m³", currentUnitPrice: "45.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Granite", unit: "m³", currentUnitPrice: "55.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Laterite", unit: "m³", currentUnitPrice: "35.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Water", unit: "tanker", currentUnitPrice: "85.00", supplier: "Water Services", tenantId: sampleTenantId },
       
-      // Hardware and fasteners
-      { name: "Common Nails 75mm", unit: "kg", currentUnitPrice: "3.20", supplier: "Hardware Central", tenantId: sampleTenantId },
-      { name: "Common Nails 100mm", unit: "kg", currentUnitPrice: "3.40", supplier: "Hardware Central", tenantId: sampleTenantId },
-      { name: "Wood Screws 50mm", unit: "kg", currentUnitPrice: "8.50", supplier: "Hardware Central", tenantId: sampleTenantId },
-      { name: "Bolts and Nuts M12", unit: "pieces", currentUnitPrice: "2.50", supplier: "Hardware Central", tenantId: sampleTenantId },
+      // Reinforcement materials
+      { name: "Reinforcement Rod", unit: "kg", currentUnitPrice: "4.20", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Binding Wire", unit: "roll", currentUnitPrice: "25.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Timber", unit: "pcs", currentUnitPrice: "15.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Nails", unit: "kg", currentUnitPrice: "3.50", supplier: "Hardware Central", tenantId: sampleTenantId },
       
       // Roofing materials
-      { name: "Aluminum Roofing Sheets", unit: "square meters", currentUnitPrice: "25.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
-      { name: "Clay Roof Tiles", unit: "square meters", currentUnitPrice: "35.00", supplier: "TileMasters", tenantId: sampleTenantId },
-      { name: "Roof Insulation", unit: "square meters", currentUnitPrice: "15.50", supplier: "InsulPro", tenantId: sampleTenantId },
-      { name: "Guttering PVC", unit: "meters", currentUnitPrice: "12.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "Aluminium Roofing Sheet", unit: "m²", currentUnitPrice: "28.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "Fascia Board", unit: "pcs", currentUnitPrice: "45.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "PVC Soffit", unit: "m²", currentUnitPrice: "22.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
       
       // Electrical materials
-      { name: "Electrical Conduit 20mm", unit: "meters", currentUnitPrice: "4.50", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "Electrical Cable 2.5mm", unit: "meters", currentUnitPrice: "6.80", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "Electrical Cable 4mm", unit: "meters", currentUnitPrice: "10.20", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "Wall Switches", unit: "pieces", currentUnitPrice: "8.50", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "Power Sockets", unit: "pieces", currentUnitPrice: "12.00", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "LED Bulbs 12W", unit: "pieces", currentUnitPrice: "15.00", supplier: "LightCorp", tenantId: sampleTenantId },
+      { name: "Electrical Conduit", unit: "length", currentUnitPrice: "4.50", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Cables", unit: "roll", currentUnitPrice: "125.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Switches & Sockets", unit: "pcs", currentUnitPrice: "8.50", supplier: "ElectroMax", tenantId: sampleTenantId },
       
-      // Plumbing materials  
-      { name: "PVC Pipes 100mm", unit: "meters", currentUnitPrice: "18.50", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "PVC Pipes 50mm", unit: "meters", currentUnitPrice: "8.75", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "Pipe Fittings Assorted", unit: "pieces", currentUnitPrice: "5.50", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "Water Taps", unit: "pieces", currentUnitPrice: "45.00", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "Toilet Set Complete", unit: "pieces", currentUnitPrice: "350.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      // Plumbing materials
+      { name: "Plumbing Pipe", unit: "length", currentUnitPrice: "18.50", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Plumbing Fittings", unit: "pcs", currentUnitPrice: "5.50", supplier: "PlumbPro", tenantId: sampleTenantId },
       
       // Finishing materials
-      { name: "Interior Paint White", unit: "liters", currentUnitPrice: "25.00", supplier: "ColorMax", tenantId: sampleTenantId },
-      { name: "Interior Paint Colors", unit: "liters", currentUnitPrice: "28.00", supplier: "ColorMax", tenantId: sampleTenantId },
-      { name: "Ceramic Floor Tiles", unit: "square meters", currentUnitPrice: "35.00", supplier: "TileWorld", tenantId: sampleTenantId },
-      { name: "Laminate Flooring", unit: "square meters", currentUnitPrice: "45.00", supplier: "FloorMaster", tenantId: sampleTenantId },
-      { name: "Interior Doors", unit: "pieces", currentUnitPrice: "280.00", supplier: "DoorCraft", tenantId: sampleTenantId },
-      { name: "Windows Aluminum", unit: "square meters", currentUnitPrice: "185.00", supplier: "WindowWorks", tenantId: sampleTenantId },
+      { name: "Paint", unit: "bucket", currentUnitPrice: "35.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Floor Tiles", unit: "m²", currentUnitPrice: "42.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      { name: "Ceiling Boards", unit: "m²", currentUnitPrice: "25.00", supplier: "CeilingPro", tenantId: sampleTenantId },
       
-      // External works materials
-      { name: "Paving Stones", unit: "square meters", currentUnitPrice: "42.00", supplier: "StoneCraft", tenantId: sampleTenantId },
-      { name: "Chain Link Fencing", unit: "meters", currentUnitPrice: "28.00", supplier: "FencePro", tenantId: sampleTenantId },
-      { name: "Garden Soil", unit: "cubic meters", currentUnitPrice: "35.00", supplier: "GardenSupply", tenantId: sampleTenantId },
-      { name: "Outdoor Light Fixtures", unit: "pieces", currentUnitPrice: "85.00", supplier: "OutdoorLights", tenantId: sampleTenantId },
-      
-      // Specialized materials
-      { name: "Waterproof Membrane", unit: "square meters", currentUnitPrice: "22.00", supplier: "WaterSeal", tenantId: sampleTenantId },
-      { name: "Construction Bricks", unit: "pieces", currentUnitPrice: "0.85", supplier: "BrickWorks", tenantId: sampleTenantId },
-      { name: "Mortar Mix", unit: "bags", currentUnitPrice: "8.50", supplier: "CemCorp Ltd", tenantId: sampleTenantId },
-      { name: "Insulation Foam", unit: "cubic meters", currentUnitPrice: "120.00", supplier: "InsulPro", tenantId: sampleTenantId },
-      { name: "Steel Beams I-Section", unit: "tons", currentUnitPrice: "1250.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
-      { name: "Concrete Blocks", unit: "pieces", currentUnitPrice: "4.50", supplier: "BlockCorp", tenantId: sampleTenantId },
-      { name: "Roofing Nails", unit: "kg", currentUnitPrice: "4.20", supplier: "Hardware Central", tenantId: sampleTenantId },
-      { name: "Exterior Paint", unit: "liters", currentUnitPrice: "32.00", supplier: "ColorMax", tenantId: sampleTenantId }
+      // Fixtures and fittings
+      { name: "Doors", unit: "pcs", currentUnitPrice: "280.00", supplier: "DoorCraft", tenantId: sampleTenantId },
+      { name: "Windows", unit: "pcs", currentUnitPrice: "350.00", supplier: "WindowWorks", tenantId: sampleTenantId },
+      { name: "Kitchen Sink", unit: "pcs", currentUnitPrice: "150.00", supplier: "KitchenPro", tenantId: sampleTenantId },
+      { name: "WC Set", unit: "pcs", currentUnitPrice: "280.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Paving Stones", unit: "m²", currentUnitPrice: "42.00", supplier: "StoneCraft", tenantId: sampleTenantId },
     ];
 
     // Insert materials
