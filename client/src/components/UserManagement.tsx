@@ -178,6 +178,8 @@ export default function UserManagement() {
   });
 
   const handleCreateUser = (data: CreateUserFormData) => {
+    console.log("Form submitted with data:", data);
+    console.log("Form errors:", form.formState.errors);
     createUserMutation.mutate(data);
   };
 
