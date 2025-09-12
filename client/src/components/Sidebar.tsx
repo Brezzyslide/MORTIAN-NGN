@@ -117,16 +117,6 @@ export default function Sidebar() {
               <span>Team Members</span>
             </Link>
             <Link 
-              href="/companies" 
-              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                isActive('/companies') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
-              }`}
-              data-testid="link-companies"
-            >
-              <i className="fas fa-building w-5"></i>
-              <span>Company Management</span>
-            </Link>
-            <Link 
               href="/permissions" 
               className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
                 isActive('/permissions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
@@ -135,6 +125,23 @@ export default function Sidebar() {
             >
               <i className="fas fa-shield-alt w-5"></i>
               <span>Permissions</span>
+            </Link>
+          </div>
+        )}
+
+        {/* Console Manager Only Section */}
+        {user?.role === 'console_manager' && (
+          <div className="mt-8 pt-6 border-t border-white/20">
+            <h3 className="text-sm font-medium opacity-75 mb-3">Console Management</h3>
+            <Link 
+              href="/companies" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/companies') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
+              data-testid="link-companies"
+            >
+              <i className="fas fa-building w-5"></i>
+              <span>Company Management</span>
             </Link>
           </div>
         )}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Building2, Mail, Phone, MapPin, Calendar } from "lucide-react";
+import { Plus, Building2, Mail, Phone, MapPin, Calendar, Shield } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -30,6 +31,10 @@ type AddCompanyFormData = z.infer<typeof addCompanyFormSchema>;
 export function CompanyManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Check if user has permission to manage companies (console managers only)
+  const hasCompanyManagementAccess = user?.role === 'console_manager';
 
   // Fetch companies
   const { data: companies = [], isLoading } = useQuery({
@@ -75,6 +80,24 @@ export function CompanyManagement() {
   const handleSubmit = (data: AddCompanyFormData) => {
     addCompanyMutation.mutate(data);
   };
+
+  // Show unauthorized access message if user doesn't have permission
+  if (!hasCompanyManagementAccess) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-16">
+          <Shield className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Access Denied</h3>
+          <p className="text-gray-500 dark:text-gray-400 mb-6">
+            You don't have permission to access Company Management. This feature is only available to Console Managers.
+          </p>
+          <p className="text-sm text-gray-400 dark:text-gray-500">
+            Your current role: <span className="font-medium">{user?.role?.replace('_', ' ')?.toUpperCase()}</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

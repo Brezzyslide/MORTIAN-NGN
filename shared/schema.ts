@@ -42,7 +42,7 @@ export const companies = pgTable("companies", {
 });
 
 // User roles enum
-export const userRoleEnum = pgEnum("user_role", ["manager", "team_leader", "user"]);
+export const userRoleEnum = pgEnum("user_role", ["console_manager", "manager", "team_leader", "user"]);
 
 // User status enum
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "pending"]);

@@ -67,14 +67,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Company management routes (for console managers only)
-  app.get('/api/companies', isAuthenticated, async (req: any, res) => {
+  app.get('/api/companies', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
-      const { user } = await getUserData(req);
-      // Check if user is console manager (highest privilege)
-      if (user.role !== 'manager' && user.role !== 'console_manager') {
-        return res.status(403).json({ message: 'Access denied. Console manager privileges required.' });
-      }
-      
       const companies = await storage.getCompanies();
       res.json(companies);
     } catch (error) {
@@ -83,13 +77,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/companies', isAuthenticated, async (req: any, res) => {
+  app.post('/api/companies', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
-      const { user, userId } = await getUserData(req);
-      // Check if user is console manager (highest privilege)
-      if (user.role !== 'manager' && user.role !== 'console_manager') {
-        return res.status(403).json({ message: 'Access denied. Console manager privileges required.' });
-      }
+      const { userId } = req.userContext;
 
       const companyData = insertCompanySchema.parse({
         ...req.body,
@@ -114,14 +104,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/companies/:id', isAuthenticated, async (req: any, res) => {
+  app.put('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
-      const { user } = await getUserData(req);
-      // Check if user is console manager (highest privilege)
-      if (user.role !== 'manager' && user.role !== 'console_manager') {
-        return res.status(403).json({ message: 'Access denied. Console manager privileges required.' });
-      }
-
       const companyData = insertCompanySchema.partial().parse(req.body);
       const company = await storage.updateCompany(req.params.id, companyData);
       
