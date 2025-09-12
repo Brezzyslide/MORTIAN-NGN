@@ -265,6 +265,9 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  startDate: z.union([z.date(), z.string()]).transform((val) => new Date(val)),
+  endDate: z.union([z.date(), z.string()]).transform((val) => new Date(val)),
 });
 
 export const insertFundAllocationSchema = createInsertSchema(fundAllocations).omit({

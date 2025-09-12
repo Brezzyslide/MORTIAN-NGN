@@ -7,23 +7,22 @@ import { useToast } from "@/hooks/use-toast";
 export default function ProjectsList() {
   const { toast } = useToast();
 
-  const { data: projects, isLoading } = useQuery({
+  const { data: projects = [] as any[], isLoading, error } = useQuery({
     queryKey: ["/api/projects"],
     retry: false,
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized", 
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-    },
   });
+
+  // Handle errors
+  if (error && isUnauthorizedError(error as Error)) {
+    toast({
+      title: "Unauthorized", 
+      description: "You are logged out. Logging in again...",
+      variant: "destructive",
+    });
+    setTimeout(() => {
+      window.location.href = "/api/login";
+    }, 500);
+  }
 
   const formatCurrency = (amount: string | number) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -102,7 +101,7 @@ export default function ProjectsList() {
         </div>
       </div>
       <div className="divide-y divide-border">
-        {!projects || projects.length === 0 ? (
+        {(projects as any[]).length === 0 ? (
           <div className="p-6 text-center text-muted-foreground">
             <div className="mb-4">
               <i className="fas fa-folder-open text-4xl opacity-50"></i>
@@ -111,7 +110,7 @@ export default function ProjectsList() {
             <p className="text-sm mt-1">Create your first project to get started</p>
           </div>
         ) : (
-          projects.slice(0, 3).map((project: any) => {
+          (projects as any[]).slice(0, 3).map((project: any) => {
             const progress = calculateProgress(project.startDate, project.endDate);
             const duration = calculateDaysDifference(project.startDate, project.endDate);
             const overdue = isOverdue(project.endDate);

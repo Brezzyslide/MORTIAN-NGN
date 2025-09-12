@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -13,12 +13,14 @@ import AnalyticsDashboard from "@/components/AnalyticsDashboard";
 import AdvancedAnalytics from "@/components/AdvancedAnalytics";
 import AuditLog from "@/components/AuditLog";
 import CsvImportExport from "@/components/CsvImportExport";
+import NewProjectDialog from "@/components/NewProjectDialog";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -93,6 +95,7 @@ export default function Dashboard() {
           <div className="flex items-center space-x-4">
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => setShowNewProjectDialog(true)}
               data-testid="button-new-project"
             >
               <i className="fas fa-plus mr-2"></i>New Project
@@ -107,12 +110,6 @@ export default function Dashboard() {
           </div>
         </div>
         
-        {/* Debug info */}
-        <div className="p-4 bg-blue-100 rounded mb-4">
-          <p>Current location (raw): {String(location)}</p>
-          <p>Location type: {typeof location}</p>
-          <p>Is root?: {String(location === '/')}</p>
-        </div>
 
         {/* Dashboard Overview */}
         {location === '/' && (
@@ -202,6 +199,11 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      
+      <NewProjectDialog 
+        open={showNewProjectDialog} 
+        onOpenChange={setShowNewProjectDialog} 
+      />
     </div>
   );
 }
