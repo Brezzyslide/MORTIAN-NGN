@@ -8,25 +8,54 @@ import Dashboard from "@/pages/dashboard";
 import Landing from "@/pages/landing";
 import NotFound from "@/pages/not-found";
 
+function ProtectedRoute({ component: Component }: { component: any }) {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Landing />;
+  }
+
+  return <Component />;
+}
+
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : (
-        <>
-          <Route path="/" component={Dashboard} />
-          <Route path="/projects" component={Dashboard} />
-          <Route path="/allocations" component={Dashboard} />
-          <Route path="/transactions" component={Dashboard} />
-          <Route path="/analytics" component={Dashboard} />
-          <Route path="/audit" component={Dashboard} />
-          <Route path="/users" component={Dashboard} />
-          <Route path="/permissions" component={Dashboard} />
-        </>
-      )}
+      <Route path="/">
+        {() => {
+          if (isLoading) {
+            return (
+              <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading...</p>
+                </div>
+              </div>
+            );
+          }
+          return isAuthenticated ? <Dashboard /> : <Landing />;
+        }}
+      </Route>
+      <Route path="/projects" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/allocations" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/transactions" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/analytics" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/audit" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/users" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/permissions" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>
   );
