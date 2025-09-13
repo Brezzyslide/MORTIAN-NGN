@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { History, TrendingUp, DollarSign, Calendar, User, FileText, Layers, AlertTriangle } from "lucide-react";
+import type { Project, BudgetAmendment, ChangeOrder } from "@shared/schema";
 
 interface BudgetHistoryItem {
   id: string;
@@ -40,17 +41,17 @@ export default function BudgetHistoryView({
 
   // Since we don't have a dedicated budget history endpoint, 
   // we'll fetch budget amendments and change orders separately and combine them
-  const { data: budgetAmendments, isLoading: amendmentsLoading } = useQuery({
+  const { data: budgetAmendments, isLoading: amendmentsLoading } = useQuery<BudgetAmendment[]>({
     queryKey: ["/api/budget-amendments", projectId ? { projectId } : {}],
     retry: false,
   });
 
-  const { data: changeOrders, isLoading: changeOrdersLoading } = useQuery({
+  const { data: changeOrders, isLoading: changeOrdersLoading } = useQuery<ChangeOrder[]>({
     queryKey: ["/api/change-orders", projectId ? { projectId } : {}],
     retry: false,
   });
 
-  const { data: projects, isLoading: projectsLoading } = useQuery({
+  const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     retry: false,
   });
@@ -62,11 +63,11 @@ export default function BudgetHistoryView({
     if (!budgetAmendments || !changeOrders || !projects) return [];
 
     const historyItems: BudgetHistoryItem[] = [];
-    const projectMap = new Map(projects.map((p: any) => [p.id, p]));
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
 
     // Add initial budget entries for projects
     if (!projectId) {
-      projects.forEach((project: any) => {
+      projects.forEach((project) => {
         historyItems.push({
           id: `initial-${project.id}`,
           type: 'initial',
@@ -75,7 +76,7 @@ export default function BudgetHistoryView({
           amount: project.budget,
           description: `Initial project budget`,
           status: 'approved',
-          createdAt: project.createdAt,
+          createdAt: project.createdAt ? new Date(project.createdAt).toISOString() : new Date().toISOString(),
           runningTotal: parseFloat(project.budget),
         });
       });
@@ -90,14 +91,14 @@ export default function BudgetHistoryView({
           amount: project.budget,
           description: `Initial project budget`,
           status: 'approved',
-          createdAt: project.createdAt,
+          createdAt: project.createdAt ? new Date(project.createdAt).toISOString() : new Date().toISOString(),
           runningTotal: parseFloat(project.budget),
         });
       }
     }
 
     // Add budget amendments
-    budgetAmendments.forEach((amendment: any) => {
+    budgetAmendments.forEach((amendment) => {
       const project = projectMap.get(amendment.projectId);
       if (project) {
         historyItems.push({
@@ -108,19 +109,19 @@ export default function BudgetHistoryView({
           amount: amendment.amountAdded,
           description: amendment.reason,
           proposedBy: amendment.proposedBy,
-          proposedByName: amendment.proposedByName,
-          approvedBy: amendment.approvedBy,
-          approvedByName: amendment.approvedByName,
+          proposedByName: undefined, // Not available in database schema
+          approvedBy: amendment.approvedBy || undefined,
+          approvedByName: undefined, // Not available in database schema
           status: amendment.status,
-          createdAt: amendment.createdAt,
-          approvedAt: amendment.approvedAt,
+          createdAt: amendment.createdAt ? new Date(amendment.createdAt).toISOString() : new Date().toISOString(),
+          approvedAt: amendment.approvedAt ? new Date(amendment.approvedAt).toISOString() : undefined,
           runningTotal: 0, // Will be calculated below
         });
       }
     });
 
     // Add change orders with cost impact
-    changeOrders.forEach((changeOrder: any) => {
+    changeOrders.forEach((changeOrder) => {
       const project = projectMap.get(changeOrder.projectId);
       if (project && parseFloat(changeOrder.costImpact) !== 0) {
         historyItems.push({
@@ -131,12 +132,12 @@ export default function BudgetHistoryView({
           amount: changeOrder.costImpact,
           description: changeOrder.description,
           proposedBy: changeOrder.proposedBy,
-          proposedByName: changeOrder.proposedByName,
-          approvedBy: changeOrder.approvedBy,
-          approvedByName: changeOrder.approvedByName,
+          proposedByName: undefined, // Not available in database schema
+          approvedBy: changeOrder.approvedBy || undefined,
+          approvedByName: undefined, // Not available in database schema
           status: changeOrder.status,
-          createdAt: changeOrder.createdAt,
-          approvedAt: changeOrder.approvedAt,
+          createdAt: changeOrder.createdAt ? new Date(changeOrder.createdAt).toISOString() : new Date().toISOString(),
+          approvedAt: changeOrder.approvedAt ? new Date(changeOrder.approvedAt).toISOString() : undefined,
           runningTotal: 0, // Will be calculated below
         });
       }

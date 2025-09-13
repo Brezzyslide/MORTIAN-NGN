@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertChangeOrderSchema } from "@shared/schema";
+import type { Project } from "@shared/schema";
 import { FileText, DollarSign, AlertTriangle, Info, CheckCircle, Layers } from "lucide-react";
 
 // Change order form schema
@@ -78,13 +79,13 @@ export default function ChangeOrderForm() {
   const watchedCostImpact = form.watch("costImpact");
 
   // Fetch projects
-  const { data: projects, isLoading: projectsLoading } = useQuery({
+  const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     retry: false,
   });
 
   // Fetch selected project details for cost impact
-  const { data: selectedProject } = useQuery({
+  const { data: selectedProject } = useQuery<Project>({
     queryKey: ["/api/projects", watchedProjectId],
     enabled: !!watchedProjectId,
     retry: false,
@@ -237,7 +238,7 @@ export default function ChangeOrderForm() {
                           {projectsLoading ? (
                             <SelectItem value="loading" disabled>Loading projects...</SelectItem>
                           ) : (
-                            projects?.map((project: any) => (
+                            projects?.map((project) => (
                               <SelectItem key={project.id} value={project.id}>
                                 {project.title} - {formatCurrency(parseFloat(project.budget))}
                               </SelectItem>

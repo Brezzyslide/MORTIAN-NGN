@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import Dashboard from "@/pages/dashboard";
 import Landing from "@/pages/landing";
+import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: any }) {
@@ -46,9 +47,10 @@ function Router() {
               </div>
             );
           }
-          return isAuthenticated ? <Dashboard /> : <Landing />;
+          return isAuthenticated ? <Dashboard /> : <Home />;
         }}
       </Route>
+      <Route path="/login" component={Landing} />
       <Route path="/projects" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/allocations" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/cost-entry" component={() => <ProtectedRoute component={Dashboard} />} />

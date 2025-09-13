@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertBudgetAmendmentSchema } from "@shared/schema";
+import type { Project } from "@shared/schema";
 import { DollarSign, TrendingUp, AlertTriangle, Info, CheckCircle } from "lucide-react";
 
 // Budget amendment form schema
@@ -77,13 +78,13 @@ export default function BudgetAmendmentForm() {
   const watchedAmountAdded = form.watch("amountAdded");
 
   // Fetch projects
-  const { data: projects, isLoading: projectsLoading } = useQuery({
+  const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
     retry: false,
   });
 
   // Fetch selected project details for budget impact
-  const { data: selectedProject } = useQuery({
+  const { data: selectedProject } = useQuery<Project>({
     queryKey: ["/api/projects", watchedProjectId],
     enabled: !!watchedProjectId,
     retry: false,
@@ -243,7 +244,7 @@ export default function BudgetAmendmentForm() {
                           {projectsLoading ? (
                             <SelectItem value="loading" disabled>Loading projects...</SelectItem>
                           ) : (
-                            projects?.map((project: any) => (
+                            projects?.map((project) => (
                               <SelectItem key={project.id} value={project.id}>
                                 {project.title} - {formatCurrency(parseFloat(project.budget))}
                               </SelectItem>
