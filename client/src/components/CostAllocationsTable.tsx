@@ -76,7 +76,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
   const [sortField, setSortField] = useState<string>("dateIncurred");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [rejectComments, setRejectComments] = useState("");
-  const [changeOrderFilter, setChangeOrderFilter] = useState<string>("");
+  const [changeOrderFilter, setChangeOrderFilter] = useState<string>("all");
 
   // Build query parameters
   const queryParams = useMemo(() => {
@@ -104,7 +104,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       params.set("changeOrderId", filters.changeOrderId);
     }
 
-    if (changeOrderFilter) {
+    if (changeOrderFilter && changeOrderFilter !== "all") {
       if (changeOrderFilter === "linked") {
         params.set("hasChangeOrder", "true");
       } else if (changeOrderFilter === "unlinked") {
@@ -493,7 +493,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
                 <SelectValue placeholder="Filter by change order..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All costs</SelectItem>
+                <SelectItem value="all">All costs</SelectItem>
                 <SelectItem value="linked">
                   <div className="flex items-center space-x-2">
                     <Layers className="h-4 w-4 text-blue-600" />

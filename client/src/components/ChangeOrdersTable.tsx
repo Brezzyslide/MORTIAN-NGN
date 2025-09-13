@@ -43,7 +43,7 @@ export default function ChangeOrdersTable({
   const { toast } = useToast();
   const { isAdmin } = usePermissions();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("createdAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [rejectComments, setRejectComments] = useState("");
@@ -58,7 +58,7 @@ export default function ChangeOrdersTable({
       params.set("projectId", projectId);
     }
     
-    if (statusFilter) {
+    if (statusFilter && statusFilter !== "all") {
       params.set("status", statusFilter);
     }
     
@@ -334,7 +334,7 @@ export default function ChangeOrdersTable({
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>

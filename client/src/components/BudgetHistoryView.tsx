@@ -35,8 +35,8 @@ export default function BudgetHistoryView({
   showProjectColumn = true 
 }: BudgetHistoryViewProps) {
   const { toast } = useToast();
-  const [typeFilter, setTypeFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Since we don't have a dedicated budget history endpoint, 
   // we'll fetch budget amendments and change orders separately and combine them
@@ -170,11 +170,11 @@ export default function BudgetHistoryView({
   const filteredHistory = useMemo(() => {
     let filtered = budgetHistory;
 
-    if (typeFilter) {
+    if (typeFilter && typeFilter !== "all") {
       filtered = filtered.filter(item => item.type === typeFilter);
     }
 
-    if (statusFilter) {
+    if (statusFilter && statusFilter !== "all") {
       filtered = filtered.filter(item => item.status === statusFilter);
     }
 
@@ -300,7 +300,7 @@ export default function BudgetHistoryView({
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Types</SelectItem>
+              <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="initial">Initial Budget</SelectItem>
               <SelectItem value="amendment">Budget Amendments</SelectItem>
               <SelectItem value="change_order">Change Orders</SelectItem>
@@ -312,7 +312,7 @@ export default function BudgetHistoryView({
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Statuses</SelectItem>
+              <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>

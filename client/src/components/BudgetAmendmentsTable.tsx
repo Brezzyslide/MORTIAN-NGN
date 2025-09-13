@@ -43,7 +43,7 @@ export default function BudgetAmendmentsTable({
   const { toast } = useToast();
   const { isAdmin } = usePermissions();
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("createdAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [rejectComments, setRejectComments] = useState("");
@@ -57,7 +57,7 @@ export default function BudgetAmendmentsTable({
       params.set("projectId", projectId);
     }
     
-    if (statusFilter) {
+    if (statusFilter && statusFilter !== "all") {
       params.set("status", statusFilter);
     }
     
@@ -319,7 +319,7 @@ export default function BudgetAmendmentsTable({
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>

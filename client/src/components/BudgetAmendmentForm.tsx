@@ -241,7 +241,7 @@ export default function BudgetAmendmentForm() {
                         </FormControl>
                         <SelectContent>
                           {projectsLoading ? (
-                            <SelectItem value="" disabled>Loading projects...</SelectItem>
+                            <SelectItem value="loading" disabled>Loading projects...</SelectItem>
                           ) : (
                             projects?.map((project: any) => (
                               <SelectItem key={project.id} value={project.id}>
