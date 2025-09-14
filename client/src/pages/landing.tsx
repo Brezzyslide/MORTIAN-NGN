@@ -2,94 +2,53 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Building2, Users, Crown, Shield, User, Eye } from "lucide-react";
+import { Loader2, Building2, Shield, Users, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  tenantId: z.string().min(1, "Please select a company"),
-  role: z.enum(['team_leader', 'user', 'viewer'], {
-    errorMap: () => ({ message: "Please select a valid role" })
-  })
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-interface Company {
+interface User {
   id: string;
-  name: string;
-  industry?: string;
-  status: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  mustChangePassword?: boolean;
 }
-
-const roleDescriptions = {
-  team_leader: {
-    title: "Team Leader",
-    description: "Project oversight and team member management",
-    icon: Users,
-    color: "bg-blue-500"
-  },
-  user: {
-    title: "User",
-    description: "Access to assigned projects and cost entry capabilities",
-    icon: User,
-    color: "bg-green-500"
-  },
-  viewer: {
-    title: "Viewer",
-    description: "Read-only access to project information and reports",
-    icon: Eye,
-    color: "bg-gray-500"
-  }
-};
 
 export default function Landing() {
   const [loginError, setLoginError] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  // Check if manual login is enabled (for development/demo only)
-  const isManualLoginEnabled = true; // Always show manual login for new tenants
-  const isProduction = import.meta.env.PROD;
 
   useEffect(() => {
     document.title = "ProjectFund - Login";
   }, []);
-
-  // Fetch available companies
-  const { data: companies = [], isLoading: companiesLoading } = useQuery<Company[]>({
-    queryKey: ['/api/auth/companies'],
-    staleTime: 60_000,
-  });
 
   // Form setup
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
-      firstName: "",
-      lastName: "",
-      tenantId: "",
-      role: "user"
+      password: ""
     }
   });
 
-  // Manual login mutation
+  // Login mutation
   const loginMutation = useMutation({
-    mutationFn: (data: LoginFormValues) => apiRequest('POST', '/api/auth/manual-login', data),
+    mutationFn: (data: LoginFormValues) => apiRequest('POST', '/api/auth/login', data),
     onSuccess: () => {
       toast({
         title: "Login Successful",
@@ -133,152 +92,55 @@ export default function Landing() {
           </p>
         </div>
 
-        <div className={`grid grid-cols-1 ${isManualLoginEnabled ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-8 max-w-5xl mx-auto`}>
-          {/* Manual Login Form - Development/Demo Only */}
-          {isManualLoginEnabled && (
-            <Card className="w-full border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
-              <CardHeader>
-                <CardTitle className="text-2xl text-center text-amber-800 dark:text-amber-200">
-                  ⚠️ Development Access
-                </CardTitle>
-                <div className="text-center space-y-2">
-                  <p className="text-sm text-amber-700 dark:text-amber-300">
-                    Quick access for development and demonstration only
-                  </p>
-                  {isProduction && (
-                    <Alert variant="destructive" className="text-left">
-                      <AlertDescription className="text-xs">
-                        ⚠️ Manual login should not be used in production environments
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              </CardHeader>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          {/* User Login Form */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="text-2xl text-center">
+                🔐 User Login
+              </CardTitle>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  Sign in to your account
+                </p>
+              </div>
+            </CardHeader>
             <CardContent>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  {/* Company Selection */}
-                  <FormField
-                    control={form.control}
-                    name="tenantId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Company</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={companiesLoading}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-company">
-                              <SelectValue placeholder={companiesLoading ? "Loading companies..." : "Select your company"} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {companies.map((company) => (
-                              <SelectItem key={company.id} value={company.id}>
-                                <div className="flex items-center justify-between w-full">
-                                  <span>{company.name}</span>
-                                  {company.industry && (
-                                    <Badge variant="outline" className="ml-2">
-                                      {company.industry}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Role Selection */}
-                  <FormField
-                    control={form.control}
-                    name="role"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Role</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-role">
-                              <SelectValue placeholder="Select your role" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.entries(roleDescriptions).map(([key, role]) => {
-                              const IconComponent = role.icon;
-                              return (
-                                <SelectItem key={key} value={key}>
-                                  <div className="flex items-center space-x-3">
-                                    <div className={`w-4 h-4 rounded-full ${role.color} flex items-center justify-center`}>
-                                      <IconComponent className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                    <div className="text-left">
-                                      <div className="font-medium">{role.title}</div>
-                                      <div className="text-xs text-muted-foreground">{role.description}</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Name Fields */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="firstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Name</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="John" 
-                              {...field} 
-                              data-testid="input-firstName"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="lastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Last Name</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="Doe" 
-                              {...field} 
-                              data-testid="input-lastName"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
                   {/* Email Field */}
                   <FormField
                     control={form.control}
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>Email Address</FormLabel>
                         <FormControl>
                           <Input 
                             type="email" 
-                            placeholder="john.doe@company.com" 
+                            placeholder="your.email@company.com" 
                             {...field} 
                             data-testid="input-email"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Password Field */}
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="password" 
+                            placeholder="Enter your password" 
+                            {...field} 
+                            data-testid="input-password"
                           />
                         </FormControl>
                         <FormMessage />
@@ -298,34 +160,21 @@ export default function Landing() {
                     type="submit" 
                     className="w-full" 
                     disabled={loginMutation.isPending}
-                    data-testid="button-manual-login"
+                    data-testid="button-login"
                   >
                     {loginMutation.isPending ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Logging in...
+                        Signing in...
                       </>
                     ) : (
-                      <>
-                        <User className="w-4 h-4 mr-2" />
-                        Continue with Quick Access
-                      </>
+                      "Sign In"
                     )}
                   </Button>
                 </form>
               </Form>
-              {/* Security Notice for Manual Login */}
-              {!isProduction && (
-                <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
-                  <AlertDescription className="text-xs text-blue-700 dark:text-blue-300">
-                    💡 Manual login restricted to safe roles: Team Leader, User, and Viewer only.
-                    For administrative access, use OIDC authentication.
-                  </AlertDescription>
-                </Alert>
-              )}
             </CardContent>
           </Card>
-          )}
 
           {/* OIDC Login & Features */}
           <div className="space-y-6">
@@ -333,13 +182,10 @@ export default function Landing() {
             <Card className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
               <CardHeader>
                 <CardTitle className="text-2xl text-center text-green-800 dark:text-green-200">
-                  🔐 Recommended: Secure Login
+                  🔐 Alternative: Secure Login
                 </CardTitle>
                 <p className="text-sm text-green-700 dark:text-green-300 text-center">
-                  {isProduction 
-                    ? "Use your Replit account for secure production access"
-                    : "Use your Replit account for secure authentication with full access controls"
-                  }
+                  Use your Replit account for secure authentication with full access controls
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -351,11 +197,9 @@ export default function Landing() {
                   <Building2 className="w-4 h-4 mr-2" />
                   Sign In with Replit
                 </Button>
-                {!isManualLoginEnabled && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Secure authentication with automatic role assignment and access controls
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground text-center">
+                  Secure authentication with automatic role assignment and access controls
+                </p>
               </CardContent>
             </Card>
 
@@ -369,26 +213,49 @@ export default function Landing() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
-                  <div className="flex items-center text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Hierarchical role-based access control</span>
+                  <div className="flex items-start space-x-3">
+                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Secure Authentication</p>
+                      <p className="text-xs text-muted-foreground">BCrypt password hashing and session management</p>
+                    </div>
                   </div>
-                  <div className="flex items-center text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Multi-tenant project management</span>
+                  <div className="flex items-start space-x-3">
+                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Multi-Tenant Support</p>
+                      <p className="text-xs text-muted-foreground">Isolated data and role-based access controls</p>
+                    </div>
                   </div>
-                  <div className="flex items-center text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Real-time budget tracking & analytics</span>
+                  <div className="flex items-start space-x-3">
+                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Project Budget Management</p>
+                      <p className="text-xs text-muted-foreground">Track allocations, expenses, and financial analytics</p>
+                    </div>
                   </div>
-                  <div className="flex items-center text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Complete audit trail & compliance</span>
+                  <div className="flex items-start space-x-3">
+                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Admin Control</p>
+                      <p className="text-xs text-muted-foreground">User creation and management by administrators</p>
+                    </div>
                   </div>
-                  <div className="flex items-center text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                    <span>Advanced cost allocation & reporting</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contact Information */}
+            <Card className="bg-muted/50">
+              <CardContent className="pt-6">
+                <div className="text-center space-y-2">
+                  <div className="flex items-center justify-center space-x-2">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">Need access?</p>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Contact your system administrator to create an account for you.
+                  </p>
                 </div>
               </CardContent>
             </Card>

@@ -8,6 +8,7 @@ import Dashboard from "@/pages/dashboard";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
+import AdminUsers from "@/pages/admin-users";
 
 function ProtectedRoute({ component: Component }: { component: any }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -57,7 +58,8 @@ function Router() {
       <Route path="/transactions" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/analytics" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/audit" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/users" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/users" component={() => <ProtectedRoute component={AdminUsers} />} />
+      <Route path="/admin/users" component={() => <ProtectedRoute component={AdminUsers} />} />
       <Route path="/companies" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/permissions" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/budget-amendments" component={() => <ProtectedRoute component={Dashboard} />} />

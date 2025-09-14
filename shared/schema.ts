@@ -58,6 +58,11 @@ export const users: any = pgTable("users", {
   managerId: varchar("manager_id").references(() => users.id),
   tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   status: userStatusEnum("status").notNull().default("active"),
+  // Authentication fields
+  passwordHash: varchar("password_hash", { length: 255 }),
+  mustChangePassword: boolean("must_change_password").notNull().default(true),
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -638,6 +643,32 @@ export const insertBudgetAlertSchema = createInsertSchema(budgetAlerts).omit({
   updatedAt: true,
 });
 
+// Authentication schemas
+export const loginRequestSchema = z.object({
+  email: z.string().email("Please enter a valid email address").max(255),
+  password: z.string().min(8, "Password must be at least 8 characters").max(255),
+});
+
+export const adminCreateUserSchema = z.object({
+  email: z.string().email("Please enter a valid email address").max(255),
+  firstName: z.string().min(1, "First name is required").max(100),
+  lastName: z.string().min(1, "Last name is required").max(100),
+  role: z.enum(['admin', 'team_leader', 'user', 'viewer'], {
+    errorMap: () => ({ message: "Please select a valid role" })
+  }),
+  tenantId: z.string().min(1, "Tenant ID is required").max(255),
+  temporaryPassword: z.string().min(8, "Temporary password must be at least 8 characters").max(255),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "New password must be at least 8 characters").max(255),
+  confirmPassword: z.string().min(1, "Please confirm your new password"),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -672,3 +703,8 @@ export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type BudgetAlert = typeof budgetAlerts.$inferSelect;
 export type InsertBudgetAlert = z.infer<typeof insertBudgetAlertSchema>;
+
+// Authentication types
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+export type AdminCreateUser = z.infer<typeof adminCreateUserSchema>;
+export type ChangePassword = z.infer<typeof changePasswordSchema>;

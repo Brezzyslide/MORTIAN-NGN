@@ -21,7 +21,11 @@ import {
   insertApprovalWorkflowSchema,
   insertBudgetAmendmentSchema,
   insertChangeOrderSchema,
+  loginRequestSchema,
+  adminCreateUserSchema,
+  changePasswordSchema,
 } from "@shared/schema";
+import bcrypt from "bcrypt";
 import { 
   calcMaterialTotal,
   calcTotalCost,
@@ -37,8 +41,8 @@ import { z } from "zod";
 
 // Helper function to get user and tenantId from authenticated request
 async function getUserData(req: any): Promise<{ userId: string; tenantId: string; user: any }> {
-  // Handle manual login session
-  if (req.user?.manualLogin) {
+  // Handle password login session
+  if (req.user?.passwordLogin) {
     const user = await storage.getUser(req.user.userId);
     if (!user) {
       throw new Error('User not found');
@@ -159,80 +163,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Manual login endpoint (development/demo only)
-  app.post('/api/auth/manual-login', async (req: any, res) => {
+  // User login endpoint
+  app.post('/api/auth/login', async (req: any, res) => {
     try {
-      // SECURITY: Check if manual login is enabled
-      if (process.env.ENABLE_MANUAL_LOGIN !== 'true') {
-        return res.status(403).json({ 
-          message: "Manual login is disabled. Please use OIDC authentication." 
-        });
-      }
-      
       // Add security headers
       res.set({
         'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY'
-      });
-      
-      const loginSchema = z.object({
-        email: z.string().email("Please enter a valid email address").max(255),
-        firstName: z.string().min(1, "First name is required").max(100),
-        lastName: z.string().min(1, "Last name is required").max(100),
-        tenantId: z.string().min(1, "Please select a company").max(255),
-        role: z.enum(['team_leader', 'user', 'viewer'], {
-          errorMap: () => ({ message: "Invalid role selected" })
-        })
+        'X-Frame-Options': 'DENY',
+        'Cache-Control': 'no-store, no-cache, must-revalidate'
       });
 
-      const loginData = loginSchema.parse(req.body);
-      
-      // SECURITY: Server-side role assignment - ignore client role for privileged roles
-      // Only allow safe roles in manual login: viewer, user, team_leader
-      const safeRole = ['viewer', 'user', 'team_leader'].includes(loginData.role) 
-        ? loginData.role 
-        : 'user'; // Default to 'user' if invalid role provided
+      const loginData = loginRequestSchema.parse(req.body);
+      const { email, password } = loginData;
 
-      // Create or update user with manual login context
-      const userId = `manual-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
       
-      // Create audit log for manual login attempt
+      // Generic error message for security (don't reveal if email exists)
+      const invalidCredentialsError = {
+        message: "Invalid credentials or account not found"
+      };
+
+      if (!user) {
+        // Create audit log for failed login attempt
+        try {
+          await storage.createAuditLog({
+            userId: null,
+            action: "login_failed_user_not_found",
+            entityType: "auth",
+            entityId: email,
+            projectId: null,
+            amount: null,
+            tenantId: null,
+            details: { 
+              email,
+              reason: "user_not_found",
+              ip: req.ip || req.connection?.remoteAddress || 'unknown'
+            },
+          });
+        } catch (auditError) {
+          console.error("Failed to create audit log for failed login:", auditError);
+        }
+        
+        return res.status(401).json(invalidCredentialsError);
+      }
+
+      // Check if account is locked
+      if (user.lockedUntil && new Date() < user.lockedUntil) {
+        try {
+          await storage.createAuditLog({
+            userId: user.id,
+            action: "login_failed_account_locked",
+            entityType: "auth",
+            entityId: user.id,
+            projectId: null,
+            amount: null,
+            tenantId: user.tenantId,
+            details: { 
+              email,
+              reason: "account_locked",
+              lockedUntil: user.lockedUntil,
+              ip: req.ip || req.connection?.remoteAddress || 'unknown'
+            },
+          });
+        } catch (auditError) {
+          console.error("Failed to create audit log for locked account:", auditError);
+        }
+        
+        return res.status(423).json({ 
+          message: "Account is temporarily locked due to multiple failed login attempts" 
+        });
+      }
+
+      // Check if user is active
+      if (user.status !== 'active') {
+        try {
+          await storage.createAuditLog({
+            userId: user.id,
+            action: "login_failed_account_inactive",
+            entityType: "auth",
+            entityId: user.id,
+            projectId: null,
+            amount: null,
+            tenantId: user.tenantId,
+            details: { 
+              email,
+              reason: "account_inactive",
+              status: user.status,
+              ip: req.ip || req.connection?.remoteAddress || 'unknown'
+            },
+          });
+        } catch (auditError) {
+          console.error("Failed to create audit log for inactive account:", auditError);
+        }
+        
+        return res.status(403).json({ 
+          message: "Account is not active. Please contact your administrator." 
+        });
+      }
+
+      // Verify password
+      if (!user.passwordHash) {
+        return res.status(401).json(invalidCredentialsError);
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      
+      if (!isPasswordValid) {
+        // Increment failed login count
+        await storage.incrementFailedLogins(user.id);
+        
+        // Lock account after 5 failed attempts
+        const maxFailedAttempts = 5;
+        const lockDurationMinutes = 30;
+        
+        if ((user.failedLoginCount || 0) + 1 >= maxFailedAttempts) {
+          const lockUntil = new Date(Date.now() + lockDurationMinutes * 60 * 1000);
+          await storage.lockAccount(user.id, lockUntil);
+        }
+
+        try {
+          await storage.createAuditLog({
+            userId: user.id,
+            action: "login_failed_invalid_password",
+            entityType: "auth",
+            entityId: user.id,
+            projectId: null,
+            amount: null,
+            tenantId: user.tenantId,
+            details: { 
+              email,
+              reason: "invalid_password",
+              failedLoginCount: (user.failedLoginCount || 0) + 1,
+              ip: req.ip || req.connection?.remoteAddress || 'unknown'
+            },
+          });
+        } catch (auditError) {
+          console.error("Failed to create audit log for invalid password:", auditError);
+        }
+        
+        return res.status(401).json(invalidCredentialsError);
+      }
+
+      // Reset failed login count on successful login
+      await storage.resetFailedLogins(user.id);
+
+      // Create audit log for successful login
       try {
         await storage.createAuditLog({
-          userId: userId,
-          action: "manual_login_attempt",
+          userId: user.id,
+          action: "login_successful",
           entityType: "auth",
-          entityId: userId,
+          entityId: user.id,
           projectId: null,
           amount: null,
-          tenantId: loginData.tenantId,
+          tenantId: user.tenantId,
           details: { 
-            email: loginData.email, 
-            requestedRole: loginData.role, 
-            assignedRole: safeRole,
+            email,
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
         });
       } catch (auditError) {
-        console.error("Failed to create audit log for manual login:", auditError);
-        // Don't fail login if audit logging fails, but log the error
+        console.error("Failed to create audit log for successful login:", auditError);
       }
-      
-      await storage.upsertUser({
-        id: userId,
-        email: loginData.email,
-        firstName: loginData.firstName,
-        lastName: loginData.lastName,
-        role: safeRole, // Use server-assigned safe role
-        tenantId: loginData.tenantId,
-        status: 'active',
-        profileImageUrl: null,
-      });
 
-      // Set up manual login session
+      // Set up user session
       req.user = {
-        manualLogin: true,
-        userId: userId,
+        passwordLogin: true,
+        userId: user.id,
       };
 
       // Log the user in by saving session
@@ -241,11 +339,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session login error:", err);
           return res.status(500).json({ message: "Failed to establish session" });
         }
-        res.json({ success: true, message: "Login successful" });
+        
+        // Return success with additional info for password change requirement
+        const response: any = { 
+          success: true, 
+          message: "Login successful",
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            mustChangePassword: user.mustChangePassword
+          }
+        };
+        
+        res.json(response);
       });
 
     } catch (error) {
-      console.error("Manual login error:", error);
+      console.error("Login error:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ 
           message: "Invalid login data", 
@@ -256,6 +369,283 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // Password change endpoint
+  app.post('/api/auth/change-password', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId } = await getUserData(req);
+      const passwordData = changePasswordSchema.parse(req.body);
+      const { currentPassword, newPassword } = passwordData;
+
+      // Get current user
+      const user = await storage.getUser(userId);
+      if (!user || !user.passwordHash) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Verify current password
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+
+      // Hash new password
+      const saltRounds = 12;
+      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update password
+      await storage.setUserPassword(userId, newPasswordHash, false);
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId: userId,
+          action: "password_changed",
+          entityType: "auth",
+          entityId: userId,
+          projectId: null,
+          amount: null,
+          tenantId: user.tenantId,
+          details: { 
+            ip: req.ip || req.connection?.remoteAddress || 'unknown'
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to create audit log for password change:", auditError);
+      }
+
+      res.json({ success: true, message: "Password changed successfully" });
+    } catch (error) {
+      console.error("Password change error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid password data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to change password" });
+    }
+  });
+
+  // Admin user management endpoints
+  app.post('/api/admin/users', isAuthenticated, authorize(['admin', 'console_manager']), async (req: any, res) => {
+    try {
+      const { userId, tenantId, user: currentUser } = await getUserData(req);
+      const userData = adminCreateUserSchema.parse(req.body);
+
+      // Console managers can create users in any tenant, regular admins only in their own
+      const targetTenantId = currentUser.role === 'console_manager' ? userData.tenantId : tenantId;
+
+      // Hash temporary password
+      const saltRounds = 12;
+      const passwordHash = await bcrypt.hash(userData.temporaryPassword, saltRounds);
+
+      // Create user with password
+      const newUser = await storage.createUserWithPassword({
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        role: userData.role,
+        tenantId: targetTenantId,
+        passwordHash,
+        profileImageUrl: null,
+        managerId: currentUser.role === 'admin' ? userId : null, // Admins can be managers
+      });
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId: userId,
+          action: "user_created",
+          entityType: "user",
+          entityId: newUser.id,
+          projectId: null,
+          amount: null,
+          tenantId: targetTenantId,
+          details: { 
+            newUserEmail: userData.email,
+            newUserRole: userData.role,
+            createdBy: `${currentUser.firstName} ${currentUser.lastName}`,
+            ip: req.ip || req.connection?.remoteAddress || 'unknown'
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to create audit log for user creation:", auditError);
+      }
+
+      // Return user without password hash
+      const { passwordHash: _, ...userResponse } = newUser;
+      res.status(201).json(userResponse);
+    } catch (error) {
+      console.error("User creation error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid user data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      if (error?.code === '23505' && error?.constraint?.includes('email')) {
+        return res.status(409).json({ message: "Email address already exists" });
+      }
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  app.get('/api/admin/users', isAuthenticated, authorize(['admin', 'team_leader', 'console_manager']), async (req: any, res) => {
+    try {
+      const { tenantId, user: currentUser } = await getUserData(req);
+
+      let users;
+      if (currentUser.role === 'console_manager') {
+        // Console managers can see users from all tenants
+        const targetTenantId = req.query.tenantId as string || tenantId;
+        users = await storage.getAllUsers(targetTenantId);
+      } else {
+        // Regular users can only see users in their own tenant
+        users = await storage.getAllUsers(tenantId);
+      }
+
+      // Filter sensitive information
+      const sanitizedUsers = users.map(user => ({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: user.status,
+        mustChangePassword: user.mustChangePassword,
+        failedLoginCount: user.failedLoginCount,
+        lockedUntil: user.lockedUntil,
+        managerId: user.managerId,
+        tenantId: user.tenantId,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }));
+
+      res.json(sanitizedUsers);
+    } catch (error) {
+      console.error("Users fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.patch('/api/admin/users/:id', isAuthenticated, authorize(['admin', 'console_manager']), async (req: any, res) => {
+    try {
+      const { userId: currentUserId, tenantId, user: currentUser } = await getUserData(req);
+      const targetUserId = req.params.id;
+      
+      const updateSchema = z.object({
+        role: z.enum(['admin', 'team_leader', 'user', 'viewer']).optional(),
+        status: z.enum(['active', 'inactive', 'pending']).optional(),
+        mustChangePassword: z.boolean().optional(),
+        resetPassword: z.boolean().optional(),
+        newPassword: z.string().min(8).max(255).optional(),
+      });
+
+      const updateData = updateSchema.parse(req.body);
+
+      // Get target user to verify tenant access
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Security: Console managers can update any user, regular admins only users in their tenant
+      if (currentUser.role !== 'console_manager' && targetUser.tenantId !== tenantId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Prevent users from modifying themselves in certain ways
+      if (targetUserId === currentUserId) {
+        if (updateData.status === 'inactive') {
+          return res.status(400).json({ message: "Cannot deactivate your own account" });
+        }
+        if (updateData.role && updateData.role !== currentUser.role) {
+          return res.status(400).json({ message: "Cannot change your own role" });
+        }
+      }
+
+      let updatedUser = targetUser;
+      const auditDetails: any = { 
+        targetUserEmail: targetUser.email,
+        updatedBy: `${currentUser.firstName} ${currentUser.lastName}`,
+        changes: {},
+        ip: req.ip || req.connection?.remoteAddress || 'unknown'
+      };
+
+      // Update role
+      if (updateData.role && updateData.role !== targetUser.role) {
+        updatedUser = await storage.updateUserRole(targetUserId, updateData.role, targetUser.tenantId) || updatedUser;
+        auditDetails.changes.role = { from: targetUser.role, to: updateData.role };
+      }
+
+      // Update status
+      if (updateData.status && updateData.status !== targetUser.status) {
+        updatedUser = await storage.updateUserStatus(targetUserId, updateData.status, targetUser.tenantId) || updatedUser;
+        auditDetails.changes.status = { from: targetUser.status, to: updateData.status };
+      }
+
+      // Update mustChangePassword flag
+      if (updateData.mustChangePassword !== undefined && updateData.mustChangePassword !== targetUser.mustChangePassword) {
+        updatedUser = await storage.setUserPassword(targetUserId, targetUser.passwordHash!, updateData.mustChangePassword) || updatedUser;
+        auditDetails.changes.mustChangePassword = { from: targetUser.mustChangePassword, to: updateData.mustChangePassword };
+      }
+
+      // Reset password if requested
+      if (updateData.resetPassword || updateData.newPassword) {
+        const newPassword = updateData.newPassword || Math.random().toString(36).slice(-12) + 'A1!';
+        const saltRounds = 12;
+        const passwordHash = await bcrypt.hash(newPassword, saltRounds);
+        updatedUser = await storage.setUserPassword(targetUserId, passwordHash, true) || updatedUser;
+        auditDetails.changes.passwordReset = true;
+        auditDetails.temporaryPassword = updateData.resetPassword ? newPassword : '[provided by admin]';
+      }
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId: currentUserId,
+          action: "user_updated",
+          entityType: "user",
+          entityId: targetUserId,
+          projectId: null,
+          amount: null,
+          tenantId: targetUser.tenantId,
+          details: auditDetails,
+        });
+      } catch (auditError) {
+        console.error("Failed to create audit log for user update:", auditError);
+      }
+
+      // Return updated user without password hash, include temporary password if reset
+      const { passwordHash: _, ...userResponse } = updatedUser;
+      const response: any = userResponse;
+      
+      if (updateData.resetPassword && auditDetails.temporaryPassword && auditDetails.temporaryPassword !== '[provided by admin]') {
+        response.temporaryPassword = auditDetails.temporaryPassword;
+      }
+
+      res.json(response);
+    } catch (error) {
+      console.error("User update error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid update data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to update user" });
     }
   });
 

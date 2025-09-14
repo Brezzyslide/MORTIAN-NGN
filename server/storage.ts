@@ -93,6 +93,14 @@ export interface IStorage {
   updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined>;
   updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
 
+  // Authentication operations
+  getUserByEmail(email: string): Promise<User | undefined>;
+  setUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<User | undefined>;
+  incrementFailedLogins(userId: string): Promise<User | undefined>;
+  lockAccount(userId: string, lockUntil: Date): Promise<User | undefined>;
+  resetFailedLogins(userId: string): Promise<User | undefined>;
+  createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }): Promise<User>;
+
   // Line items operations
   getLineItems(tenantId: string): Promise<LineItem[]>;
   getLineItem(id: string, tenantId: string): Promise<LineItem | undefined>;
@@ -504,6 +512,88 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
       .returning();
     return updatedUser;
+  }
+
+  // Authentication operations
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+    return user;
+  }
+
+  async setUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<User | undefined> {
+    const updateData: any = { 
+      passwordHash,
+      updatedAt: new Date(),
+      failedLoginCount: 0, // Reset failed login count when password is set
+      lockedUntil: null // Unlock account when password is set
+    };
+    
+    if (mustChangePassword !== undefined) {
+      updateData.mustChangePassword = mustChangePassword;
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async incrementFailedLogins(userId: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ 
+        failedLoginCount: sql`${users.failedLoginCount} + 1`,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async lockAccount(userId: string, lockUntil: Date): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ 
+        lockedUntil: lockUntil,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async resetFailedLogins(userId: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({ 
+        failedLoginCount: 0,
+        lockedUntil: null,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }): Promise<User> {
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        id: sql`gen_random_uuid()`,
+        ...userData,
+        status: 'active',
+        failedLoginCount: 0,
+        mustChangePassword: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newUser;
   }
 
   // Analytics operations
