@@ -581,7 +581,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }): Promise<User> {
-    const [newUser] = await db
+    const result = await db
       .insert(users)
       .values({
         id: sql`gen_random_uuid()`,
@@ -593,6 +593,7 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .returning();
+    const [newUser] = result as User[];
     return newUser;
   }
 
