@@ -62,7 +62,7 @@ export default function Landing() {
   const queryClient = useQueryClient();
   
   // Check if manual login is enabled (for development/demo only)
-  const isManualLoginEnabled = import.meta.env.VITE_ENABLE_MANUAL_LOGIN === 'true';
+  const isManualLoginEnabled = true; // Always show manual login for new tenants
   const isProduction = import.meta.env.PROD;
 
   useEffect(() => {
