@@ -43,8 +43,8 @@ import { z } from "zod";
 
 // Helper function to get user and tenantId from authenticated request
 async function getUserData(req: any): Promise<{ userId: string; tenantId: string; user: any }> {
-  // Handle password login session
-  if (req.user?.passwordLogin) {
+  // Handle manual login session
+  if (req.user?.manualLogin) {
     const user = await storage.getUser(req.user.userId);
     if (!user) {
       throw new Error('User not found');
@@ -53,41 +53,74 @@ async function getUserData(req: any): Promise<{ userId: string; tenantId: string
   }
   
   // Handle OIDC login session
-  const userId = req.user.claims.sub;
-  const user = await storage.getUser(userId);
-  if (!user) {
-    throw new Error('User not found');
+  if (req.user?.claims?.sub) {
+    const userId = req.user.claims.sub;
+    const user = await storage.getUser(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return { userId, tenantId: user.tenantId, user };
   }
-  return { userId, tenantId: user.tenantId, user };
+  
+  throw new Error('No valid authentication found');
+}
+
+// Tenant context middleware - normalizes authentication and provides tenant context
+function setTenantContext() {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const { userId, tenantId, user } = await getUserData(req);
+      
+      // Map legacy roles to new roles for backward compatibility
+      const normalizedRole = mapLegacyRole(user.role);
+      
+      // Set tenant context for all subsequent operations
+      req.tenant = {
+        tenantId,
+        role: normalizedRole,
+        userId,
+        isConsoleManager: normalizedRole === 'console_manager'
+      };
+      
+      // Also attach enhanced user context for backward compatibility
+      req.userContext = { 
+        userId, 
+        tenantId, 
+        user,
+        normalizedRole
+      };
+      
+      next();
+    } catch (error) {
+      console.error('Tenant context error:', error);
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+  };
 }
 
 // Sprint 5: Enhanced role-based authorization middleware
 function authorize(allowedRoles: string[]) {
   return async (req: any, res: any, next: any) => {
     try {
-      const { user } = await getUserData(req);
+      // Use tenant context if available, fallback to getUserData
+      const userRole = req.tenant?.role || req.userContext?.normalizedRole;
+      const userStatus = req.userContext?.user?.status;
       
-      // Map legacy roles to new roles for backward compatibility
-      const normalizedRole = mapLegacyRole(user.role);
+      if (!userRole) {
+        return res.status(401).json({ message: 'Unauthorized - no user context' });
+      }
       
-      if (!allowedRoles.includes(normalizedRole)) {
+      if (!allowedRoles.includes(userRole)) {
         return res.status(403).json({ 
-          message: `Access denied. Required roles: ${allowedRoles.join(', ')}. Your role: ${normalizedRole}` 
+          message: `Access denied. Required roles: ${allowedRoles.join(', ')}. Your role: ${userRole}` 
         });
       }
       
       // Verify user is active
-      if (user.status !== 'active') {
+      if (userStatus !== 'active') {
         return res.status(403).json({ message: 'Access denied. User account is not active.' });
       }
       
-      // Attach enhanced user context to request for use in route handlers
-      req.userContext = { 
-        userId: user.id, 
-        tenantId: user.tenantId, 
-        user: user,
-        normalizedRole
-      };
       next();
     } catch (error) {
       console.error('Authorization error:', error);
@@ -121,13 +154,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle manual login session
       if (req.user?.manualLogin) {
         const user = await storage.getUser(req.user.userId);
-        return res.status(200).json(user);
+        if (user) {
+          return res.status(200).json({
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            tenantId: user.tenantId,
+            status: user.status,
+            mustChangePassword: user.mustChangePassword
+          });
+        }
       }
       
       // Handle OIDC login session
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
         const user = await storage.getUser(req.user.claims.sub);
-        return res.status(200).json(user);
+        if (user) {
+          return res.status(200).json({
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            tenantId: user.tenantId,
+            status: user.status,
+            profileImageUrl: user.profileImageUrl
+          });
+        }
       }
       
       return res.status(200).json(null);
@@ -434,8 +489,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin user management endpoints
-  app.post('/api/admin/users', isAuthenticated, authorize(['admin', 'console_manager']), async (req: any, res) => {
+  // Apply tenant context middleware to all authenticated API routes
+  app.use('/api', isAuthenticated, setTenantContext());
+
+  // Admin user management endpoints  
+  app.post('/api/admin/users', authorize(['admin', 'console_manager']), async (req: any, res) => {
     try {
       const { userId, tenantId, user: currentUser } = await getUserData(req);
       const userData = adminCreateUserSchema.parse(req.body);
@@ -501,7 +559,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/admin/users', isAuthenticated, authorize(['admin', 'team_leader', 'console_manager']), async (req: any, res) => {
+  app.get('/api/admin/users', authorize(['admin', 'team_leader', 'console_manager']), async (req: any, res) => {
     try {
       const { tenantId, user: currentUser } = await getUserData(req);
 
@@ -539,7 +597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/admin/users/:id', isAuthenticated, authorize(['admin', 'console_manager']), async (req: any, res) => {
+  app.patch('/api/admin/users/:id', authorize(['admin', 'console_manager']), async (req: any, res) => {
     try {
       const { userId: currentUserId, tenantId, user: currentUser } = await getUserData(req);
       const targetUserId = req.params.id;
@@ -652,7 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Company management routes (for console managers only)
-  app.get('/api/companies', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
+  app.get('/api/companies', authorize(['console_manager']), async (req: any, res) => {
     try {
       const companies = await storage.getCompanies();
       res.json(companies);
@@ -662,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/companies', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
+  app.post('/api/companies', authorize(['console_manager']), async (req: any, res) => {
     try {
       const { userId } = req.userContext;
 
