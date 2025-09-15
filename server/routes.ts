@@ -331,7 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Set up user session
       req.user = {
-        passwordLogin: true,
+        manualLogin: true,
         userId: user.id,
       };
 
