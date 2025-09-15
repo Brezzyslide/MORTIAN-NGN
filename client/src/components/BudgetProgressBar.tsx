@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface BudgetSummaryItem {
   projectId: string;
@@ -19,9 +20,12 @@ interface BudgetSummaryItem {
 
 export default function BudgetProgressBar() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
   
   const { data: budgetSummary, isLoading, error } = useQuery<BudgetSummaryItem[]>({
-    queryKey: ["/api/analytics/budget-summary"],
+    queryKey: ["/api/analytics/budget-summary", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   });

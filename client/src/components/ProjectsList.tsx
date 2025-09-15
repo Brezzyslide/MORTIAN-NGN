@@ -4,12 +4,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ProjectsList() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
 
   const { data: projects = [] as any[], isLoading, error } = useQuery({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/projects", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 

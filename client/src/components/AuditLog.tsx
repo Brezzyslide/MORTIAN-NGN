@@ -6,13 +6,17 @@ import { Input } from "@/components/ui/input";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { AuditLog as AuditLogType } from "@shared/schema";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function AuditLog() {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
 
   const { data: auditLogs, isLoading, error } = useQuery<AuditLogType[]>({
-    queryKey: ["/api/audit-logs"],
+    queryKey: ["/api/audit-logs", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 

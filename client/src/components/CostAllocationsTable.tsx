@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Search, Download, ChevronUp, ChevronDown, Calendar, User, Building, Check, X, Clock, FileText, Layers, Filter } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface CostAllocation {
   id: string;
@@ -70,6 +71,8 @@ interface CostAllocationsTableProps {
 export default function CostAllocationsTable({ filters }: CostAllocationsTableProps) {
   const { toast } = useToast();
   const { permissions, isAdmin, isTeamLeader } = usePermissions();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -122,7 +125,8 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
   }, [currentPage, pageSize, searchQuery, filters, changeOrderFilter]);
 
   const { data: costAllocationsData, isLoading, error } = useQuery<CostAllocationsResponse>({
-    queryKey: ["/api/cost-allocations-filtered", queryParams],
+    queryKey: ["/api/cost-allocations-filtered", tenantId, queryParams],
+    enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   });
@@ -307,8 +311,8 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
         title: "Success",
         description: "Cost allocation approved successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/approvals", tenantId] });
     },
     onError: (error: any) => {
       toast({
@@ -330,8 +334,8 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
         description: "Cost allocation rejected successfully",
       });
       setRejectComments("");
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/approvals", tenantId] });
     },
     onError: (error: any) => {
       toast({
@@ -352,8 +356,8 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
         title: "Success",
         description: "Cost allocation submitted for approval",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/approvals", tenantId] });
     },
     onError: (error: any) => {
       toast({

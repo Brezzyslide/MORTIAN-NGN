@@ -16,6 +16,7 @@ import {
   Clock
 } from "lucide-react";
 import { format, subDays, startOfMonth, subMonths } from "date-fns";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Project {
   id: string;
@@ -108,10 +109,13 @@ export default function AnalyticsFilters({ filters, onFiltersChange }: Analytics
     from: filters.startDate,
     to: filters.endDate
   });
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
 
   // Fetch projects for project filter
   const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/projects", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 

@@ -18,6 +18,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertBudgetAmendmentSchema } from "@shared/schema";
 import type { Project } from "@shared/schema";
 import { DollarSign, TrendingUp, AlertTriangle, Info, CheckCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 // Budget amendment form schema
 const budgetAmendmentFormSchema = z.object({
@@ -49,6 +50,8 @@ interface BudgetImpact {
 export default function BudgetAmendmentForm() {
   const { toast } = useToast();
   const { permissions, isAdmin, isTeamLeader } = usePermissions();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [budgetImpact, setBudgetImpact] = useState<BudgetImpact | null>(null);
 
@@ -79,14 +82,15 @@ export default function BudgetAmendmentForm() {
 
   // Fetch projects
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/projects", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch selected project details for budget impact
   const { data: selectedProject } = useQuery<Project>({
-    queryKey: ["/api/projects", watchedProjectId],
-    enabled: !!watchedProjectId,
+    queryKey: ["/api/projects", tenantId, watchedProjectId],
+    enabled: Boolean(tenantId) && !!watchedProjectId,
     retry: false,
   });
 
@@ -132,8 +136,9 @@ export default function BudgetAmendmentForm() {
       setBudgetImpact(null);
       setShowConfirmDialog(false);
       // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ["/api/budget-amendments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/budget-amendments", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant", tenantId] });
     },
     onError: (error: any) => {
       if (isUnauthorizedError(error)) {

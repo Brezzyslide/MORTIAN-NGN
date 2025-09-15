@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Layers, Clock, DollarSign, Building, ArrowRight, AlertTriangle, CheckCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ChangeOrder {
   id: string;
@@ -22,8 +23,12 @@ interface ChangeOrdersSummaryWidgetProps {
 }
 
 export default function ChangeOrdersSummaryWidget({ onViewAll }: ChangeOrdersSummaryWidgetProps) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
+  
   const { data: allChangeOrders, isLoading } = useQuery<ChangeOrder[]>({
-    queryKey: ["/api/change-orders"],
+    queryKey: ["/api/change-orders", tenantId],
+    enabled: Boolean(tenantId),
     refetchInterval: 30000, // Refresh every 30 seconds for real-time updates
   });
 

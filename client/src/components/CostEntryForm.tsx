@@ -18,6 +18,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { insertCostAllocationSchema } from "@shared/schema";
 import { AlertTriangle, XCircle, CheckCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 // Material allocation schema for dynamic rows
 const materialAllocationSchema = z.object({
@@ -100,6 +101,8 @@ interface BudgetImpactValidation {
 export default function CostEntryForm() {
   const { toast } = useToast();
   const { permissions } = usePermissions();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
   const [grandTotal, setGrandTotal] = useState(0);
   const [labourTotal, setLabourTotal] = useState(0);
   const [materialTotal, setMaterialTotal] = useState(0);
@@ -146,26 +149,29 @@ export default function CostEntryForm() {
 
   // Fetch projects
   const { data: projects, isLoading: projectsLoading } = useQuery({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/projects", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch line items
   const { data: lineItemsData, isLoading: lineItemsLoading } = useQuery({
-    queryKey: ["/api/line-items"],
+    queryKey: ["/api/line-items", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch materials
   const { data: materials, isLoading: materialsLoading } = useQuery({
-    queryKey: ["/api/materials"],
+    queryKey: ["/api/materials", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch change orders for selected project
   const { data: changeOrders, isLoading: changeOrdersLoading } = useQuery({
-    queryKey: ["/api/change-orders", watchedProjectId ? `projectId=${watchedProjectId}` : ""],
-    enabled: !!watchedProjectId,
+    queryKey: ["/api/change-orders", tenantId, watchedProjectId ? `projectId=${watchedProjectId}` : ""],
+    enabled: Boolean(tenantId) && !!watchedProjectId,
     retry: false,
   });
 
@@ -214,16 +220,16 @@ export default function CostEntryForm() {
       setBudgetValidation(null);
       
       // Invalidate all analytics-related queries for real-time updates
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/labour-material-split"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/category-spending"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/budget-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/labour-material-split", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/category-spending", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/budget-alerts", tenantId] });
       
       // Also invalidate broader analytics queries that may contain cost allocation data
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", tenantId] });
     },
     onError: (error: any) => {
       toast({

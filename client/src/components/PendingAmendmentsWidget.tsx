@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 import { TrendingUp, AlertTriangle, Clock, DollarSign, Building, ArrowRight } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PendingAmendment {
   id: string;
@@ -23,6 +24,8 @@ interface PendingAmendmentsWidgetProps {
 
 export default function PendingAmendmentsWidget({ onViewAll }: PendingAmendmentsWidgetProps) {
   const { isAdmin, isTeamLeader } = usePermissions();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
 
   // Only show for managers who can approve amendments
   if (!isAdmin) {
@@ -30,7 +33,8 @@ export default function PendingAmendmentsWidget({ onViewAll }: PendingAmendments
   }
 
   const { data: allAmendments, isLoading } = useQuery<PendingAmendment[]>({
-    queryKey: ["/api/budget-amendments"],
+    queryKey: ["/api/budget-amendments", tenantId],
+    enabled: Boolean(tenantId),
     refetchInterval: 30000, // Refresh every 30 seconds for real-time updates
   });
 

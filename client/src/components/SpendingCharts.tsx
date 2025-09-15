@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   PieChart, 
   Pie, 
@@ -81,6 +82,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function SpendingCharts({ filters }: SpendingChartsProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
 
   // Build query parameters for API calls
   const queryParams = useMemo(() => {
@@ -109,14 +112,16 @@ export default function SpendingCharts({ filters }: SpendingChartsProps) {
 
   // Fetch labour vs material split data
   const { data: labourMaterialData, isLoading: isLoadingLabourMaterial, error: labourMaterialError } = useQuery<LabourMaterialSplit>({
-    queryKey: ["/api/analytics/labour-material-split", queryParams],
+    queryKey: ["/api/analytics/labour-material-split", tenantId, queryParams],
+    enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   });
 
   // Fetch category spending data
   const { data: categoryData, isLoading: isLoadingCategory, error: categoryError } = useQuery<CategorySpending[]>({
-    queryKey: ["/api/analytics/category-spending", queryParams],
+    queryKey: ["/api/analytics/category-spending", tenantId, queryParams],
+    enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   });

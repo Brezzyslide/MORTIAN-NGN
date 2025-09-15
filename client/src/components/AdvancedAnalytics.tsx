@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { DollarSign, TrendingUp, TrendingDown, Users, Target } from "lucide-react";
 import { Project, Transaction, FundAllocation } from "@shared/schema";
+import { useAuth } from "@/hooks/useAuth";
 
 interface TenantStats {
   totalBudget: number;
@@ -31,23 +32,30 @@ interface TenantStats {
 }
 
 export default function AdvancedAnalytics() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
+
   const { data: tenantStats } = useQuery<TenantStats>({
-    queryKey: ["/api/analytics/tenant"],
+    queryKey: ["/api/analytics/tenant", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
   const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/projects", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
   const { data: transactions } = useQuery<Transaction[]>({
-    queryKey: ["/api/transactions"],
+    queryKey: ["/api/transactions", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
   const { data: allocations } = useQuery<FundAllocation[]>({
-    queryKey: ["/api/fund-allocations"],
+    queryKey: ["/api/fund-allocations", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 

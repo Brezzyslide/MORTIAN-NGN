@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface TenantStats {
   totalBudget: number;
@@ -14,9 +15,12 @@ interface TenantStats {
 
 export default function BudgetChart() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
 
   const { data: stats, isLoading, error } = useQuery<TenantStats>({
-    queryKey: ["/api/analytics/tenant"],
+    queryKey: ["/api/analytics/tenant", tenantId],
+    enabled: Boolean(tenantId),
     retry: false,
   });
 
