@@ -54,9 +54,8 @@ export default function Landing() {
         title: "Login Successful",
         description: "Welcome to ProjectFund!",
       });
-      // Invalidate auth query to trigger redirect
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
-      window.location.reload();
+      // Direct redirect to dashboard after successful login
+      window.location.href = '/';
     },
     onError: (error: any) => {
       const errorMessage = error?.errors?.length > 0 
