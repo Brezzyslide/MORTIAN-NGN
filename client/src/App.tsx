@@ -9,6 +9,7 @@ import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
 import AdminUsers from "@/pages/admin-users";
+import ChangePassword from "@/pages/change-password";
 
 function ProtectedRoute({ component: Component }: { component: any }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -52,6 +53,7 @@ function Router() {
         }}
       </Route>
       <Route path="/login" component={Landing} />
+      <Route path="/change-password" component={ChangePassword} />
       <Route path="/projects" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/allocations" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/cost-entry" component={() => <ProtectedRoute component={Dashboard} />} />
