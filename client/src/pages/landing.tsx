@@ -49,22 +49,12 @@ export default function Landing() {
   // Login mutation
   const loginMutation = useMutation({
     mutationFn: (data: LoginFormValues) => apiRequest('POST', '/api/auth/login', data),
-    onSuccess: (response: any) => {
+    onSuccess: () => {
       toast({
         title: "Login Successful",
         description: "Welcome to ProjectFund!",
       });
-      
-      // Check if user must change password
-      if (response?.user?.mustChangePassword) {
-        // Store login state and redirect to password change
-        sessionStorage.setItem('pendingPasswordChange', 'true');
-        sessionStorage.setItem('pendingUser', JSON.stringify(response.user));
-        window.location.href = '/change-password';
-        return;
-      }
-      
-      // Normal login flow - invalidate auth query to trigger redirect
+      // Invalidate auth query to trigger redirect
       queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
       window.location.reload();
     },
