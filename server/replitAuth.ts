@@ -57,7 +57,7 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
-  // Check if user already exists to preserve their tenantId
+  // Check if user already exists to preserve their tenantId and role
   const existingUser = await storage.getUser(claims["sub"]);
   
   await storage.upsertUser({
@@ -66,10 +66,10 @@ async function upsertUser(
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
-    // Map OIDC role claim to user role, default to "user" if not provided
-    role: claims["role"] || "user",
-    // Map OIDC status claim to user status, default to "active" if not provided  
-    status: claims["status"] || "active",
+    // Preserve existing role for returning users, only set default for new users
+    role: existingUser?.role ?? (claims["role"] || "user"),
+    // Preserve existing status for returning users, or use OIDC claim, default to "active"
+    status: existingUser?.status ?? (claims["status"] || "active"),
     // Preserve existing tenantId for returning users, or use their own ID for new users
     // In a real app, this could be set via invitation/onboarding flows
     tenantId: existingUser?.tenantId ?? claims["sub"],
