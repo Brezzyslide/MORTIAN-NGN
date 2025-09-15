@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Building2, Mail, Phone, MapPin, Calendar, Shield } from "lucide-react";
+import { Plus, Building2, Mail, Phone, MapPin, Calendar, Shield, Edit, Key } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,12 +25,41 @@ const addCompanyFormSchema = insertCompanySchema.extend({
   address: z.string().optional(),
   industry: z.string().optional(),
   subscriptionPlan: z.enum(["basic", "professional", "enterprise"]).default("basic"),
+  adminPassword: z.string().min(8, "Password must be at least 8 characters long")
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Password must contain at least one uppercase letter, one lowercase letter, and one number"),
+  confirmPassword: z.string(),
+}).refine((data) => data.adminPassword === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+const editCompanyFormSchema = insertCompanySchema.omit({ createdBy: true }).extend({
+  name: z.string().min(1, "Company name is required"),
+  email: z.string().email("Please enter a valid email address"),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  industry: z.string().optional(),
+  subscriptionPlan: z.enum(["basic", "professional", "enterprise"]).default("basic"),
+});
+
+const changePasswordFormSchema = z.object({
+  newPassword: z.string().min(8, "Password must be at least 8 characters long")
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Password must contain at least one uppercase letter, one lowercase letter, and one number"),
+  confirmPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
 type AddCompanyFormData = z.infer<typeof addCompanyFormSchema>;
+type EditCompanyFormData = z.infer<typeof editCompanyFormSchema>;
+type ChangePasswordFormData = z.infer<typeof changePasswordFormSchema>;
 
 export function CompanyManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   const { permissions } = usePermissions();
@@ -58,9 +87,10 @@ export function CompanyManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
       setIsAddDialogOpen(false);
+      addForm.reset();
       toast({
         title: "Success",
-        description: "Company created successfully",
+        description: "Company and admin account created successfully",
       });
     },
     onError: (error: any) => {
@@ -73,8 +103,68 @@ export function CompanyManagement() {
     },
   });
 
-  const form = useForm<AddCompanyFormData>({
+  // Edit company mutation
+  const editCompanyMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: EditCompanyFormData }) => 
+      apiRequest("PATCH", `/api/companies/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+      setIsEditDialogOpen(false);
+      setSelectedCompany(null);
+      toast({
+        title: "Success",
+        description: "Company updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Error updating company:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Change password mutation
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ companyId, data }: { companyId: string; data: ChangePasswordFormData }) => 
+      apiRequest("POST", `/api/companies/${companyId}/change-password`, data),
+    onSuccess: () => {
+      setIsPasswordDialogOpen(false);
+      setSelectedCompany(null);
+      passwordForm.reset();
+      toast({
+        title: "Success",
+        description: "Company admin password changed successfully",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Error changing password:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to change password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addForm = useForm<AddCompanyFormData>({
     resolver: zodResolver(addCompanyFormSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      industry: "",
+      subscriptionPlan: "basic",
+      adminPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  const editForm = useForm<EditCompanyFormData>({
+    resolver: zodResolver(editCompanyFormSchema),
     defaultValues: {
       name: "",
       email: "",
@@ -85,8 +175,46 @@ export function CompanyManagement() {
     },
   });
 
-  const handleSubmit = (data: AddCompanyFormData) => {
+  const passwordForm = useForm<ChangePasswordFormData>({
+    resolver: zodResolver(changePasswordFormSchema),
+    defaultValues: {
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  const handleAddSubmit = (data: AddCompanyFormData) => {
     addCompanyMutation.mutate(data);
+  };
+
+  const handleEditSubmit = (data: EditCompanyFormData) => {
+    if (!selectedCompany) return;
+    editCompanyMutation.mutate({ id: selectedCompany.id, data });
+  };
+
+  const handlePasswordSubmit = (data: ChangePasswordFormData) => {
+    if (!selectedCompany) return;
+    changePasswordMutation.mutate({ companyId: selectedCompany.id, data });
+  };
+
+  const handleEditCompany = (company: Company) => {
+    setSelectedCompany(company);
+    editForm.reset({
+      name: company.name,
+      email: company.email,
+      phone: company.phone || "",
+      address: company.address || "",
+      industry: company.industry || "",
+      subscriptionPlan: company.subscriptionPlan as "basic" | "professional" | "enterprise",
+      status: company.status,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleChangePassword = (company: Company) => {
+    setSelectedCompany(company);
+    passwordForm.reset();
+    setIsPasswordDialogOpen(true);
   };
 
 
@@ -139,10 +267,10 @@ export function CompanyManagement() {
                 Create a new tenant company in the system
               </DialogDescription>
             </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <Form {...addForm}>
+              <form onSubmit={addForm.handleSubmit(handleAddSubmit)} className="space-y-4">
                 <FormField
-                  control={form.control}
+                  control={addForm.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
@@ -159,16 +287,16 @@ export function CompanyManagement() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={addForm.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contact Email</FormLabel>
+                      <FormLabel>Admin Email (Login)</FormLabel>
                       <FormControl>
                         <Input 
                           data-testid="input-company-email"
                           type="email"
-                          placeholder="Enter contact email" 
+                          placeholder="Enter admin email for login" 
                           {...field} 
                         />
                       </FormControl>
@@ -177,7 +305,43 @@ export function CompanyManagement() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={addForm.control}
+                  name="adminPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Admin Password</FormLabel>
+                      <FormControl>
+                        <Input 
+                          data-testid="input-admin-password"
+                          type="password"
+                          placeholder="Enter admin password" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={addForm.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <Input 
+                          data-testid="input-confirm-password"
+                          type="password"
+                          placeholder="Confirm admin password" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={addForm.control}
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
@@ -194,7 +358,7 @@ export function CompanyManagement() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={addForm.control}
                   name="industry"
                   render={({ field }) => (
                     <FormItem>
@@ -211,7 +375,7 @@ export function CompanyManagement() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={addForm.control}
                   name="address"
                   render={({ field }) => (
                     <FormItem>
@@ -228,7 +392,7 @@ export function CompanyManagement() {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={addForm.control}
                   name="subscriptionPlan"
                   render={({ field }) => (
                     <FormItem>
@@ -271,6 +435,216 @@ export function CompanyManagement() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Edit Company Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Company</DialogTitle>
+            <DialogDescription>
+              Update company information
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company Name</FormLabel>
+                    <FormControl>
+                      <Input 
+                        data-testid="input-edit-company-name"
+                        placeholder="Enter company name" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Admin Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        data-testid="input-edit-company-email"
+                        type="email"
+                        placeholder="Enter admin email" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone Number</FormLabel>
+                    <FormControl>
+                      <Input 
+                        data-testid="input-edit-company-phone"
+                        placeholder="Enter phone number" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="industry"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Industry</FormLabel>
+                    <FormControl>
+                      <Input 
+                        data-testid="input-edit-company-industry"
+                        placeholder="e.g., Construction, Real Estate" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        data-testid="input-edit-company-address"
+                        placeholder="Enter company address" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="subscriptionPlan"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subscription Plan</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-subscription-plan">
+                          <SelectValue placeholder="Select a subscription plan" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="basic">Basic</SelectItem>
+                        <SelectItem value="professional">Professional</SelectItem>
+                        <SelectItem value="enterprise">Enterprise</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-3 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsEditDialogOpen(false)}
+                  data-testid="button-cancel-edit-company"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={editCompanyMutation.isPending}
+                  data-testid="button-submit-edit-company"
+                >
+                  {editCompanyMutation.isPending ? "Updating..." : "Update Company"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Change Admin Password</DialogTitle>
+            <DialogDescription>
+              {selectedCompany ? `Change admin password for ${selectedCompany.name}` : "Change admin password"}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...passwordForm}>
+            <form onSubmit={passwordForm.handleSubmit(handlePasswordSubmit)} className="space-y-4">
+              <FormField
+                control={passwordForm.control}
+                name="newPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>New Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        data-testid="input-new-password"
+                        type="password"
+                        placeholder="Enter new password" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm New Password</FormLabel>
+                    <FormControl>
+                      <Input 
+                        data-testid="input-confirm-new-password"
+                        type="password"
+                        placeholder="Confirm new password" 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-3 pt-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setIsPasswordDialogOpen(false)}
+                  data-testid="button-cancel-change-password"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={changePasswordMutation.isPending}
+                  data-testid="button-submit-change-password"
+                >
+                  {changePasswordMutation.isPending ? "Changing..." : "Change Password"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Companies Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -327,6 +701,28 @@ export function CompanyManagement() {
                     Created {new Date(company.createdAt).toLocaleDateString()}
                   </span>
                 </div>
+              </div>
+              <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEditCompany(company)}
+                  className="flex-1 gap-2"
+                  data-testid={`button-edit-company-${company.id}`}
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleChangePassword(company)}
+                  className="flex-1 gap-2"
+                  data-testid={`button-change-password-${company.id}`}
+                >
+                  <Key className="h-4 w-4" />
+                  Password
+                </Button>
               </div>
             </CardContent>
           </Card>

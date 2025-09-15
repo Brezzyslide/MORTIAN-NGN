@@ -328,20 +328,30 @@ export const auditActionEnum = pgEnum("audit_action", [
   "approval_workflow_updated",
   // Auth audit actions
   "manual_login_attempt",
-  "cost_allocation_submitted"
+  "cost_allocation_submitted",
+  "login_failed_user_not_found",
+  "login_failed_account_locked",
+  "login_failed_account_inactive",
+  "login_failed_invalid_password",
+  "login_successful",
+  "password_changed",
+  // Company audit actions
+  "company_created",
+  "company_updated",
+  "company_admin_password_changed"
 ]);
 
 // Audit logs table
 export const auditLogs = pgTable("audit_logs", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id).notNull(),
+  userId: varchar("user_id").references(() => users.id),
   action: auditActionEnum("action").notNull(),
   entityType: varchar("entity_type").notNull(),
   entityId: varchar("entity_id").notNull(),
   projectId: uuid("project_id").references(() => projects.id),
   amount: decimal("amount", { precision: 15, scale: 2 }),
   details: jsonb("details"),
-  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -647,6 +657,16 @@ export const insertBudgetAlertSchema = createInsertSchema(budgetAlerts).omit({
 export const loginRequestSchema = z.object({
   email: z.string().email("Please enter a valid email address").max(255),
   password: z.string().min(8, "Password must be at least 8 characters").max(255),
+});
+
+// Company creation with admin password
+export const createCompanyWithAdminSchema = insertCompanySchema.extend({
+  adminPassword: z.string().min(8, "Admin password must be at least 8 characters").max(255),
+});
+
+// Company admin password change
+export const companyPasswordChangeSchema = z.object({
+  newPassword: z.string().min(8, "New password must be at least 8 characters").max(255),
 });
 
 export const adminCreateUserSchema = z.object({

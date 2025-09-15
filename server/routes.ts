@@ -24,6 +24,8 @@ import {
   loginRequestSchema,
   adminCreateUserSchema,
   changePasswordSchema,
+  createCompanyWithAdminSchema,
+  companyPasswordChangeSchema,
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 import { 
@@ -492,7 +494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }))
         });
       }
-      if (error?.code === '23505' && error?.constraint?.includes('email')) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === '23505' && 'constraint' in error && typeof error.constraint === 'string' && error.constraint.includes('email')) {
         return res.status(409).json({ message: "Email address already exists" });
       }
       res.status(500).json({ message: "Failed to create user" });
@@ -664,14 +666,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.userContext;
 
-      const companyData = insertCompanySchema.parse({
-        ...req.body,
+      const requestData = createCompanyWithAdminSchema.parse(req.body);
+      const { adminPassword, ...companyData } = requestData;
+
+      // Create the company first
+      const company = await storage.createCompany({
+        ...companyData,
         createdBy: userId,
       });
 
-      const company = await storage.createCompany(companyData);
+      // Hash the admin password
+      const saltRounds = 12;
+      const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
+
+      // Create admin user for the company
+      const adminUser = await storage.createUserWithPassword({
+        email: companyData.email,
+        firstName: 'Company',
+        lastName: 'Admin',
+        role: 'admin',
+        tenantId: company.id,
+        passwordHash,
+        profileImageUrl: null,
+        managerId: null,
+      });
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId: userId,
+          action: "company_created",
+          entityType: "company",
+          entityId: company.id,
+          projectId: null,
+          amount: null,
+          tenantId: null, // Console manager action
+          details: { 
+            companyName: company.name,
+            adminEmail: companyData.email,
+            adminUserId: adminUser.id,
+            ip: req.ip || req.connection?.remoteAddress || 'unknown'
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to create audit log for company creation:", auditError);
+      }
       
-      res.json(company);
+      res.json({ 
+        ...company,
+        adminUserId: adminUser.id 
+      });
     } catch (error) {
       console.error("Error creating company:", error);
       if (error instanceof z.ZodError) {
@@ -683,10 +727,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }))
         });
       }
+      if (error && typeof error === 'object' && 'code' in error && error.code === '23505' && 'constraint' in error && typeof error.constraint === 'string' && error.constraint.includes('email')) {
+        return res.status(409).json({ message: "Email address already exists" });
+      }
       res.status(500).json({ message: "Failed to create company" });
     }
   });
 
+  // Update company (PATCH for partial updates)
+  app.patch('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
+    try {
+      const { userId } = req.userContext;
+      const companyData = insertCompanySchema.omit({ createdBy: true }).partial().parse(req.body);
+      const company = await storage.updateCompany(req.params.id, companyData);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId: userId,
+          action: "company_updated",
+          entityType: "company",
+          entityId: company.id,
+          projectId: null,
+          amount: null,
+          tenantId: null, // Console manager action
+          details: { 
+            companyName: company.name,
+            updatedFields: Object.keys(companyData),
+            ip: req.ip || req.connection?.remoteAddress || 'unknown'
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to create audit log for company update:", auditError);
+      }
+      
+      res.json(company);
+    } catch (error) {
+      console.error("Error updating company:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid input", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to update company" });
+    }
+  });
+
+  // Change company admin password
+  app.post('/api/companies/:id/change-password', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
+    try {
+      const { userId } = req.userContext;
+      const companyId = req.params.id;
+      const { newPassword } = companyPasswordChangeSchema.parse(req.body);
+
+      // Verify company exists
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      // Find the admin user for this company (assuming email matches company email)
+      const adminUser = await storage.getUserByEmail(company.email);
+      if (!adminUser || adminUser.tenantId !== companyId) {
+        return res.status(404).json({ message: "Company admin user not found" });
+      }
+
+      // Hash new password
+      const saltRounds = 12;
+      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update password
+      await storage.setUserPassword(adminUser.id, newPasswordHash, false);
+
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId: userId,
+          action: "company_admin_password_changed",
+          entityType: "company",
+          entityId: companyId,
+          projectId: null,
+          amount: null,
+          tenantId: null, // Console manager action
+          details: { 
+            companyName: company.name,
+            adminEmail: company.email,
+            adminUserId: adminUser.id,
+            ip: req.ip || req.connection?.remoteAddress || 'unknown'
+          },
+        });
+      } catch (auditError) {
+        console.error("Failed to create audit log for company password change:", auditError);
+      }
+
+      res.json({ success: true, message: "Company admin password changed successfully" });
+    } catch (error) {
+      console.error("Company password change error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid password data", 
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      res.status(500).json({ message: "Failed to change company admin password" });
+    }
+  });
+
+  // Keep PUT for backward compatibility
   app.put('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
       const companyData = insertCompanySchema.partial().parse(req.body);
