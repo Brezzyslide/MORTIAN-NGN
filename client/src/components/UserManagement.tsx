@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions, ProtectedComponent } from "@/hooks/usePermissions";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
-import { insertUserSchema, User } from "@shared/schema";
+import { insertUserSchema, User, Company } from "@shared/schema";
 import {
   Card,
   CardContent,
@@ -52,14 +53,14 @@ import {
 import { Plus, Edit, UserCheck, UserX, Users, Key } from "lucide-react";
 
 
-// Create form validation schema with Sprint 5 role definitions
+// Create form validation schema matching backend adminCreateUserSchema
 const createUserSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  firstName: z.string().min(1, "First name is required").max(50, "First name must be less than 50 characters"),
-  lastName: z.string().min(1, "Last name is required").max(50, "Last name must be less than 50 characters"),
-  role: z.enum(["admin", "team_leader", "viewer"]).default("viewer"),
-  status: z.enum(["active", "inactive", "pending"]).default("active"),
-  tenantId: z.string().optional(),
+  email: z.string().email("Please enter a valid email address").max(255),
+  firstName: z.string().min(1, "First name is required").max(100),
+  lastName: z.string().min(1, "Last name is required").max(100),
+  role: z.enum(["admin", "team_leader", "user", "viewer"]).default("viewer"),
+  tenantId: z.string().min(1, "Tenant ID is required").max(255),
+  temporaryPassword: z.string().min(8, "Temporary password must be at least 8 characters").max(255),
 });
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
@@ -68,6 +69,7 @@ export default function UserManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { permissions } = usePermissions();
+  const { user, tenantId, isConsoleManager } = useAuth();
 
   // Check if user has permission to manage users
   if (!permissions.canManageUsers()) {
@@ -81,6 +83,9 @@ export default function UserManagement() {
     );
   }
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  // State for console manager company selection
+  const [selectedTenantId, setSelectedTenantId] = useState<string>(tenantId || "");
+
   // Initialize form with react-hook-form and zodResolver
   const form = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
@@ -89,26 +94,62 @@ export default function UserManagement() {
       firstName: "",
       lastName: "",
       role: "viewer" as const,
-      status: "active" as const,
+      tenantId: tenantId || "",
+      temporaryPassword: "",
     },
   });
 
   // Fetch all users
   const { data: users = [], isLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/admin/users"],
   });
+
+  // Fetch companies for console managers or current company for regular admins
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ["/api/companies"],
+    enabled: isConsoleManager,
+  });
+
+  const { data: publicCompanies = [] } = useQuery<Company[]>({
+    queryKey: ["/api/auth/companies"],
+    enabled: !isConsoleManager && !!tenantId,
+  });
+
+  // Get current company for display
+  const currentCompany = isConsoleManager 
+    ? companies.find(c => c.id === selectedTenantId)
+    : publicCompanies.find(c => c.id === tenantId);
+
+  // Reset form tenantId when user context or selection changes
+  useEffect(() => {
+    const targetTenantId = isConsoleManager ? selectedTenantId : tenantId;
+    if (targetTenantId) {
+      form.setValue('tenantId', targetTenantId);
+    }
+  }, [tenantId, selectedTenantId, isConsoleManager, form]);
+
+  // Update selectedTenantId when tenantId changes for non-console managers
+  useEffect(() => {
+    if (!isConsoleManager && tenantId) {
+      setSelectedTenantId(tenantId);
+    }
+  }, [tenantId, isConsoleManager]);
 
   // Create user mutation
   const createUserMutation = useMutation({
     mutationFn: async (userData: CreateUserFormData) => {
-      return apiRequest("POST", "/api/users", userData);
+      // Validate tenantId is set before submitting
+      if (!userData.tenantId) {
+        throw new Error("Please select a company first");
+      }
+      return apiRequest("POST", "/api/admin/users", userData);
     },
     onSuccess: () => {
       toast({
         title: "Success",
         description: "User created successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       setShowCreateDialog(false);
       form.reset();
     },
@@ -131,7 +172,7 @@ export default function UserManagement() {
         title: "Success",
         description: "User role updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
     },
     onError: (error: any) => {
       toast({
@@ -152,7 +193,7 @@ export default function UserManagement() {
         title: "Success",
         description: "User status updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
     },
     onError: (error: any) => {
       toast({
@@ -323,52 +364,87 @@ export default function UserManagement() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="role"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Role</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-user-role">
-                              <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="viewer">Viewer</SelectItem>
-                            <SelectItem value="team_leader">Team Leader</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-user-status">
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                {/* Company Selection - Console Manager or Read-only display */}
+                {isConsoleManager ? (
+                  <div className="space-y-2">
+                    <Label>Select Organization *</Label>
+                    <Select value={selectedTenantId} onValueChange={(value) => {
+                      setSelectedTenantId(value);
+                      form.setValue('tenantId', value);
+                    }}>
+                      <SelectTrigger data-testid="select-company">
+                        <SelectValue placeholder="Select organization" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Select which organization to create the user for
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Organization</Label>
+                    <div className="px-3 py-2 bg-muted border rounded-md text-sm text-muted-foreground" data-testid="text-current-company">
+                      {currentCompany?.name || "Loading..."}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      New users will be added to your organization
+                    </p>
+                  </div>
+                )}
+                
+                {/* Temporary Password Field */}
+                <FormField
+                  control={form.control}
+                  name="temporaryPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Temporary Password *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="Enter temporary password (min 8 characters)"
+                          data-testid="input-user-password"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      <p className="text-xs text-muted-foreground">
+                        User will be required to change this password on first login
+                      </p>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-user-role">
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="viewer">Viewer</SelectItem>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="team_leader">Team Leader</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="flex justify-end space-x-2">
                   <Button
                     type="button"

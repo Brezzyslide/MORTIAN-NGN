@@ -15,5 +15,7 @@ export function useAuth() {
     user,
     isLoading,
     isAuthenticated: !!user,
+    tenantId: user?.tenantId,
+    isConsoleManager: user?.role === 'console_manager',
   };
 }
