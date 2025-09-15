@@ -48,43 +48,96 @@ import {
 import { db } from "./db";
 import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
 
+// Critical Security Helper Functions for Tenant Isolation
+class TenantSecurityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TenantSecurityError';
+  }
+}
+
+/**
+ * Validates that a user has access to a specific tenant
+ * @param userRole - The role of the requesting user
+ * @param userTenantId - The tenant ID of the requesting user
+ * @param resourceTenantId - The tenant ID of the resource being accessed
+ * @param operation - The operation being performed (read/write)
+ */
+function assertTenantAccess(userRole: string, userTenantId: string, resourceTenantId: string, operation: 'read' | 'write' = 'read'): void {
+  // Console managers can access all tenants for read operations only
+  if (userRole === 'console_manager' && operation === 'read') {
+    return;
+  }
+  
+  // All other users must match tenant IDs exactly
+  if (userTenantId !== resourceTenantId) {
+    throw new TenantSecurityError(`Access denied: Cannot ${operation} data from tenant ${resourceTenantId} while authenticated to tenant ${userTenantId}`);
+  }
+}
+
+/**
+ * Validates tenant ownership for write operations
+ * @param requesterTenantId - The tenant ID of the requesting user
+ * @param dataObject - The data object containing tenantId
+ * @param operation - The operation being performed
+ */
+function validateTenantOwnership(requesterTenantId: string, dataObject: any, operation: string): void {
+  if (!dataObject.tenantId) {
+    throw new TenantSecurityError(`${operation} failed: Missing tenantId in data object`);
+  }
+  
+  if (dataObject.tenantId !== requesterTenantId) {
+    throw new TenantSecurityError(`${operation} failed: Cannot create/modify data for tenant ${dataObject.tenantId} while authenticated to tenant ${requesterTenantId}`);
+  }
+}
+
+/**
+ * Ensures a database query includes proper tenant filtering
+ * @param query - The database query object
+ * @param table - The table being queried
+ * @param tenantId - The tenant ID to filter by
+ */
+function ensureTenantFilter(table: any, tenantId: string) {
+  return eq(table.tenantId, tenantId);
+}
+
 export interface IStorage {
   // Company operations (for console managers)
-  getCompanies(): Promise<Company[]>;
-  getCompany(id: string): Promise<Company | undefined>;
+  getCompanies(requesterRole: string): Promise<Company[]>;
+  getCompany(id: string, tenantId: string): Promise<Company | undefined>;
   getCompanyForTenant(id: string, tenantId: string): Promise<Company | undefined>;
-  createCompany(company: InsertCompany): Promise<Company>;
-  updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined>;
+  createCompany(company: InsertCompany, requesterTenantId: string, requesterRole: string): Promise<Company>;
+  updateCompany(id: string, company: Partial<InsertCompany>, tenantId: string, requesterRole: string): Promise<Company | undefined>;
 
   // User operations (required for Replit Auth)
-  getUser(id: string): Promise<User | undefined>;
+  getUser(id: string, tenantId: string, systemContext?: boolean): Promise<User | undefined>;
   getUserById(id: string, tenantId: string): Promise<User | undefined>;
   getUserWithPermissions(id: string, tenantId: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
+  upsertUser(user: UpsertUser, requesterTenantId: string): Promise<User>;
 
   // Project operations
   getProjects(tenantId: string): Promise<Project[]>;
   getProject(id: string, tenantId: string): Promise<Project | undefined>;
-  createProject(project: InsertProject): Promise<Project>;
+  createProject(project: InsertProject, requesterTenantId: string): Promise<Project>;
   updateProject(id: string, project: Partial<InsertProject>, tenantId: string): Promise<Project | undefined>;
 
   // Fund allocation operations
   getFundAllocations(tenantId: string): Promise<FundAllocation[]>;
   getFundAllocationsByProject(projectId: string, tenantId: string): Promise<FundAllocation[]>;
-  createFundAllocation(allocation: InsertFundAllocation): Promise<FundAllocation>;
+  createFundAllocation(allocation: InsertFundAllocation, requesterTenantId: string): Promise<FundAllocation>;
 
   // Transaction operations
   getTransactions(tenantId: string): Promise<Transaction[]>;
   getTransactionsByProject(projectId: string, tenantId: string): Promise<Transaction[]>;
-  createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  createTransaction(transaction: InsertTransaction, requesterTenantId: string): Promise<Transaction>;
 
   // Fund transfer operations
   getFundTransfers(tenantId: string): Promise<FundTransfer[]>;
-  createFundTransfer(transfer: InsertFundTransfer): Promise<FundTransfer>;
+  createFundTransfer(transfer: InsertFundTransfer, requesterTenantId: string): Promise<FundTransfer>;
 
   // Audit log operations
   getAuditLogs(tenantId: string): Promise<AuditLog[]>;
-  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
+  createAuditLog(log: InsertAuditLog, requesterTenantId: string): Promise<AuditLog>;
 
   // User hierarchy operations
   getSubordinates(managerId: string, tenantId: string): Promise<User[]>;
@@ -94,29 +147,29 @@ export interface IStorage {
   updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
 
   // Authentication operations
-  getUserByEmail(email: string): Promise<User | undefined>;
-  setUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<User | undefined>;
-  incrementFailedLogins(userId: string): Promise<User | undefined>;
-  lockAccount(userId: string, lockUntil: Date): Promise<User | undefined>;
-  resetFailedLogins(userId: string): Promise<User | undefined>;
-  createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }): Promise<User>;
+  getUserByEmail(email: string, tenantId: string, systemContext?: boolean): Promise<User | undefined>;
+  setUserPassword(userId: string, passwordHash: string, tenantId: string, mustChangePassword?: boolean): Promise<User | undefined>;
+  incrementFailedLogins(userId: string, tenantId: string): Promise<User | undefined>;
+  lockAccount(userId: string, lockUntil: Date, tenantId: string): Promise<User | undefined>;
+  resetFailedLogins(userId: string, tenantId: string): Promise<User | undefined>;
+  createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }, requesterTenantId: string): Promise<User>;
 
   // Line items operations
   getLineItems(tenantId: string): Promise<LineItem[]>;
   getLineItem(id: string, tenantId: string): Promise<LineItem | undefined>;
-  createLineItem(lineItem: InsertLineItem): Promise<LineItem>;
+  createLineItem(lineItem: InsertLineItem, requesterTenantId: string): Promise<LineItem>;
   updateLineItem(id: string, lineItem: Partial<InsertLineItem>, tenantId: string): Promise<LineItem | undefined>;
 
   // Materials operations
   getMaterials(tenantId: string): Promise<Material[]>;
   getMaterial(id: string, tenantId: string): Promise<Material | undefined>;
-  createMaterial(material: InsertMaterial): Promise<Material>;
+  createMaterial(material: InsertMaterial, requesterTenantId: string): Promise<Material>;
   updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined>;
 
   // Cost allocation operations
   getCostAllocations(tenantId: string): Promise<CostAllocation[]>;
   getCostAllocationsByProject(projectId: string, tenantId: string): Promise<(CostAllocation & { materialAllocations: (MaterialAllocation & { material: Material })[] })[]>;
-  createCostAllocation(costAllocation: InsertCostAllocation, materialAllocations?: InsertMaterialAllocation[]): Promise<CostAllocation>;
+  createCostAllocation(costAllocation: InsertCostAllocation, materialAllocations: InsertMaterialAllocation[], requesterTenantId: string): Promise<CostAllocation>;
   updateCostAllocation(id: string, costAllocation: Partial<InsertCostAllocation>, tenantId: string): Promise<CostAllocation | undefined>;
 
   // Analytics operations
@@ -208,14 +261,14 @@ export interface IStorage {
       enteredByName: string | null;
     };
   }>>;
-  createApprovalWorkflow(workflow: InsertApprovalWorkflow): Promise<ApprovalWorkflow>;
-  updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, comments?: string, tenantId?: string): Promise<ApprovalWorkflow | undefined>;
+  createApprovalWorkflow(workflow: InsertApprovalWorkflow, requesterTenantId: string): Promise<ApprovalWorkflow>;
+  updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, tenantId: string, comments?: string): Promise<ApprovalWorkflow | undefined>;
   updateCostAllocationStatus(id: string, status: 'draft' | 'pending' | 'approved' | 'rejected', tenantId: string): Promise<CostAllocation | undefined>;
 
   // Budget alert operations
   getBudgetAlerts(tenantId: string, status?: 'active' | 'acknowledged' | 'resolved'): Promise<Array<BudgetAlert & { project: Project }>>;
   getBudgetAlertsByProject(projectId: string, tenantId: string): Promise<Array<BudgetAlert & { project: Project }>>;
-  createBudgetAlert(alert: InsertBudgetAlert): Promise<BudgetAlert>;
+  createBudgetAlert(alert: InsertBudgetAlert, requesterTenantId: string): Promise<BudgetAlert>;
   acknowledgeBudgetAlert(alertId: string, acknowledgedBy: string, tenantId: string): Promise<BudgetAlert | undefined>;
   resolveBudgetAlert(alertId: string, tenantId: string): Promise<BudgetAlert | undefined>;
   checkAndCreateBudgetAlerts(projectId: string, tenantId: string): Promise<BudgetAlert[]>;
@@ -223,14 +276,14 @@ export interface IStorage {
   // Budget amendment operations
   getBudgetAmendments(tenantId: string, projectId?: string, status?: 'draft' | 'pending' | 'approved' | 'rejected', userRole?: string, userId?: string): Promise<Array<BudgetAmendment & { project: Project; proposer: User; approver?: User }>>;
   getBudgetAmendmentsByProject(projectId: string, tenantId: string): Promise<Array<BudgetAmendment & { proposer: User; approver?: User }>>;
-  createBudgetAmendment(amendment: InsertBudgetAmendment): Promise<BudgetAmendment>;
-  updateBudgetAmendmentStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<BudgetAmendment | undefined>;
+  createBudgetAmendment(amendment: InsertBudgetAmendment, requesterTenantId: string): Promise<BudgetAmendment>;
+  updateBudgetAmendmentStatus(id: string, status: 'pending' | 'approved' | 'rejected', tenantId: string, approvedBy?: string): Promise<BudgetAmendment | undefined>;
 
   // Change order operations
   getChangeOrders(tenantId: string, projectId?: string, status?: 'draft' | 'pending' | 'approved' | 'rejected', userRole?: string, userId?: string): Promise<Array<ChangeOrder & { project: Project; proposer: User; approver?: User }>>;
   getChangeOrdersByProject(projectId: string, tenantId: string): Promise<Array<ChangeOrder & { proposer: User; approver?: User }>>;
-  createChangeOrder(changeOrder: InsertChangeOrder): Promise<ChangeOrder>;
-  updateChangeOrderStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<ChangeOrder | undefined>;
+  createChangeOrder(changeOrder: InsertChangeOrder, requesterTenantId: string): Promise<ChangeOrder>;
+  updateChangeOrderStatus(id: string, status: 'pending' | 'approved' | 'rejected', tenantId: string, approvedBy?: string): Promise<ChangeOrder | undefined>;
 
   // Project budget history operations
   getProjectBudgetHistory(projectId: string, tenantId: string): Promise<{
@@ -244,19 +297,34 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // Company operations (for console managers)
-  async getCompanies(): Promise<Company[]> {
+  async getCompanies(requesterRole: string): Promise<Company[]> {
+    // CRITICAL SECURITY FIX: Only console managers can list all companies
+    if (requesterRole !== 'console_manager') {
+      throw new TenantSecurityError('Access denied: Only console managers can list all companies');
+    }
+    
     return await db
       .select()
       .from(companies)
       .orderBy(desc(companies.createdAt));
   }
 
-  async getCompany(id: string): Promise<Company | undefined> {
-    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+  async getCompany(id: string, tenantId: string): Promise<Company | undefined> {
+    // CRITICAL SECURITY FIX: Always require tenant validation
+    // Users can only access their own company (company.id === tenantId)
+    const [company] = await db
+      .select()
+      .from(companies)
+      .where(and(eq(companies.id, id), eq(companies.id, tenantId)));
     return company;
   }
 
-  async createCompany(company: InsertCompany): Promise<Company> {
+  async createCompany(company: InsertCompany, requesterTenantId: string, requesterRole: string): Promise<Company> {
+    // CRITICAL SECURITY FIX: Only console managers can create companies
+    if (requesterRole !== 'console_manager') {
+      throw new TenantSecurityError('Access denied: Only console managers can create companies');
+    }
+    
     const [newCompany] = await db
       .insert(companies)
       .values(company)
@@ -270,18 +338,41 @@ export class DatabaseStorage implements IStorage {
     return company;
   }
 
-  async updateCompany(id: string, company: Partial<InsertCompany>): Promise<Company | undefined> {
-    const [updatedCompany] = await db
-      .update(companies)
-      .set({ ...company, updatedAt: new Date() })
-      .where(eq(companies.id, id))
-      .returning();
-    return updatedCompany;
+  async updateCompany(id: string, company: Partial<InsertCompany>, tenantId: string, requesterRole: string): Promise<Company | undefined> {
+    // CRITICAL SECURITY FIX: Role-based access control for company updates
+    if (requesterRole === 'console_manager') {
+      // Console managers can update any company (no tenant filter)
+      const [updatedCompany] = await db
+        .update(companies)
+        .set({ ...company, updatedAt: new Date() })
+        .where(eq(companies.id, id))
+        .returning();
+      return updatedCompany;
+    } else {
+      // Regular users can only update their own company
+      const [updatedCompany] = await db
+        .update(companies)
+        .set({ ...company, updatedAt: new Date() })
+        .where(and(eq(companies.id, id), eq(companies.id, tenantId)))
+        .returning();
+      return updatedCompany;
+    }
   }
 
   // User operations
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+  async getUser(id: string, tenantId: string, systemContext: boolean = false): Promise<User | undefined> {
+    // CRITICAL SECURITY FIX: Secure user lookup with explicit system context
+    if (systemContext) {
+      // System operations can access any user (auth flow only)
+      const [user] = await db.select().from(users).where(eq(users.id, id));
+      return user;
+    }
+    
+    // All other operations must be tenant-scoped
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
     return user;
   }
 
@@ -306,7 +397,10 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
+  async upsertUser(userData: UpsertUser, requesterTenantId: string): Promise<User> {
+    // CRITICAL SECURITY FIX: Always validate tenant ownership for writes
+    validateTenantOwnership(requesterTenantId, userData, 'Upsert user');
+    
     try {
       // Try to insert or update by ID first
       const result = await db
@@ -325,22 +419,30 @@ export class DatabaseStorage implements IStorage {
     } catch (error: any) {
       // Handle unique email constraint violation (error code 23505)
       if (error?.code === '23505' && error?.constraint?.includes('email')) {
-        console.log('Email conflict detected, updating existing user with email:', userData.email);
+        console.log('Email conflict detected, checking tenant ownership for email:', userData.email);
         
-        // Find existing user by email and update them
+        // CRITICAL SECURITY FIX: Find existing user by email WITH tenant validation
         const [existingUser] = await db
           .select()
           .from(users)
           .where(eq(users.email, userData.email!));
           
         if (existingUser) {
+          // CRITICAL SECURITY FIX: Prevent cross-tenant takeover - verify tenant ownership
+          if (existingUser.tenantId !== requesterTenantId) {
+            throw new TenantSecurityError(
+              `SECURITY VIOLATION: Cannot update user with email ${userData.email} - user belongs to tenant ${existingUser.tenantId} but requester is from tenant ${requesterTenantId}. Cross-tenant user updates are forbidden.`
+            );
+          }
+          
+          // Safe to update - user belongs to same tenant
           const [updatedUser] = await db
             .update(users)
             .set({
               ...userData,
               updatedAt: new Date(),
             })
-            .where(eq(users.email, userData.email!))
+            .where(and(eq(users.email, userData.email!), eq(users.tenantId, requesterTenantId)))
             .returning();
           return updatedUser;
         }
@@ -369,7 +471,10 @@ export class DatabaseStorage implements IStorage {
     return project;
   }
 
-  async createProject(project: InsertProject): Promise<Project> {
+  async createProject(project: InsertProject, requesterTenantId: string): Promise<Project> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, project, 'Create project');
+    
     const [newProject] = await db
       .insert(projects)
       .values(project)
@@ -403,7 +508,10 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(fundAllocations.createdAt));
   }
 
-  async createFundAllocation(allocation: InsertFundAllocation): Promise<FundAllocation> {
+  async createFundAllocation(allocation: InsertFundAllocation, requesterTenantId: string): Promise<FundAllocation> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, allocation, 'Create fund allocation');
+    
     const [newAllocation] = await db
       .insert(fundAllocations)
       .values(allocation)
@@ -428,7 +536,10 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(transactions.createdAt));
   }
 
-  async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
+  async createTransaction(transaction: InsertTransaction, requesterTenantId: string): Promise<Transaction> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, transaction, 'Create transaction');
+    
     const [newTransaction] = await db
       .insert(transactions)
       .values(transaction)
@@ -445,7 +556,10 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(fundTransfers.createdAt));
   }
 
-  async createFundTransfer(transfer: InsertFundTransfer): Promise<FundTransfer> {
+  async createFundTransfer(transfer: InsertFundTransfer, requesterTenantId: string): Promise<FundTransfer> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, transfer, 'Create fund transfer');
+    
     const [newTransfer] = await db
       .insert(fundTransfers)
       .values(transfer)
@@ -463,12 +577,25 @@ export class DatabaseStorage implements IStorage {
       .limit(100);
   }
 
-  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
-    const [newLog] = await db
-      .insert(auditLogs)
-      .values(log)
-      .returning();
-    return newLog;
+  async createAuditLog(log: InsertAuditLog, requesterTenantId: string): Promise<AuditLog> {
+    // CRITICAL SECURITY FIX: Handle system operations differently from tenant operations
+    if (requesterTenantId === "system") {
+      // System operations can create audit logs with null tenantId for global operations
+      // Skip tenant validation for legitimate system operations
+      const [newLog] = await db
+        .insert(auditLogs)
+        .values(log)
+        .returning();
+      return newLog;
+    } else {
+      // Regular tenant operations must validate tenant ownership
+      validateTenantOwnership(requesterTenantId, log, 'Create audit log');
+      const [newLog] = await db
+        .insert(auditLogs)
+        .values(log)
+        .returning();
+      return newLog;
+    }
   }
 
   // User hierarchy operations
@@ -515,15 +642,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Authentication operations
-  async getUserByEmail(email: string): Promise<User | undefined> {
+  async getUserByEmail(email: string, tenantId: string, systemContext: boolean = false): Promise<User | undefined> {
+    // CRITICAL SECURITY FIX: Secure email lookup with explicit system context
+    if (systemContext) {
+      // System operations can access any user by email (auth flow only)
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email));
+      return user;
+    }
+    
+    // All other operations must be tenant-scoped
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email));
+      .where(and(eq(users.email, email), eq(users.tenantId, tenantId)));
     return user;
   }
 
-  async setUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<User | undefined> {
+  async setUserPassword(userId: string, passwordHash: string, tenantId: string, mustChangePassword?: boolean): Promise<User | undefined> {
+    // CRITICAL SECURITY FIX: Add tenant validation to prevent cross-tenant password changes
     const updateData: any = { 
       passwordHash,
       updatedAt: new Date(),
@@ -538,36 +677,39 @@ export class DatabaseStorage implements IStorage {
     const [updatedUser] = await db
       .update(users)
       .set(updateData)
-      .where(eq(users.id, userId))
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
       .returning();
     return updatedUser;
   }
 
-  async incrementFailedLogins(userId: string): Promise<User | undefined> {
+  async incrementFailedLogins(userId: string, tenantId: string): Promise<User | undefined> {
+    // CRITICAL SECURITY FIX: Add tenant validation
     const [updatedUser] = await db
       .update(users)
       .set({ 
         failedLoginCount: sql`${users.failedLoginCount} + 1`,
         updatedAt: new Date()
       })
-      .where(eq(users.id, userId))
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
       .returning();
     return updatedUser;
   }
 
-  async lockAccount(userId: string, lockUntil: Date): Promise<User | undefined> {
+  async lockAccount(userId: string, lockUntil: Date, tenantId: string): Promise<User | undefined> {
+    // CRITICAL SECURITY FIX: Add tenant validation
     const [updatedUser] = await db
       .update(users)
       .set({ 
         lockedUntil: lockUntil,
         updatedAt: new Date()
       })
-      .where(eq(users.id, userId))
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
       .returning();
     return updatedUser;
   }
 
-  async resetFailedLogins(userId: string): Promise<User | undefined> {
+  async resetFailedLogins(userId: string, tenantId: string): Promise<User | undefined> {
+    // CRITICAL SECURITY FIX: Add tenant validation
     const [updatedUser] = await db
       .update(users)
       .set({ 
@@ -575,12 +717,17 @@ export class DatabaseStorage implements IStorage {
         lockedUntil: null,
         updatedAt: new Date()
       })
-      .where(eq(users.id, userId))
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
       .returning();
     return updatedUser;
   }
 
-  async createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }): Promise<User> {
+  async createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }, requesterTenantId: string): Promise<User> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    if (userData.tenantId !== requesterTenantId) {
+      throw new TenantSecurityError(`Cannot create user for tenant ${userData.tenantId} while authenticated to tenant ${requesterTenantId}`);
+    }
+    
     const result = await db
       .insert(users)
       .values({
@@ -980,7 +1127,11 @@ export class DatabaseStorage implements IStorage {
           })
           .from(materialAllocations)
           .innerJoin(materials, eq(materialAllocations.materialId, materials.id))
-          .where(eq(materialAllocations.costAllocationId, item.allocation.id));
+          .where(and(
+            eq(materialAllocations.costAllocationId, item.allocation.id),
+            eq(materialAllocations.tenantId, tenantId),
+            eq(materials.tenantId, tenantId)
+          ));
 
         return {
           ...item.allocation,
@@ -1018,7 +1169,10 @@ export class DatabaseStorage implements IStorage {
     return lineItem;
   }
 
-  async createLineItem(lineItem: InsertLineItem): Promise<LineItem> {
+  async createLineItem(lineItem: InsertLineItem, requesterTenantId: string): Promise<LineItem> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, lineItem, 'Create line item');
+    
     const [newLineItem] = await db
       .insert(lineItems)
       .values(lineItem)
@@ -1052,7 +1206,10 @@ export class DatabaseStorage implements IStorage {
     return material;
   }
 
-  async createMaterial(material: InsertMaterial): Promise<Material> {
+  async createMaterial(material: InsertMaterial, requesterTenantId: string): Promise<Material> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, material, 'Create material');
+    
     const [newMaterial] = await db
       .insert(materials)
       .values(material)
@@ -1115,7 +1272,11 @@ export class DatabaseStorage implements IStorage {
           })
           .from(materialAllocations)
           .innerJoin(materials, eq(materialAllocations.materialId, materials.id))
-          .where(eq(materialAllocations.costAllocationId, allocation.id));
+          .where(and(
+            eq(materialAllocations.costAllocationId, allocation.id),
+            eq(materialAllocations.tenantId, tenantId),
+            eq(materials.tenantId, tenantId)
+          ));
 
         return {
           ...allocation,
@@ -1127,7 +1288,14 @@ export class DatabaseStorage implements IStorage {
     return allocationsWithMaterials;
   }
 
-  async createCostAllocation(costAllocation: InsertCostAllocation, materialAllocationsData: InsertMaterialAllocation[] = []): Promise<CostAllocation> {
+  async createCostAllocation(costAllocation: InsertCostAllocation, materialAllocationsData: InsertMaterialAllocation[], requesterTenantId: string): Promise<CostAllocation> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, costAllocation, 'Create cost allocation');
+    
+    // Validate material allocations tenant ownership
+    materialAllocationsData.forEach(matAlloc => {
+      validateTenantOwnership(requesterTenantId, matAlloc, 'Create material allocation');
+    });
     const [newCostAllocation] = await db
       .insert(costAllocations)
       .values(costAllocation)
@@ -1265,7 +1433,10 @@ export class DatabaseStorage implements IStorage {
     return await query;
   }
 
-  async createApprovalWorkflow(workflow: InsertApprovalWorkflow): Promise<ApprovalWorkflow> {
+  async createApprovalWorkflow(workflow: InsertApprovalWorkflow, requesterTenantId: string): Promise<ApprovalWorkflow> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, workflow, 'Create approval workflow');
+    
     const [newWorkflow] = await db
       .insert(approvalWorkflows)
       .values(workflow)
@@ -1273,11 +1444,12 @@ export class DatabaseStorage implements IStorage {
     return newWorkflow;
   }
 
-  async updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, comments?: string, tenantId?: string): Promise<ApprovalWorkflow | undefined> {
-    const whereConditions = [eq(approvalWorkflows.recordId, recordId)];
-    if (tenantId) {
-      whereConditions.push(eq(approvalWorkflows.tenantId, tenantId));
-    }
+  async updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, tenantId: string, comments?: string): Promise<ApprovalWorkflow | undefined> {
+    // CRITICAL SECURITY FIX: Always require tenant validation
+    const whereConditions = [
+      eq(approvalWorkflows.recordId, recordId),
+      eq(approvalWorkflows.tenantId, tenantId)
+    ];
 
     const [updatedWorkflow] = await db
       .update(approvalWorkflows)
@@ -1398,7 +1570,10 @@ export class DatabaseStorage implements IStorage {
     return alerts;
   }
 
-  async createBudgetAlert(alert: InsertBudgetAlert): Promise<BudgetAlert> {
+  async createBudgetAlert(alert: InsertBudgetAlert, requesterTenantId: string): Promise<BudgetAlert> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, alert, 'Create budget alert');
+    
     const [newAlert] = await db
       .insert(budgetAlerts)
       .values(alert)
@@ -1700,7 +1875,10 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async createBudgetAmendment(amendment: InsertBudgetAmendment): Promise<BudgetAmendment> {
+  async createBudgetAmendment(amendment: InsertBudgetAmendment, requesterTenantId: string): Promise<BudgetAmendment> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, amendment, 'Create budget amendment');
+    
     const [newAmendment] = await db
       .insert(budgetAmendments)
       .values(amendment)
@@ -1708,7 +1886,8 @@ export class DatabaseStorage implements IStorage {
     return newAmendment;
   }
 
-  async updateBudgetAmendmentStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<BudgetAmendment | undefined> {
+  async updateBudgetAmendmentStatus(id: string, status: 'pending' | 'approved' | 'rejected', tenantId: string, approvedBy?: string): Promise<BudgetAmendment | undefined> {
+    // CRITICAL SECURITY FIX: Always require tenant validation
     const updateData: any = {
       status,
       updatedAt: new Date(),
@@ -1719,11 +1898,11 @@ export class DatabaseStorage implements IStorage {
       updateData.approvedAt = new Date();
     }
 
-    // Build where conditions
-    let whereConditions = [eq(budgetAmendments.id, id)];
-    if (tenantId) {
-      whereConditions.push(eq(budgetAmendments.tenantId, tenantId));
-    }
+    // Build where conditions with mandatory tenant filtering
+    let whereConditions = [
+      eq(budgetAmendments.id, id),
+      eq(budgetAmendments.tenantId, tenantId)
+    ];
 
     const [updatedAmendment] = await db
       .update(budgetAmendments)
@@ -1909,7 +2088,10 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async createChangeOrder(changeOrder: InsertChangeOrder): Promise<ChangeOrder> {
+  async createChangeOrder(changeOrder: InsertChangeOrder, requesterTenantId: string): Promise<ChangeOrder> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, changeOrder, 'Create change order');
+    
     const [newChangeOrder] = await db
       .insert(changeOrders)
       .values(changeOrder)
@@ -1917,7 +2099,8 @@ export class DatabaseStorage implements IStorage {
     return newChangeOrder;
   }
 
-  async updateChangeOrderStatus(id: string, status: 'pending' | 'approved' | 'rejected', approvedBy?: string, tenantId?: string): Promise<ChangeOrder | undefined> {
+  async updateChangeOrderStatus(id: string, status: 'pending' | 'approved' | 'rejected', tenantId: string, approvedBy?: string): Promise<ChangeOrder | undefined> {
+    // CRITICAL SECURITY FIX: Always require tenant validation
     const updateData: any = {
       status,
       updatedAt: new Date(),
@@ -1928,11 +2111,11 @@ export class DatabaseStorage implements IStorage {
       updateData.approvedAt = new Date();
     }
 
-    // Build where conditions
-    let whereConditions = [eq(changeOrders.id, id)];
-    if (tenantId) {
-      whereConditions.push(eq(changeOrders.tenantId, tenantId));
-    }
+    // Build where conditions with mandatory tenant filtering
+    let whereConditions = [
+      eq(changeOrders.id, id),
+      eq(changeOrders.tenantId, tenantId)
+    ];
 
     const [updatedChangeOrder] = await db
       .update(changeOrders)

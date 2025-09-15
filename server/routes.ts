@@ -45,7 +45,8 @@ import { z } from "zod";
 async function getUserData(req: any): Promise<{ userId: string; tenantId: string; user: any }> {
   // Handle manual login session
   if (req.user?.manualLogin) {
-    const user = await storage.getUser(req.user.userId);
+    // CRITICAL SECURITY FIX: Use systemContext=true during auth flow since we don't know tenantId yet
+    const user = await storage.getUser(req.user.userId, '', true);
     if (!user) {
       throw new Error('User not found');
     }
@@ -55,7 +56,8 @@ async function getUserData(req: any): Promise<{ userId: string; tenantId: string
   // Handle OIDC login session
   if (req.user?.claims?.sub) {
     const userId = req.user.claims.sub;
-    const user = await storage.getUser(userId);
+    // CRITICAL SECURITY FIX: Use systemContext=true during auth flow since we don't know tenantId yet
+    const user = await storage.getUser(userId, '', true);
     if (!user) {
       throw new Error('User not found');
     }
@@ -153,7 +155,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Handle manual login session
       if (req.user?.manualLogin) {
-        const user = await storage.getUser(req.user.userId);
+        // CRITICAL SECURITY FIX: Use systemContext=true during auth route since we don't know tenantId yet
+        const user = await storage.getUser(req.user.userId, '', true);
         if (user) {
           return res.status(200).json({
             id: user.id,
@@ -170,7 +173,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Handle OIDC login session
       if (req.isAuthenticated?.() && req.user?.claims?.sub) {
-        const user = await storage.getUser(req.user.claims.sub);
+        // CRITICAL SECURITY FIX: Use systemContext=true during auth route since we don't know tenantId yet
+        const user = await storage.getUser(req.user.claims.sub, '', true);
         if (user) {
           return res.status(200).json({
             id: user.id,
@@ -257,7 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               reason: "user_not_found",
               ip: req.ip || req.connection?.remoteAddress || 'unknown'
             },
-          });
+          }, "system");
         } catch (auditError) {
           console.error("Failed to create audit log for failed login:", auditError);
         }
@@ -282,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               lockedUntil: user.lockedUntil,
               ip: req.ip || req.connection?.remoteAddress || 'unknown'
             },
-          });
+          }, user.tenantId);
         } catch (auditError) {
           console.error("Failed to create audit log for locked account:", auditError);
         }
@@ -309,7 +313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               status: user.status,
               ip: req.ip || req.connection?.remoteAddress || 'unknown'
             },
-          });
+          }, user.tenantId);
         } catch (auditError) {
           console.error("Failed to create audit log for inactive account:", auditError);
         }
@@ -328,7 +332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!isPasswordValid) {
         // Increment failed login count
-        await storage.incrementFailedLogins(user.id);
+        await storage.incrementFailedLogins(user.id, user.tenantId);
         
         // Lock account after 5 failed attempts
         const maxFailedAttempts = 5;
@@ -336,7 +340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if ((user.failedLoginCount || 0) + 1 >= maxFailedAttempts) {
           const lockUntil = new Date(Date.now() + lockDurationMinutes * 60 * 1000);
-          await storage.lockAccount(user.id, lockUntil);
+          await storage.lockAccount(user.id, lockUntil, user.tenantId);
         }
 
         try {
@@ -354,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               failedLoginCount: (user.failedLoginCount || 0) + 1,
               ip: req.ip || req.connection?.remoteAddress || 'unknown'
             },
-          });
+          }, user.tenantId);
         } catch (auditError) {
           console.error("Failed to create audit log for invalid password:", auditError);
         }
@@ -363,7 +367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Reset failed login count on successful login
-      await storage.resetFailedLogins(user.id);
+      await storage.resetFailedLogins(user.id, user.tenantId);
 
       // Create audit log for successful login
       try {
@@ -379,7 +383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email,
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
-        });
+        }, user.tenantId);
       } catch (auditError) {
         console.error("Failed to create audit log for successful login:", auditError);
       }
@@ -432,12 +436,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Password change endpoint
   app.post('/api/auth/change-password', isAuthenticated, async (req: any, res) => {
     try {
-      const { userId } = await getUserData(req);
+      const { userId, tenantId } = await getUserData(req);
       const passwordData = changePasswordSchema.parse(req.body);
       const { currentPassword, newPassword } = passwordData;
 
-      // Get current user
-      const user = await storage.getUser(userId);
+      // Get current user with proper tenant validation
+      // CRITICAL SECURITY FIX: Use tenantId to prevent cross-tenant access
+      const user = await storage.getUser(userId, tenantId);
       if (!user || !user.passwordHash) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -452,8 +457,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const saltRounds = 12;
       const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
 
-      // Update password
-      await storage.setUserPassword(userId, newPasswordHash, false);
+      // Update password with tenant validation
+      await storage.setUserPassword(userId, newPasswordHash, tenantId, false);
 
       // Create audit log
       try {
@@ -468,7 +473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           details: { 
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
-        });
+        }, user.tenantId);
       } catch (auditError) {
         console.error("Failed to create audit log for password change:", auditError);
       }
@@ -515,7 +520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passwordHash,
         profileImageUrl: null,
         managerId: currentUser.role === 'admin' ? userId : null, // Admins can be managers
-      });
+      }, targetTenantId);
 
       // Create audit log
       try {
@@ -533,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             createdBy: `${currentUser.firstName} ${currentUser.lastName}`,
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
-        });
+        }, targetTenantId);
       } catch (auditError) {
         console.error("Failed to create audit log for user creation:", auditError);
       }
@@ -613,7 +618,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData = updateSchema.parse(req.body);
 
       // Get target user to verify tenant access
-      const targetUser = await storage.getUser(targetUserId);
+      // CRITICAL SECURITY FIX: Console managers can access any user, regular admins only their tenant
+      let targetUser;
+      if (currentUser.role === 'console_manager') {
+        // Console managers can access any user using systemContext
+        targetUser = await storage.getUser(targetUserId, '', true);
+      } else {
+        // Regular admins can only access users in their own tenant
+        targetUser = await storage.getUser(targetUserId, tenantId);
+      }
+      
       if (!targetUser) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -655,7 +669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update mustChangePassword flag
       if (updateData.mustChangePassword !== undefined && updateData.mustChangePassword !== targetUser.mustChangePassword) {
-        updatedUser = await storage.setUserPassword(targetUserId, targetUser.passwordHash!, updateData.mustChangePassword) || updatedUser;
+        updatedUser = await storage.setUserPassword(targetUserId, targetUser.passwordHash!, targetUser.tenantId, updateData.mustChangePassword) || updatedUser;
         auditDetails.changes.mustChangePassword = { from: targetUser.mustChangePassword, to: updateData.mustChangePassword };
       }
 
@@ -664,7 +678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const newPassword = updateData.newPassword || Math.random().toString(36).slice(-12) + 'A1!';
         const saltRounds = 12;
         const passwordHash = await bcrypt.hash(newPassword, saltRounds);
-        updatedUser = await storage.setUserPassword(targetUserId, passwordHash, true) || updatedUser;
+        updatedUser = await storage.setUserPassword(targetUserId, passwordHash, targetUser.tenantId, true) || updatedUser;
         auditDetails.changes.passwordReset = true;
         auditDetails.temporaryPassword = updateData.resetPassword ? newPassword : '[provided by admin]';
       }
@@ -680,7 +694,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           amount: null,
           tenantId: targetUser.tenantId,
           details: auditDetails,
-        });
+        }, targetUser.tenantId);
       } catch (auditError) {
         console.error("Failed to create audit log for user update:", auditError);
       }
@@ -747,7 +761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passwordHash,
         profileImageUrl: null,
         managerId: null,
-      });
+      }, company.id);
 
       // Create audit log
       try {
@@ -765,7 +779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             adminUserId: adminUser.id,
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
-        });
+        }, "system");
       } catch (auditError) {
         console.error("Failed to create audit log for company creation:", auditError);
       }
@@ -818,7 +832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updatedFields: Object.keys(companyData),
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
-        });
+        }, "system");
       } catch (auditError) {
         console.error("Failed to create audit log for company update:", auditError);
       }
@@ -863,7 +877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
 
       // Update password
-      await storage.setUserPassword(adminUser.id, newPasswordHash, false);
+      await storage.setUserPassword(adminUser.id, newPasswordHash, adminUser.tenantId, false);
 
       // Create audit log
       try {
@@ -881,7 +895,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             adminUserId: adminUser.id,
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
-        });
+        }, "system");
       } catch (auditError) {
         console.error("Failed to create audit log for company password change:", auditError);
       }
@@ -964,7 +978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const project = await storage.createProject(projectData);
+      const project = await storage.createProject(projectData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -976,7 +990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: projectData.budget,
         tenantId,
         details: { title: project.title },
-      });
+      }, tenantId);
 
       res.json(project);
     } catch (error) {
@@ -1010,7 +1024,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const allocation = await storage.createFundAllocation(allocationData);
+      const allocation = await storage.createFundAllocation(allocationData, tenantId);
       
       // Create corresponding transaction
       await storage.createTransaction({
@@ -1022,7 +1036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: allocation.description || "Fund allocation",
         allocationId: allocation.id,
         tenantId,
-      });
+      }, tenantId);
 
       // Create audit log
       await storage.createAuditLog({
@@ -1034,7 +1048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: allocation.amount,
         tenantId,
         details: { category: allocation.category, toUser: allocation.toUserId },
-      });
+      }, tenantId);
 
       res.json(allocation);
     } catch (error) {
@@ -1068,7 +1082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const transaction = await storage.createTransaction(transactionData);
+      const transaction = await storage.createTransaction(transactionData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -1080,7 +1094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: transaction.amount,
         tenantId,
         details: { type: transaction.type, category: transaction.category },
-      });
+      }, tenantId);
 
       res.json(transaction);
     } catch (error) {
@@ -1114,7 +1128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const transfer = await storage.createFundTransfer(transferData);
+      const transfer = await storage.createFundTransfer(transferData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -1126,7 +1140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: transfer.amount,
         tenantId,
         details: { fromUser: transfer.fromUserId, toUser: transfer.toUserId },
-      });
+      }, tenantId);
 
       res.json(transfer);
     } catch (error) {
@@ -1315,7 +1329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const user = await storage.upsertUser(userData);
+      const user = await storage.upsertUser(userData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -1325,7 +1339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: user.id,
         tenantId,
         details: { email: user.email, role: user.role },
-      });
+      }, tenantId);
 
       res.json(user);
     } catch (error) {
@@ -1359,7 +1373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: user.id,
         tenantId,
         details: { newRole: role, email: user.email },
-      });
+      }, tenantId);
 
       res.json(user);
     } catch (error) {
@@ -1390,7 +1404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: user.id,
         tenantId,
         details: { newStatus: status, email: user.email },
-      });
+      }, tenantId);
 
       res.json(user);
     } catch (error) {
@@ -1421,7 +1435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           resetRequestedBy: userId,
           resetMethod: "admin_requested"
         },
-      });
+      }, tenantId);
 
       res.json({ 
         message: "Password reset initiated", 
@@ -1671,7 +1685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             requiresApproval: requiresApproval
           }
         },
-      });
+      }, tenantId);
       
       res.json({
         costAllocation,
@@ -1820,7 +1834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           approverId: userId,
           comments: comments || null
         },
-      });
+      }, tenantId);
       
       res.json({ 
         message: "Cost allocation approved successfully", 
@@ -1886,7 +1900,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           approverId: userId,
           comments: comments
         },
-      });
+      }, tenantId);
       
       res.json({ 
         message: "Cost allocation rejected successfully", 
@@ -1949,7 +1963,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: 'pending',
           submittedBy: userId
         },
-      });
+      }, tenantId);
       
       res.json({ 
         message: "Cost allocation submitted for approval", 
@@ -2014,7 +2028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           submittedBy: userId,
           previousStatus: 'draft'
         },
-      });
+      }, tenantId);
       
       res.json({ 
         message: "Cost allocation submitted for approval successfully", 
@@ -2127,7 +2141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Validate with schema
           const validated = insertTransactionSchema.parse(transactionData);
-          const transaction = await storage.createTransaction(validated);
+          const transaction = await storage.createTransaction(validated, tenantId);
           
           // Create audit log for imported transaction
           await storage.createAuditLog({
@@ -2143,7 +2157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               category: transaction.category,
               importSource: "csv_import"
             },
-          });
+          }, tenantId);
           
           results.success++;
         } catch (error) {
@@ -2244,8 +2258,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Validate toUserId exists within tenant (if specified)
           if (record.toUserId && record.toUserId !== userId) {
-            const targetUser = await storage.getUser(record.toUserId);
-            if (!targetUser || targetUser.tenantId !== tenantId) {
+            // CRITICAL SECURITY FIX: Use tenantId to prevent cross-tenant user access
+            const targetUser = await storage.getUser(record.toUserId, tenantId);
+            if (!targetUser) {
               throw new Error(`Target user not found or not in your tenant: ${record.toUserId}`);
             }
           }
@@ -2264,7 +2279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Validate with schema
           const validated = insertFundAllocationSchema.parse(allocationData);
-          const createdAllocation = await storage.createFundAllocation(validated);
+          const createdAllocation = await storage.createFundAllocation(validated, tenantId);
           
           // Create corresponding transaction (exactly matching POST /api/fund-allocations)
           const transaction = await storage.createTransaction({
@@ -2276,7 +2291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: validated.description || "Fund allocation",
             allocationId: createdAllocation.id,
             tenantId: validated.tenantId,
-          });
+          }, tenantId);
           
           // Create audit logs for both allocation and transaction
           await storage.createAuditLog({
@@ -2292,7 +2307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               toUser: createdAllocation.toUserId,
               importSource: "csv_import"
             },
-          });
+          }, tenantId);
           
           await storage.createAuditLog({
             userId,
@@ -2308,7 +2323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               importSource: "csv_import",
               linkedAllocation: createdAllocation.id
             },
-          });
+          }, tenantId);
           
           results.success++;
         } catch (error) {
@@ -2382,7 +2397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const lineItem = await storage.createLineItem(lineItemData);
+      const lineItem = await storage.createLineItem(lineItemData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -2392,7 +2407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: lineItem.id,
         tenantId,
         details: { name: lineItem.name, category: lineItem.category },
-      });
+      }, tenantId);
 
       res.json(lineItem);
     } catch (error) {
@@ -2423,7 +2438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: lineItem.id,
         tenantId,
         details: { name: lineItem.name, category: lineItem.category },
-      });
+      }, tenantId);
       
       res.json(lineItem);
     } catch (error) {
@@ -2480,7 +2495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: material.id,
         tenantId,
         details: { name: material.name, unit: material.unit, supplier: material.supplier },
-      });
+      }, tenantId);
 
       res.json(material);
     } catch (error) {
@@ -2511,7 +2526,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: material.id,
         tenantId,
         details: { name: material.name, unit: material.unit, supplier: material.supplier },
-      });
+      }, tenantId);
       
       res.json(material);
     } catch (error) {
@@ -2569,7 +2584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: alertId,
         tenantId,
         details: { action: "acknowledged", alertType: updatedAlert.type }
-      });
+      }, tenantId);
       
       res.json(updatedAlert);
     } catch (error) {
@@ -2597,7 +2612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: alertId,
         tenantId,
         details: { action: "resolved", alertType: updatedAlert.type }
-      });
+      }, tenantId);
       
       res.json(updatedAlert);
     } catch (error) {
@@ -2668,7 +2683,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Project not found or access denied" });
       }
 
-      const budgetAmendment = await storage.createBudgetAmendment(amendmentData);
+      const budgetAmendment = await storage.createBudgetAmendment(amendmentData, tenantId);
       
       // Create audit log for budget amendment creation
       await storage.createAuditLog({
@@ -2684,7 +2699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           amountAdded: amendmentData.amountAdded,
           status: 'draft'
         }
-      });
+      }, tenantId);
 
       res.status(201).json(budgetAmendment);
     } catch (error) {
@@ -2822,7 +2837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           comments: comments || null,
           approvedBy: userId
         }
-      });
+      }, tenantId);
 
       res.json(updatedAmendment);
     } catch (error) {
@@ -2851,7 +2866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Project not found or access denied" });
       }
 
-      const changeOrder = await storage.createChangeOrder(changeOrderData);
+      const changeOrder = await storage.createChangeOrder(changeOrderData, tenantId);
       
       // Create audit log for change order creation
       await storage.createAuditLog({
@@ -2867,7 +2882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           costImpact: changeOrderData.costImpact,
           status: 'draft'
         }
-      });
+      }, tenantId);
 
       res.status(201).json(changeOrder);
     } catch (error) {
@@ -3008,7 +3023,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           approvedBy: userId,
           description: changeOrder.description
         }
-      });
+      }, tenantId);
 
       res.json(updatedChangeOrder);
     } catch (error) {
