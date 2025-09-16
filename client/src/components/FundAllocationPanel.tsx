@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Users } from "lucide-react";
+import { ChevronDown, ChevronUp, Users, ArrowRight, Building, Crown } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,8 @@ const allocationSchema = z.object({
 
 type AllocationFormData = z.infer<typeof allocationSchema>;
 
+type UserWithManager = User & { manager?: User };
+
 const categoryLabels: Record<string, string> = {
   development_resources: "Development Resources",
   design_tools: "Design Tools", 
@@ -45,6 +47,23 @@ const categoryLabels: Record<string, string> = {
   marketing: "Marketing",
   operations: "Operations",
   miscellaneous: "Miscellaneous",
+};
+
+// Helper function to format user display name
+const formatUserDisplayName = (user: User): string => {
+  return user.firstName && user.lastName 
+    ? `${user.firstName} ${user.lastName}` 
+    : user.email;
+};
+
+// Helper function to format hierarchy display for team leaders
+const formatTeamLeaderHierarchy = (leader: UserWithManager): string => {
+  const leaderName = formatUserDisplayName(leader);
+  if (leader.manager) {
+    const managerName = formatUserDisplayName(leader.manager);
+    return `${leaderName} (reports to: ${managerName})`;
+  }
+  return `${leaderName} (top-level manager)`;
 };
 
 export default function FundAllocationPanel() {
@@ -74,8 +93,8 @@ export default function FundAllocationPanel() {
   // Get project-specific team leaders if a project is selected, otherwise get all team leaders
   const selectedProjectId = form.watch("projectId");
   
-  const { data: teamLeaders, isLoading: teamLeadersLoading, error: teamLeadersError } = useQuery<User[]>({
-    queryKey: selectedProjectId ? ["/api/projects", selectedProjectId, "team-leaders"] : ["/api/users/team-leaders"],
+  const { data: teamLeaders, isLoading: teamLeadersLoading, error: teamLeadersError } = useQuery<UserWithManager[]>({
+    queryKey: selectedProjectId ? ["/api/projects", selectedProjectId, "team-leaders"] : ["/api/users/team-leaders-with-hierarchy"],
     queryFn: async () => {
       if (selectedProjectId) {
         // Fetch team leaders assigned to the specific project
@@ -90,15 +109,15 @@ export default function FundAllocationPanel() {
         }
         return response.json();
       } else {
-        // Fallback to all team leaders if no project is selected
-        const response = await fetch(`/api/users/team-leaders`, {
+        // Fetch all team leaders with hierarchy information
+        const response = await fetch(`/api/users/team-leaders-with-hierarchy`, {
           headers: {
             'Content-Type': 'application/json',
           },
           credentials: 'include',
         });
         if (!response.ok) {
-          throw new Error('Failed to fetch team leaders');
+          throw new Error('Failed to fetch team leaders with hierarchy');
         }
         return response.json();
       }
@@ -299,11 +318,26 @@ export default function FundAllocationPanel() {
                             : "No team leaders available"}
                         </div>
                       ) : (
-                        teamLeaders.map((leader: any) => (
+                        teamLeaders.map((leader: UserWithManager) => (
                           <SelectItem key={leader.id} value={leader.id}>
-                            {leader.firstName && leader.lastName 
-                              ? `${leader.firstName} ${leader.lastName}` 
-                              : leader.email}
+                            <div className="flex items-center gap-2 py-1">
+                              <div className="flex items-center gap-1">
+                                {leader.manager ? (
+                                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                                ) : (
+                                  <Crown className="h-3 w-3 text-amber-500" />
+                                )}
+                                <span className="font-medium">
+                                  {formatUserDisplayName(leader)}
+                                </span>
+                              </div>
+                              {leader.manager && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <ArrowRight className="h-2 w-2" />
+                                  <span>{formatUserDisplayName(leader.manager)}</span>
+                                </div>
+                              )}
+                            </div>
                           </SelectItem>
                         ))
                       )}
@@ -319,7 +353,7 @@ export default function FundAllocationPanel() {
               )}
             />
 
-            {/* Team Members Section */}
+            {/* Team Hierarchy Section */}
             {selectedTeamLeaderId && (
               <Collapsible 
                 open={isTeamMembersExpanded} 
@@ -327,25 +361,28 @@ export default function FundAllocationPanel() {
                 className="w-full"
               >
                 <CollapsibleTrigger asChild>
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md cursor-pointer hover:bg-muted transition-colors" data-testid="team-members-toggle">
+                  <div className="flex items-center justify-between p-3 bg-gradient-to-r from-muted/30 to-muted/50 rounded-md cursor-pointer hover:from-muted/50 hover:to-muted/70 transition-all duration-200 border border-border/50" data-testid="team-members-toggle">
                     <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      <span className="text-sm font-medium">Team Members</span>
+                      <Building className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Team Hierarchy</span>
                       {teamMembers && (
-                        <Badge variant="secondary" className="text-xs">
-                          {teamMembers.length}
+                        <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/20">
+                          {teamMembers.length} {teamMembers.length === 1 ? 'member' : 'members'}
                         </Badge>
                       )}
                     </div>
-                    {isTeamMembersExpanded ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">View structure</span>
+                      {isTeamMembersExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-primary" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-primary" />
+                      )}
+                    </div>
                   </div>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-2">
-                  <Card className="border-dashed">
+                  <Card className="border-dashed border-primary/20 bg-gradient-to-br from-background to-muted/20">
                     <CardContent className="p-4">
                       {teamMembersLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -357,32 +394,107 @@ export default function FundAllocationPanel() {
                       ) : !teamMembers || teamMembers.length === 0 ? (
                         <div className="text-sm text-muted-foreground italic">No team members found for this team leader</div>
                       ) : (
-                        <div className="space-y-2">
-                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Reports to selected team leader</div>
-                          {teamMembers.map((member: any) => (
-                            <div 
-                              key={member.id} 
-                              className="flex items-center justify-between py-2 px-3 bg-background rounded border border-border/50"
-                              data-testid={`team-member-${member.id}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 bg-primary/60 rounded-full"></div>
-                                <div>
-                                  <div className="text-sm font-medium">
-                                    {member.firstName && member.lastName 
-                                      ? `${member.firstName} ${member.lastName}` 
-                                      : member.email}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <Building className="h-3 w-3" />
+                            Reporting Structure
+                          </div>
+                          
+                          {/* Show selected team leader info */}
+                          {(() => {
+                            const selectedLeader = teamLeaders?.find(leader => leader.id === selectedTeamLeaderId);
+                            return selectedLeader && (
+                              <div className="mb-4 p-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border border-primary/30 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Crown className="h-4 w-4 text-primary" />
+                                  <span className="text-sm font-semibold text-primary">Team Leader</span>
+                                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                                </div>
+                                <div className="pl-6 space-y-2">
+                                  <div className="text-sm font-medium text-foreground">
+                                    {formatUserDisplayName(selectedLeader)}
                                   </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {member.firstName && member.lastName && member.email}
-                                  </div>
+                                  {selectedLeader.manager ? (
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <div className="flex items-center gap-1">
+                                        <ArrowRight className="h-3 w-3" />
+                                        <span>Reports to:</span>
+                                      </div>
+                                      <Badge variant="outline" className="text-xs bg-background/50">
+                                        {formatUserDisplayName(selectedLeader.manager)}
+                                      </Badge>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 text-xs text-amber-600">
+                                      <Crown className="h-3 w-3" />
+                                      <span>Senior Leadership</span>
+                                    </div>
+                                  )}
+                                  <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/20">
+                                    {selectedLeader.role?.replace('_', ' ') || 'Team Leader'}
+                                  </Badge>
                                 </div>
                               </div>
-                              <Badge variant="outline" className="text-xs capitalize">
-                                {member.role?.replace('_', ' ') || 'User'}
-                              </Badge>
+                            );
+                          })()}
+                          
+                          {/* Show team members */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                Direct Reports ({teamMembers.length})
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Organizational Structure
+                              </div>
                             </div>
-                          ))}
+                            {teamMembers.map((member: any, index: number) => (
+                              <div 
+                                key={member.id} 
+                                className="flex items-center justify-between py-3 px-4 bg-background rounded-lg border border-border/50 hover:border-primary/30 hover:shadow-sm transition-all duration-200"
+                                data-testid={`team-member-${member.id}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {/* Hierarchy connector */}
+                                  <div className="flex items-center">
+                                    <div className="w-8 flex justify-center relative">
+                                      <div className="w-3 h-3 bg-gradient-to-r from-primary/60 to-primary/40 rounded-full border-2 border-background shadow-sm"></div>
+                                      {index < teamMembers.length - 1 && (
+                                        <div className="absolute top-3 w-px h-4 bg-border"></div>
+                                      )}
+                                    </div>
+                                    <div className="w-4 h-px bg-gradient-to-r from-border to-transparent"></div>
+                                  </div>
+                                  
+                                  <div className="flex-1">
+                                    <div className="text-sm font-medium">
+                                      {formatUserDisplayName(member)}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      {member.firstName && member.lastName && (
+                                        <div className="text-xs text-muted-foreground">
+                                          {member.email}
+                                        </div>
+                                      )}
+                                      <ArrowRight className="h-2 w-2 text-muted-foreground" />
+                                      <div className="text-xs text-muted-foreground">
+                                        Reports to: {(() => {
+                                          const leader = teamLeaders?.find(l => l.id === selectedTeamLeaderId);
+                                          return leader ? formatUserDisplayName(leader) : 'Team Leader';
+                                        })()}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs capitalize">
+                                    {member.role?.replace('_', ' ') || 'User'}
+                                  </Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </CardContent>

@@ -156,6 +156,7 @@ export interface IStorage {
   // User hierarchy operations
   getSubordinates(managerId: string, tenantId: string): Promise<User[]>;
   getUsersByRole(role: string, tenantId: string): Promise<User[]>;
+  getTeamLeadersWithHierarchy(tenantId: string): Promise<(User & { manager?: User })[]>;
   getAllUsers(tenantId: string): Promise<User[]>;
   updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined>;
   updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
@@ -650,6 +651,89 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(and(eq(users.role, role), eq(users.companyId, tenantId)))
       .orderBy(users.firstName);
+  }
+
+  async getTeamLeadersWithHierarchy(tenantId: string): Promise<(User & { manager?: User })[]> {
+    // Use an alias for the managers table to avoid naming conflicts
+    const managers = users;
+    
+    const result = await db
+      .select({
+        // Team leader fields
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profileImageUrl: users.profileImageUrl,
+        role: users.role,
+        managerId: users.managerId,
+        companyId: users.companyId,
+        status: users.status,
+        passwordHash: users.passwordHash,
+        mustChangePassword: users.mustChangePassword,
+        failedLoginCount: users.failedLoginCount,
+        lockedUntil: users.lockedUntil,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        // Manager fields (prefixed with manager_)
+        manager_id: managers.id,
+        manager_email: managers.email,
+        manager_firstName: managers.firstName,
+        manager_lastName: managers.lastName,
+        manager_profileImageUrl: managers.profileImageUrl,
+        manager_role: managers.role,
+      })
+      .from(users)
+      .leftJoin(managers, eq(users.managerId, managers.id))
+      .where(and(
+        eq(users.role, 'team_leader'),
+        eq(users.companyId, tenantId)
+      ))
+      .orderBy(users.firstName);
+
+    // Transform the result to include manager as a nested object
+    return result.map(row => {
+      const teamLeader: User & { manager?: User } = {
+        id: row.id,
+        email: row.email,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        profileImageUrl: row.profileImageUrl,
+        role: row.role,
+        managerId: row.managerId,
+        companyId: row.companyId,
+        status: row.status,
+        passwordHash: row.passwordHash,
+        mustChangePassword: row.mustChangePassword,
+        failedLoginCount: row.failedLoginCount,
+        lockedUntil: row.lockedUntil,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+
+      // Add manager information if available
+      if (row.manager_id) {
+        teamLeader.manager = {
+          id: row.manager_id,
+          email: row.manager_email,
+          firstName: row.manager_firstName,
+          lastName: row.manager_lastName,
+          profileImageUrl: row.manager_profileImageUrl,
+          role: row.manager_role,
+          managerId: null,
+          companyId: tenantId,
+          status: 'active',
+          passwordHash: null,
+          mustChangePassword: false,
+          failedLoginCount: 0,
+          lockedUntil: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
+
+      return teamLeader;
+    });
   }
 
   async getAllUsers(tenantId: string): Promise<User[]> {

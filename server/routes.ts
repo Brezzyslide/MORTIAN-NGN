@@ -1482,6 +1482,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/users/team-leaders-with-hierarchy', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const teamLeadersWithHierarchy = await storage.getTeamLeadersWithHierarchy(tenantId);
+      res.json(teamLeadersWithHierarchy);
+    } catch (error) {
+      console.error("Error fetching team leaders with hierarchy:", error);
+      res.status(500).json({ message: "Failed to fetch team leaders with hierarchy" });
+    }
+  });
+
   // User management routes (admin only)
   app.get('/api/users', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
