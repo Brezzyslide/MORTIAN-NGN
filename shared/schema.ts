@@ -275,6 +275,20 @@ export const changeOrders = pgTable("change_orders", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Project assignments table (tracks which team leaders are assigned to projects)
+export const projectAssignments = pgTable("project_assignments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: uuid("project_id").references(() => projects.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  assignedBy: varchar("assigned_by").references(() => users.id).notNull(),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Ensure unique assignment per project-user combination
+  uniqueProjectUser: index("idx_project_assignments_unique").on(table.projectId, table.userId),
+}));
+
 // Budget alert types enum
 export const budgetAlertTypeEnum = pgEnum("budget_alert_type", [
   "warning_threshold", // 80% threshold crossed
@@ -383,6 +397,12 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     relationName: "transfers_to"
   }),
   auditLogs: many(auditLogs),
+  projectAssignments: many(projectAssignments, {
+    relationName: "project_assignments_user"
+  }),
+  assignmentsMade: many(projectAssignments, {
+    relationName: "project_assignments_assigned_by"
+  }),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -396,6 +416,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   auditLogs: many(auditLogs),
   budgetAmendments: many(budgetAmendments),
   changeOrders: many(changeOrders),
+  assignments: many(projectAssignments),
 }));
 
 export const fundAllocationsRelations = relations(fundAllocations, ({ one, many }) => ({
@@ -541,6 +562,23 @@ export const changeOrdersRelations = relations(changeOrders, ({ one, many }) => 
   costAllocations: many(costAllocations),
 }));
 
+export const projectAssignmentsRelations = relations(projectAssignments, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectAssignments.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [projectAssignments.userId],
+    references: [users.id],
+    relationName: "project_assignments_user"
+  }),
+  assignedByUser: one(users, {
+    fields: [projectAssignments.assignedBy],
+    references: [users.id],
+    relationName: "project_assignments_assigned_by"
+  }),
+}));
+
 export const budgetAlertsRelations = relations(budgetAlerts, ({ one }) => ({
   project: one(projects, {
     fields: [budgetAlerts.projectId],
@@ -583,6 +621,9 @@ export const insertFundAllocationSchema = createInsertSchema(fundAllocations).om
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  // Fix: Allow amount to be either string or number, but convert to string for decimal handling
+  amount: z.union([z.string(), z.number()]).transform((val) => String(val)),
 });
 
 export const insertTransactionSchema = createInsertSchema(transactions).omit({
@@ -639,6 +680,12 @@ export const insertBudgetAmendmentSchema = createInsertSchema(budgetAmendments).
 });
 
 export const insertChangeOrderSchema = createInsertSchema(changeOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProjectAssignmentSchema = createInsertSchema(projectAssignments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -736,6 +783,8 @@ export type BudgetAmendment = typeof budgetAmendments.$inferSelect;
 export type InsertBudgetAmendment = z.infer<typeof insertBudgetAmendmentSchema>;
 export type ChangeOrder = typeof changeOrders.$inferSelect;
 export type InsertChangeOrder = z.infer<typeof insertChangeOrderSchema>;
+export type ProjectAssignment = typeof projectAssignments.$inferSelect;
+export type InsertProjectAssignment = z.infer<typeof insertProjectAssignmentSchema>;
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type BudgetAlert = typeof budgetAlerts.$inferSelect;

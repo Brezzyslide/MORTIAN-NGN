@@ -1031,6 +1031,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Project assignment routes
+  app.get('/api/projects/:projectId/team-leaders', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { projectId } = req.params;
+      
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format" });
+      }
+      
+      const teamLeaders = await storage.getAssignedTeamLeadersByProject(projectId, tenantId);
+      res.json(teamLeaders);
+    } catch (error) {
+      console.error("Error fetching assigned team leaders:", error);
+      res.status(500).json({ message: "Failed to fetch assigned team leaders" });
+    }
+  });
+
+  app.get('/api/project-assignments', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const assignments = await storage.getProjectAssignments(tenantId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching project assignments:", error);
+      res.status(500).json({ message: "Failed to fetch project assignments" });
+    }
+  });
+
+  app.get('/api/project-assignments/:projectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { projectId } = req.params;
+      
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format" });
+      }
+      
+      const assignments = await storage.getProjectAssignmentsByProject(projectId, tenantId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching project assignments:", error);
+      res.status(500).json({ message: "Failed to fetch project assignments" });
+    }
+  });
+
+  app.post('/api/project-assignments', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      
+      const assignmentData = insertProjectAssignmentSchema.parse({
+        ...req.body,
+        assignedBy: userId,
+        tenantId,
+      });
+
+      // Check if assignment already exists
+      const existingAssignments = await storage.getProjectAssignmentsByProject(assignmentData.projectId, tenantId);
+      const existingAssignment = existingAssignments.find(a => a.userId === assignmentData.userId);
+      
+      if (existingAssignment) {
+        return res.status(400).json({ message: "User is already assigned to this project" });
+      }
+
+      const assignment = await storage.createProjectAssignment(assignmentData, tenantId);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "project_created", // Using existing action, could add new one
+        entityType: "project_assignment",
+        entityId: assignment.id,
+        projectId: assignment.projectId,
+        tenantId,
+        details: { assignedUser: assignment.userId },
+      }, tenantId);
+
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error creating project assignment:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid assignment data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create project assignment" });
+    }
+  });
+
+  app.delete('/api/project-assignments/:projectId/:userId', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { userId: currentUserId, tenantId } = await getUserData(req);
+      const { projectId, userId } = req.params;
+      
+      if (!isValidUUID(projectId) || !isValidUUID(userId)) {
+        return res.status(400).json({ message: "Invalid project or user ID format" });
+      }
+      
+      const success = await storage.deleteProjectAssignment(projectId, userId, tenantId);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Project assignment not found" });
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId: currentUserId,
+        action: "project_updated", // Using existing action
+        entityType: "project_assignment",
+        entityId: `${projectId}-${userId}`,
+        projectId,
+        tenantId,
+        details: { removedUser: userId },
+      }, tenantId);
+
+      res.json({ success: true, message: "Project assignment removed successfully" });
+    } catch (error) {
+      console.error("Error removing project assignment:", error);
+      res.status(500).json({ message: "Failed to remove project assignment" });
+    }
+  });
+
   // Fund allocation routes
   app.get('/api/fund-allocations', isAuthenticated, async (req: any, res) => {
     try {
@@ -1321,7 +1441,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User hierarchy routes
+  // User hierarchy routes - Updated to support fetching subordinates by team leader ID
+  app.get('/api/users/subordinates/:teamLeaderId', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { teamLeaderId } = req.params;
+      
+      if (!teamLeaderId || !isValidUUID(teamLeaderId)) {
+        return res.status(400).json({ message: "Valid team leader ID is required" });
+      }
+      
+      const subordinates = await storage.getSubordinates(teamLeaderId, tenantId);
+      res.json(subordinates);
+    } catch (error) {
+      console.error("Error fetching subordinates:", error);
+      res.status(500).json({ message: "Failed to fetch subordinates" });
+    }
+  });
+
+  // Backwards compatibility: Get subordinates for current user
   app.get('/api/users/subordinates', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
       const { userId: managerId, tenantId } = await getUserData(req);

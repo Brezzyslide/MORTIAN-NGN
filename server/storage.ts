@@ -14,6 +14,7 @@ import {
   budgetAlerts,
   budgetAmendments,
   changeOrders,
+  projectAssignments,
   type User,
   type UpsertUser,
   type Project,
@@ -44,6 +45,8 @@ import {
   type InsertBudgetAmendment,
   type ChangeOrder,
   type InsertChangeOrder,
+  type ProjectAssignment,
+  type InsertProjectAssignment,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
@@ -295,6 +298,14 @@ export interface IStorage {
   getChangeOrdersByProject(projectId: string, tenantId: string): Promise<Array<ChangeOrder & { proposer: User; approver?: User }>>;
   createChangeOrder(changeOrder: InsertChangeOrder, requesterTenantId: string): Promise<ChangeOrder>;
   updateChangeOrderStatus(id: string, status: 'pending' | 'approved' | 'rejected', tenantId: string, approvedBy?: string): Promise<ChangeOrder | undefined>;
+
+  // Project assignment operations
+  getProjectAssignments(tenantId: string): Promise<Array<ProjectAssignment & { project: Project; user: User }>>;
+  getProjectAssignmentsByProject(projectId: string, tenantId: string): Promise<Array<ProjectAssignment & { user: User }>>;
+  getAssignedTeamLeadersByProject(projectId: string, tenantId: string): Promise<User[]>;
+  getUserProjectAssignments(userId: string, tenantId: string): Promise<Array<ProjectAssignment & { project: Project }>>;
+  createProjectAssignment(assignment: InsertProjectAssignment, requesterTenantId: string): Promise<ProjectAssignment>;
+  deleteProjectAssignment(projectId: string, userId: string, tenantId: string): Promise<boolean>;
 
   // Project budget history operations
   getProjectBudgetHistory(projectId: string, tenantId: string): Promise<{
@@ -2187,6 +2198,208 @@ export class DatabaseStorage implements IStorage {
       amendments: approvedAmendments,
       changeOrders: projectChangeOrders,
     };
+  }
+
+  // Project assignment operations
+  async getProjectAssignments(tenantId: string): Promise<Array<ProjectAssignment & { project: Project; user: User }>> {
+    const results = await db
+      .select({
+        id: projectAssignments.id,
+        projectId: projectAssignments.projectId,
+        userId: projectAssignments.userId,
+        assignedBy: projectAssignments.assignedBy,
+        tenantId: projectAssignments.tenantId,
+        createdAt: projectAssignments.createdAt,
+        updatedAt: projectAssignments.updatedAt,
+        // Project data
+        project: {
+          id: projects.id,
+          title: projects.title,
+          description: projects.description,
+          startDate: projects.startDate,
+          endDate: projects.endDate,
+          budget: projects.budget,
+          consumedAmount: projects.consumedAmount,
+          revenue: projects.revenue,
+          managerId: projects.managerId,
+          tenantId: projects.tenantId,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        },
+        // User data
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+          managerId: users.managerId,
+          companyId: users.companyId,
+          status: users.status,
+        },
+      })
+      .from(projectAssignments)
+      .leftJoin(projects, eq(projectAssignments.projectId, projects.id))
+      .leftJoin(users, eq(projectAssignments.userId, users.id))
+      .where(eq(projectAssignments.tenantId, tenantId))
+      .orderBy(desc(projectAssignments.createdAt));
+
+    return results.map(result => ({
+      id: result.id,
+      projectId: result.projectId,
+      userId: result.userId,
+      assignedBy: result.assignedBy,
+      tenantId: result.tenantId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      project: result.project,
+      user: result.user,
+    }));
+  }
+
+  async getProjectAssignmentsByProject(projectId: string, tenantId: string): Promise<Array<ProjectAssignment & { user: User }>> {
+    const results = await db
+      .select({
+        id: projectAssignments.id,
+        projectId: projectAssignments.projectId,
+        userId: projectAssignments.userId,
+        assignedBy: projectAssignments.assignedBy,
+        tenantId: projectAssignments.tenantId,
+        createdAt: projectAssignments.createdAt,
+        updatedAt: projectAssignments.updatedAt,
+        // User data
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+          managerId: users.managerId,
+          companyId: users.companyId,
+          status: users.status,
+        },
+      })
+      .from(projectAssignments)
+      .leftJoin(users, eq(projectAssignments.userId, users.id))
+      .where(and(
+        eq(projectAssignments.projectId, projectId),
+        eq(projectAssignments.tenantId, tenantId)
+      ))
+      .orderBy(desc(projectAssignments.createdAt));
+
+    return results.map(result => ({
+      id: result.id,
+      projectId: result.projectId,
+      userId: result.userId,
+      assignedBy: result.assignedBy,
+      tenantId: result.tenantId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      user: result.user,
+    }));
+  }
+
+  async getAssignedTeamLeadersByProject(projectId: string, tenantId: string): Promise<User[]> {
+    const results = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profileImageUrl: users.profileImageUrl,
+        role: users.role,
+        managerId: users.managerId,
+        companyId: users.companyId,
+        status: users.status,
+        passwordHash: users.passwordHash,
+        mustChangePassword: users.mustChangePassword,
+        failedLoginCount: users.failedLoginCount,
+        lockedUntil: users.lockedUntil,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(projectAssignments)
+      .leftJoin(users, eq(projectAssignments.userId, users.id))
+      .where(and(
+        eq(projectAssignments.projectId, projectId),
+        eq(projectAssignments.tenantId, tenantId),
+        eq(users.role, 'team_leader'),
+        eq(users.status, 'active')
+      ))
+      .orderBy(users.firstName, users.lastName);
+
+    return results;
+  }
+
+  async getUserProjectAssignments(userId: string, tenantId: string): Promise<Array<ProjectAssignment & { project: Project }>> {
+    const results = await db
+      .select({
+        id: projectAssignments.id,
+        projectId: projectAssignments.projectId,
+        userId: projectAssignments.userId,
+        assignedBy: projectAssignments.assignedBy,
+        tenantId: projectAssignments.tenantId,
+        createdAt: projectAssignments.createdAt,
+        updatedAt: projectAssignments.updatedAt,
+        // Project data
+        project: {
+          id: projects.id,
+          title: projects.title,
+          description: projects.description,
+          startDate: projects.startDate,
+          endDate: projects.endDate,
+          budget: projects.budget,
+          consumedAmount: projects.consumedAmount,
+          revenue: projects.revenue,
+          managerId: projects.managerId,
+          tenantId: projects.tenantId,
+          status: projects.status,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        },
+      })
+      .from(projectAssignments)
+      .leftJoin(projects, eq(projectAssignments.projectId, projects.id))
+      .where(and(
+        eq(projectAssignments.userId, userId),
+        eq(projectAssignments.tenantId, tenantId)
+      ))
+      .orderBy(desc(projectAssignments.createdAt));
+
+    return results.map(result => ({
+      id: result.id,
+      projectId: result.projectId,
+      userId: result.userId,
+      assignedBy: result.assignedBy,
+      tenantId: result.tenantId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      project: result.project,
+    }));
+  }
+
+  async createProjectAssignment(assignment: InsertProjectAssignment, requesterTenantId: string): Promise<ProjectAssignment> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, assignment, 'Create project assignment');
+    
+    const [newAssignment] = await db
+      .insert(projectAssignments)
+      .values(assignment)
+      .returning();
+    return newAssignment;
+  }
+
+  async deleteProjectAssignment(projectId: string, userId: string, tenantId: string): Promise<boolean> {
+    const result = await db
+      .delete(projectAssignments)
+      .where(and(
+        eq(projectAssignments.projectId, projectId),
+        eq(projectAssignments.userId, userId),
+        eq(projectAssignments.tenantId, tenantId)
+      ));
+    
+    return result.rowCount !== null && result.rowCount > 0;
   }
 }
 

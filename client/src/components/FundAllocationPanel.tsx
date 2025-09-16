@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { ChevronDown, ChevronUp, Users } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -48,6 +51,8 @@ export default function FundAllocationPanel() {
   const { toast } = useToast();
   const { user } = useAuth();
   const tenantId = user?.tenantId;
+  const [selectedTeamLeaderId, setSelectedTeamLeaderId] = useState<string>("");
+  const [isTeamMembersExpanded, setIsTeamMembersExpanded] = useState(false);
 
   const form = useForm<AllocationFormData>({
     resolver: zodResolver(allocationSchema),
@@ -66,9 +71,59 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
+  // Get project-specific team leaders if a project is selected, otherwise get all team leaders
+  const selectedProjectId = form.watch("projectId");
+  
   const { data: teamLeaders, isLoading: teamLeadersLoading, error: teamLeadersError } = useQuery<User[]>({
-    queryKey: ["/api/users/team-leaders"],
+    queryKey: selectedProjectId ? ["/api/projects", selectedProjectId, "team-leaders"] : ["/api/users/team-leaders"],
+    queryFn: async () => {
+      if (selectedProjectId) {
+        // Fetch team leaders assigned to the specific project
+        const response = await fetch(`/api/projects/${selectedProjectId}/team-leaders`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch assigned team leaders');
+        }
+        return response.json();
+      } else {
+        // Fallback to all team leaders if no project is selected
+        const response = await fetch(`/api/users/team-leaders`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch team leaders');
+        }
+        return response.json();
+      }
+    },
     enabled: Boolean(tenantId),
+    retry: false,
+  });
+
+  // Fetch team members when team leader is selected
+  const { data: teamMembers, isLoading: teamMembersLoading, error: teamMembersError } = useQuery<User[]>({
+    queryKey: ["/api/users/subordinates", selectedTeamLeaderId],
+    queryFn: async () => {
+      if (!selectedTeamLeaderId) return [];
+      const response = await fetch(`/api/users/subordinates/${selectedTeamLeaderId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch team members');
+      }
+      return response.json();
+    },
+    enabled: Boolean(tenantId) && Boolean(selectedTeamLeaderId),
     retry: false,
   });
 
@@ -99,11 +154,41 @@ export default function FundAllocationPanel() {
     }
   }, [teamLeadersError, toast]);
 
+  useEffect(() => {
+    if (teamMembersError && isUnauthorizedError(teamMembersError)) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+    }
+  }, [teamMembersError, toast]);
+
+  // Handle project selection change  
+  const handleProjectChange = (value: string) => {
+    form.setValue("projectId", value);
+    // Reset team leader selection when project changes since available leaders might be different
+    setSelectedTeamLeaderId("");
+    form.setValue("toUserId", "");
+    setIsTeamMembersExpanded(false);
+  };
+
+  // Handle team leader selection change
+  const handleTeamLeaderChange = (value: string) => {
+    setSelectedTeamLeaderId(value);
+    setIsTeamMembersExpanded(Boolean(value));
+    form.setValue("toUserId", value);
+  };
+
   const allocationMutation = useMutation({
     mutationFn: async (data: AllocationFormData) => {
       const response = await apiRequest("POST", "/api/fund-allocations", {
         ...data,
-        amount: parseFloat(data.amount),
+        // Keep amount as string for backend validation
+        amount: data.amount,
       });
       return await response.json();
     },
@@ -156,7 +241,7 @@ export default function FundAllocationPanel() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Project</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={handleProjectChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-project">
                         <SelectValue placeholder="Select a project" />
@@ -186,18 +271,33 @@ export default function FundAllocationPanel() {
               name="toUserId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Team Leader</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <FormLabel className="flex items-center gap-2">
+                    Team Leader
+                    {selectedProjectId && (
+                      <Badge variant="secondary" className="text-xs">
+                        Project-specific
+                      </Badge>
+                    )}
+                  </FormLabel>
+                  <Select onValueChange={handleTeamLeaderChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-team-leader">
-                        <SelectValue placeholder="Select a team leader" />
+                        <SelectValue placeholder={
+                          selectedProjectId 
+                            ? "Select an assigned team leader" 
+                            : "Select a team leader"
+                        } />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {teamLeadersLoading ? (
                         <div className="p-2 text-center text-muted-foreground">Loading team leaders...</div>
                       ) : !teamLeaders || teamLeaders.length === 0 ? (
-                        <div className="p-2 text-center text-muted-foreground">No team leaders available</div>
+                        <div className="p-2 text-center text-muted-foreground">
+                          {selectedProjectId 
+                            ? "No team leaders assigned to this project" 
+                            : "No team leaders available"}
+                        </div>
                       ) : (
                         teamLeaders.map((leader: any) => (
                           <SelectItem key={leader.id} value={leader.id}>
@@ -209,10 +309,87 @@ export default function FundAllocationPanel() {
                       )}
                     </SelectContent>
                   </Select>
+                  {selectedProjectId && teamLeaders && teamLeaders.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      💡 No team leaders are assigned to this project. Contact your administrator to assign team leaders.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {/* Team Members Section */}
+            {selectedTeamLeaderId && (
+              <Collapsible 
+                open={isTeamMembersExpanded} 
+                onOpenChange={setIsTeamMembersExpanded}
+                className="w-full"
+              >
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md cursor-pointer hover:bg-muted transition-colors" data-testid="team-members-toggle">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      <span className="text-sm font-medium">Team Members</span>
+                      {teamMembers && (
+                        <Badge variant="secondary" className="text-xs">
+                          {teamMembers.length}
+                        </Badge>
+                      )}
+                    </div>
+                    {isTeamMembersExpanded ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <Card className="border-dashed">
+                    <CardContent className="p-4">
+                      {teamMembersLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-muted-foreground"></div>
+                          Loading team members...
+                        </div>
+                      ) : teamMembersError ? (
+                        <div className="text-sm text-destructive">Failed to load team members</div>
+                      ) : !teamMembers || teamMembers.length === 0 ? (
+                        <div className="text-sm text-muted-foreground italic">No team members found for this team leader</div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Reports to selected team leader</div>
+                          {teamMembers.map((member: any) => (
+                            <div 
+                              key={member.id} 
+                              className="flex items-center justify-between py-2 px-3 bg-background rounded border border-border/50"
+                              data-testid={`team-member-${member.id}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-primary/60 rounded-full"></div>
+                                <div>
+                                  <div className="text-sm font-medium">
+                                    {member.firstName && member.lastName 
+                                      ? `${member.firstName} ${member.lastName}` 
+                                      : member.email}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {member.firstName && member.lastName && member.email}
+                                  </div>
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {member.role?.replace('_', ' ') || 'User'}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
             <FormField
               control={form.control}
