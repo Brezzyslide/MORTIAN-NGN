@@ -80,8 +80,14 @@ function assertTenantAccess(userRole: string, userTenantId: string, resourceTena
  * @param requesterTenantId - The tenant ID of the requesting user
  * @param dataObject - The data object containing tenantId
  * @param operation - The operation being performed
+ * @param systemContext - Whether this is a system operation that bypasses tenant checks
  */
-function validateTenantOwnership(requesterTenantId: string, dataObject: any, operation: string): void {
+function validateTenantOwnership(requesterTenantId: string, dataObject: any, operation: string, systemContext: boolean = false): void {
+  // Skip validation for system operations (e.g., during authentication flow)
+  if (systemContext) {
+    return;
+  }
+  
   if (!dataObject.tenantId) {
     throw new TenantSecurityError(`${operation} failed: Missing tenantId in data object`);
   }
@@ -104,6 +110,7 @@ function ensureTenantFilter(table: any, tenantId: string) {
 export interface IStorage {
   // Company operations (for console managers)
   getCompanies(requesterRole: string): Promise<Company[]>;
+  getPublicCompanies(): Promise<Pick<Company, 'id' | 'name' | 'industry' | 'status'>[]>;
   getCompany(id: string, tenantId: string): Promise<Company | undefined>;
   getCompanyForTenant(id: string, tenantId: string): Promise<Company | undefined>;
   createCompany(company: InsertCompany, requesterTenantId: string, requesterRole: string): Promise<Company>;
@@ -113,7 +120,7 @@ export interface IStorage {
   getUser(id: string, tenantId: string, systemContext?: boolean): Promise<User | undefined>;
   getUserById(id: string, tenantId: string): Promise<User | undefined>;
   getUserWithPermissions(id: string, tenantId: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser, requesterTenantId: string): Promise<User>;
+  upsertUser(user: UpsertUser, requesterTenantId: string, systemContext?: boolean): Promise<User>;
 
   // Project operations
   getProjects(tenantId: string): Promise<Project[]>;
@@ -359,6 +366,21 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getPublicCompanies(): Promise<Pick<Company, 'id' | 'name' | 'industry' | 'status'>[]> {
+    // Public endpoint for unauthenticated login dropdown - only returns safe public fields
+    // No role or tenant restrictions as this is for pre-authentication company selection
+    return await db
+      .select({
+        id: companies.id,
+        name: companies.name,
+        industry: companies.industry,
+        status: companies.status
+      })
+      .from(companies)
+      .where(eq(companies.status, 'active'))
+      .orderBy(companies.name);
+  }
+
   // User operations
   async getUser(id: string, tenantId: string, systemContext: boolean = false): Promise<User | undefined> {
     // CRITICAL SECURITY FIX: Secure user lookup with explicit system context
@@ -397,9 +419,9 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async upsertUser(userData: UpsertUser, requesterTenantId: string): Promise<User> {
-    // CRITICAL SECURITY FIX: Always validate tenant ownership for writes
-    validateTenantOwnership(requesterTenantId, userData, 'Upsert user');
+  async upsertUser(userData: UpsertUser, requesterTenantId: string, systemContext: boolean = false): Promise<User> {
+    // CRITICAL SECURITY FIX: Always validate tenant ownership for writes (unless system context)
+    validateTenantOwnership(requesterTenantId, userData, 'Upsert user', systemContext);
     
     try {
       // Try to insert or update by ID first
@@ -1663,7 +1685,7 @@ export class DatabaseStorage implements IStorage {
           spentPercentage: spentPercentage.toString(),
           remainingBudget: remainingBudget.toString(),
           tenantId
-        });
+        }, tenantId);
         createdAlerts.push(newAlert);
       }
     }
@@ -1692,7 +1714,7 @@ export class DatabaseStorage implements IStorage {
           spentPercentage: spentPercentage.toString(),
           remainingBudget: remainingBudget.toString(),
           tenantId
-        });
+        }, tenantId);
         createdAlerts.push(newAlert);
       }
     }

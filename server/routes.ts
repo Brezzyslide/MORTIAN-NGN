@@ -206,18 +206,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'X-Frame-Options': 'DENY'
       });
       
-      const companies = await storage.getCompanies();
+      // Use the dedicated public companies method that doesn't require authentication
+      const companies = await storage.getPublicCompanies();
       
-      // Sanitize response - only return safe public fields
-      const sanitizedCompanies = companies.map(company => ({
-        id: company.id,
-        name: company.name,
-        industry: company.industry,
-        status: company.status
-        // Deliberately exclude email and other sensitive fields
-      }));
-      
-      res.json(sanitizedCompanies);
+      res.json(companies);
     } catch (error) {
       console.error("Error fetching companies for login:", error);
       res.status(500).json({ message: "Failed to fetch companies" });
@@ -238,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { email, password } = loginData;
 
       // Find user by email
-      const user = await storage.getUserByEmail(email);
+      const user = await storage.getUserByEmail(email, '', true);
       
       // Generic error message for security (don't reveal if email exists)
       const invalidCredentialsError = {
@@ -726,7 +718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Company management routes (for console managers only)
   app.get('/api/companies', authorize(['console_manager']), async (req: any, res) => {
     try {
-      const companies = await storage.getCompanies();
+      const companies = await storage.getCompanies(req.tenant.role);
       res.json(companies);
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -745,7 +737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const company = await storage.createCompany({
         ...companyData,
         createdBy: userId,
-      });
+      }, req.tenant.tenantId, req.tenant.role);
 
       // Hash the admin password
       const saltRounds = 12;
@@ -811,7 +803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.userContext;
       const companyData = insertCompanySchema.omit({ createdBy: true }).partial().parse(req.body);
-      const company = await storage.updateCompany(req.params.id, companyData);
+      const company = await storage.updateCompany(req.params.id, companyData, req.tenant.tenantId, req.tenant.role);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -861,13 +853,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { newPassword } = companyPasswordChangeSchema.parse(req.body);
 
       // Verify company exists
-      const company = await storage.getCompany(companyId);
+      const company = await storage.getCompany(companyId, req.tenant.tenantId);
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
       }
 
       // Find the admin user for this company (assuming email matches company email)
-      const adminUser = await storage.getUserByEmail(company.email);
+      const adminUser = await storage.getUserByEmail(company.email, companyId, true);
       if (!adminUser || adminUser.tenantId !== companyId) {
         return res.status(404).json({ message: "Company admin user not found" });
       }
@@ -920,7 +912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
       const companyData = insertCompanySchema.partial().parse(req.body);
-      const company = await storage.updateCompany(req.params.id, companyData);
+      const company = await storage.updateCompany(req.params.id, companyData, req.tenant.tenantId, req.tenant.role);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -1646,7 +1638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Create cost allocation with material allocations
-      const costAllocation = await storage.createCostAllocation(costAllocationData, materialAllocationsData);
+      const costAllocation = await storage.createCostAllocation(costAllocationData, materialAllocationsData, tenantId);
       
       // Check and create budget alerts if thresholds are crossed
       try {
@@ -1948,7 +1940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
       
-      const workflow = await storage.createApprovalWorkflow(workflowData);
+      const workflow = await storage.createApprovalWorkflow(workflowData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -2012,7 +2004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
       
-      const workflow = await storage.createApprovalWorkflow(workflowData);
+      const workflow = await storage.createApprovalWorkflow(workflowData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -2485,7 +2477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const material = await storage.createMaterial(materialData);
+      const material = await storage.createMaterial(materialData, tenantId);
       
       // Create audit log
       await storage.createAuditLog({
@@ -2817,7 +2809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               severity: alertType === 'over_budget' ? 'critical' : (alertType === 'critical_threshold' ? 'critical' : 'warning'),
               message: generateBudgetAlertMessage(project.title, variance),
               tenantId
-            });
+            }, tenantId);
           }
         }
       }
@@ -3001,7 +2993,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 severity: alertType === 'over_budget' ? 'critical' : (alertType === 'critical_threshold' ? 'critical' : 'warning'),
                 message: generateBudgetAlertMessage(project.title, variance),
                 tenantId
-              });
+              }, tenantId);
             }
           }
         }
