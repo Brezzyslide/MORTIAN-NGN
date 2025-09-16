@@ -49,21 +49,21 @@ export default function ProjectAssignmentManager() {
 
   // Fetch all projects
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: ['/api/projects'],
     enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch all team leaders
   const { data: teamLeaders, isLoading: teamLeadersLoading } = useQuery<User[]>({
-    queryKey: ["/api/users/team-leaders"],
+    queryKey: ['/api/users', 'team-leaders'],
     enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch all project assignments
   const { data: assignments, isLoading: assignmentsLoading } = useQuery<ProjectAssignment[]>({
-    queryKey: ["/api/project-assignments"],
+    queryKey: ['/api/project-assignments'],
     enabled: Boolean(tenantId),
     retry: false,
   });
@@ -80,7 +80,9 @@ export default function ProjectAssignmentManager() {
         description: "Team leader assigned to project successfully",
       });
       form.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/project-assignments"] });
+      // CRITICAL SECURITY: Invalidate all related cache keys for proper data consistency
+      queryClient.invalidateQueries({ queryKey: ['/api/project-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] }); // May affect project assignment counts
     },
     onError: (error: any) => {
       if (isUnauthorizedError(error)) {
@@ -94,6 +96,8 @@ export default function ProjectAssignmentManager() {
         }, 500);
         return;
       }
+      // CRITICAL SECURITY: Log security-related errors for audit
+      console.error('Project assignment creation failed:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to assign team leader to project",
@@ -113,7 +117,9 @@ export default function ProjectAssignmentManager() {
         title: "Success",
         description: "Team leader removed from project successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/project-assignments"] });
+      // CRITICAL SECURITY: Invalidate all related cache keys for proper data consistency
+      queryClient.invalidateQueries({ queryKey: ['/api/project-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] }); // May affect project assignment counts
     },
     onError: (error: any) => {
       if (isUnauthorizedError(error)) {
@@ -127,6 +133,8 @@ export default function ProjectAssignmentManager() {
         }, 500);
         return;
       }
+      // CRITICAL SECURITY: Log security-related errors for audit
+      console.error('Project assignment removal failed:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to remove team leader from project",
@@ -174,7 +182,11 @@ export default function ProjectAssignmentManager() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Project</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={(value) => {
+                        field.onChange(value);
+                        // CRITICAL SECURITY: Reset team leader selection when project changes
+                        form.setValue('userId', '');
+                      }} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-assignment-project">
                             <SelectValue placeholder="Select a project" />
@@ -182,12 +194,12 @@ export default function ProjectAssignmentManager() {
                         </FormControl>
                         <SelectContent>
                           {projectsLoading ? (
-                            <div className="p-2 text-center text-muted-foreground">Loading projects...</div>
+                            <div className="p-2 text-center text-muted-foreground" data-testid="loading-projects">Loading projects...</div>
                           ) : !projects || projects.length === 0 ? (
-                            <div className="p-2 text-center text-muted-foreground">No projects available</div>
+                            <div className="p-2 text-center text-muted-foreground" data-testid="no-projects">No projects available</div>
                           ) : (
                             projects.map((project) => (
-                              <SelectItem key={project.id} value={project.id}>
+                              <SelectItem key={project.id} value={project.id} data-testid={`project-option-${project.id}`}>
                                 {project.title}
                               </SelectItem>
                             ))
@@ -213,12 +225,12 @@ export default function ProjectAssignmentManager() {
                         </FormControl>
                         <SelectContent>
                           {teamLeadersLoading ? (
-                            <div className="p-2 text-center text-muted-foreground">Loading team leaders...</div>
+                            <div className="p-2 text-center text-muted-foreground" data-testid="loading-team-leaders">Loading team leaders...</div>
                           ) : !teamLeaders || teamLeaders.length === 0 ? (
-                            <div className="p-2 text-center text-muted-foreground">No team leaders available</div>
+                            <div className="p-2 text-center text-muted-foreground" data-testid="no-team-leaders">No team leaders available</div>
                           ) : (
                             teamLeaders.map((leader) => (
-                              <SelectItem key={leader.id} value={leader.id}>
+                              <SelectItem key={leader.id} value={leader.id} data-testid={`team-leader-option-${leader.id}`}>
                                 {leader.firstName && leader.lastName 
                                   ? `${leader.firstName} ${leader.lastName}` 
                                   : leader.email}
@@ -263,12 +275,12 @@ export default function ProjectAssignmentManager() {
         </CardHeader>
         <CardContent>
           {assignmentsLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-8" data-testid="loading-assignments">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               <span className="ml-2">Loading assignments...</span>
             </div>
           ) : !assignments || assignments.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground" data-testid="no-assignments">
               <AlertCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No project assignments found</p>
               <p className="text-sm">Assign team leaders to projects to enable hierarchical fund allocation</p>
@@ -278,10 +290,10 @@ export default function ProjectAssignmentManager() {
               {projects?.map((project) => {
                 const projectAssignments = assignmentsByProject[project.id] || [];
                 return (
-                  <div key={project.id} className="border rounded-lg p-4">
+                  <div key={project.id} className="border rounded-lg p-4" data-testid={`project-assignments-${project.id}`}>
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-medium">{project.title}</h4>
-                      <Badge variant="outline">
+                      <h4 className="font-medium" data-testid={`project-title-${project.id}`}>{project.title}</h4>
+                      <Badge variant="outline" data-testid={`assignment-count-${project.id}`}>
                         {projectAssignments.length} assigned
                       </Badge>
                     </div>

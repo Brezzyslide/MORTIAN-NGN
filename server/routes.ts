@@ -1032,15 +1032,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project assignment routes
-  app.get('/api/projects/:projectId/team-leaders', isAuthenticated, async (req: any, res) => {
+  app.get('/api/projects/:projectId/team-leaders', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
       const { projectId } = req.params;
+      const { tenantId } = req.tenant;
       
       if (!isValidUUID(projectId)) {
         return res.status(400).json({ message: "Invalid project ID format" });
       }
       
+      // CRITICAL SECURITY: Verify project belongs to requesting tenant
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+      
+      // Get team leaders assigned to this specific project, filtered by tenant/role/status
       const teamLeaders = await storage.getAssignedTeamLeadersByProject(projectId, tenantId);
       res.json(teamLeaders);
     } catch (error) {
@@ -1049,9 +1056,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/project-assignments', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+  app.get('/api/project-assignments', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
+      const { tenantId } = req.tenant;
       const assignments = await storage.getProjectAssignments(tenantId);
       res.json(assignments);
     } catch (error) {
@@ -1060,13 +1067,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/project-assignments/:projectId', isAuthenticated, async (req: any, res) => {
+  app.get('/api/project-assignments/:projectId', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
       const { projectId } = req.params;
+      const { tenantId } = req.tenant;
       
       if (!isValidUUID(projectId)) {
         return res.status(400).json({ message: "Invalid project ID format" });
+      }
+      
+      // CRITICAL SECURITY: Verify project belongs to requesting tenant
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
       }
       
       const assignments = await storage.getProjectAssignmentsByProject(projectId, tenantId);
@@ -1077,15 +1090,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/project-assignments', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+  app.post('/api/project-assignments', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = await getUserData(req);
+      const { userId, tenantId } = req.tenant;
       
       const assignmentData = insertProjectAssignmentSchema.parse({
         ...req.body,
         assignedBy: userId,
         tenantId,
       });
+
+      // CRITICAL SECURITY: Verify project belongs to requesting tenant before assignment
+      const project = await storage.getProject(assignmentData.projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+
+      // CRITICAL SECURITY: Verify target user belongs to requesting tenant
+      const targetUser = await storage.getUser(assignmentData.userId, tenantId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found or access denied" });
+      }
+
+      // Verify target user is a team leader and active
+      if (targetUser.role !== 'team_leader') {
+        return res.status(400).json({ message: "Only team leaders can be assigned to projects" });
+      }
+      if (targetUser.status !== 'active') {
+        return res.status(400).json({ message: "Cannot assign inactive user to project" });
+      }
 
       // Check if assignment already exists
       const existingAssignments = await storage.getProjectAssignmentsByProject(assignmentData.projectId, tenantId);
@@ -1097,15 +1130,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const assignment = await storage.createProjectAssignment(assignmentData, tenantId);
       
-      // Create audit log
+      // Create comprehensive audit log
       await storage.createAuditLog({
         userId,
-        action: "project_created", // Using existing action, could add new one
+        action: "project_assignment_created",
         entityType: "project_assignment",
         entityId: assignment.id,
         projectId: assignment.projectId,
         tenantId,
-        details: { assignedUser: assignment.userId },
+        details: { 
+          assignedUser: assignment.userId,
+          assignedUserName: `${targetUser.firstName} ${targetUser.lastName}` || targetUser.email,
+          projectTitle: project.title 
+        },
       }, tenantId);
 
       res.json(assignment);
@@ -1118,13 +1155,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/project-assignments/:projectId/:userId', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+  app.delete('/api/project-assignments/:projectId/:userId', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId: currentUserId, tenantId } = await getUserData(req);
+      const { userId: currentUserId, tenantId } = req.tenant;
       const { projectId, userId } = req.params;
       
-      if (!isValidUUID(projectId) || !isValidUUID(userId)) {
-        return res.status(400).json({ message: "Invalid project or user ID format" });
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format" });
+      }
+      
+      // Note: userId parameter can be varchar (user IDs) so don't validate as UUID
+      if (!userId || userId.trim() === '') {
+        return res.status(400).json({ message: "Invalid user ID format" });
+      }
+      
+      // CRITICAL SECURITY: Verify project belongs to requesting tenant
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+
+      // CRITICAL SECURITY: Verify user belongs to requesting tenant
+      const targetUser = await storage.getUser(userId, tenantId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found or access denied" });
       }
       
       const success = await storage.deleteProjectAssignment(projectId, userId, tenantId);
@@ -1133,15 +1187,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Project assignment not found" });
       }
       
-      // Create audit log
+      // Create comprehensive audit log
       await storage.createAuditLog({
         userId: currentUserId,
-        action: "project_updated", // Using existing action
+        action: "project_assignment_removed",
         entityType: "project_assignment",
         entityId: `${projectId}-${userId}`,
         projectId,
         tenantId,
-        details: { removedUser: userId },
+        details: { 
+          removedUser: userId,
+          removedUserName: `${targetUser.firstName} ${targetUser.lastName}` || targetUser.email,
+          projectTitle: project.title 
+        },
       }, tenantId);
 
       res.json({ success: true, message: "Project assignment removed successfully" });

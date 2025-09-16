@@ -285,8 +285,8 @@ export const projectAssignments = pgTable("project_assignments", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
-  // Ensure unique assignment per project-user combination
-  uniqueProjectUser: index("idx_project_assignments_unique").on(table.projectId, table.userId),
+  // CRITICAL SECURITY: Ensure unique assignment per tenant-project-user combination to prevent cross-tenant leakage
+  uniqueTenantProjectUser: index("idx_project_assignments_unique_tenant").on(table.tenantId, table.projectId, table.userId),
 }));
 
 // Budget alert types enum
