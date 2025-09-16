@@ -1450,7 +1450,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(approvalWorkflows)
       .leftJoin(users, eq(approvalWorkflows.approverId, users.id))
-      .leftJoin(costAllocations, eq(approvalWorkflows.recordId, costAllocations.id))
+      .leftJoin(costAllocations, sql`${approvalWorkflows.recordId}::uuid = ${costAllocations.id}`)
       .leftJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
       .leftJoin(projects, eq(costAllocations.projectId, projects.id))
       .where(and(...whereConditions))

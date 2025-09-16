@@ -53,13 +53,12 @@ import {
 import { Plus, Edit, UserCheck, UserX, Users, Key } from "lucide-react";
 
 
-// Create form validation schema matching backend adminCreateUserSchema
+// Create form validation schema - removed tenantId as backend will set companyId from auth context
 const createUserSchema = z.object({
   email: z.string().email("Please enter a valid email address").max(255),
   firstName: z.string().min(1, "First name is required").max(100),
   lastName: z.string().min(1, "Last name is required").max(100),
   role: z.enum(["admin", "team_leader", "user", "viewer"]).default("viewer"),
-  tenantId: z.string().min(1, "Tenant ID is required").max(255),
   temporaryPassword: z.string().min(8, "Temporary password must be at least 8 characters").max(255),
 });
 
@@ -83,8 +82,8 @@ export default function UserManagement() {
     );
   }
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  // State for console manager company selection
-  const [selectedTenantId, setSelectedTenantId] = useState<string>(tenantId || "");
+  // Get current user's company for display only
+  const currentUserCompany = user?.companyId || tenantId;
 
   // Initialize form with react-hook-form and zodResolver
   const form = useForm<CreateUserFormData>({
@@ -94,7 +93,6 @@ export default function UserManagement() {
       firstName: "",
       lastName: "",
       role: "viewer" as const,
-      tenantId: tenantId || "",
       temporaryPassword: "",
     },
   });
@@ -104,45 +102,32 @@ export default function UserManagement() {
     queryKey: ["/api/admin/users"],
   });
 
-  // Fetch companies for console managers or current company for regular admins
-  const { data: companies = [] } = useQuery<Company[]>({
-    queryKey: ["/api/companies"],
-    enabled: isConsoleManager,
+  // Fetch current user's company for display only
+  const { data: currentCompany } = useQuery<Company>({
+    queryKey: ["/api/auth/company"],
+    enabled: !!user,
   });
 
-  const { data: publicCompanies = [] } = useQuery<Company[]>({
-    queryKey: ["/api/auth/companies"],
-    enabled: !isConsoleManager && !!tenantId,
-  });
-
-  // Get current company for display
-  const currentCompany = isConsoleManager 
-    ? companies.find(c => c.id === selectedTenantId)
-    : publicCompanies.find(c => c.id === tenantId);
-
-  // Reset form tenantId when user context or selection changes
-  useEffect(() => {
-    const targetTenantId = isConsoleManager ? selectedTenantId : tenantId;
-    if (targetTenantId) {
-      form.setValue('tenantId', targetTenantId);
+  // Get available roles based on current user's role
+  const getAvailableRoles = () => {
+    switch (user?.role) {
+      case 'console_manager':
+        return ['admin', 'team_leader', 'user', 'viewer'];
+      case 'admin':
+        return ['team_leader', 'user', 'viewer'];
+      default:
+        return []; // Other roles cannot create users
     }
-  }, [tenantId, selectedTenantId, isConsoleManager, form]);
+  };
 
-  // Update selectedTenantId when tenantId changes for non-console managers
-  useEffect(() => {
-    if (!isConsoleManager && tenantId) {
-      setSelectedTenantId(tenantId);
-    }
-  }, [tenantId, isConsoleManager]);
+  const availableRoles = getAvailableRoles();
 
   // Create user mutation
   const createUserMutation = useMutation({
     mutationFn: async (userData: CreateUserFormData) => {
-      // Validate tenantId is set before submitting
-      if (!userData.tenantId) {
-        throw new Error("Please select a company first");
-      }
-      return apiRequest("POST", "/api/admin/users", userData);
+      // Remove any tenantId/companyId from payload - backend will set from auth context
+      const { ...payloadData } = userData;
+      return apiRequest("POST", "/api/admin/users", payloadData);
     },
     onSuccess: () => {
       toast({
@@ -364,40 +349,17 @@ export default function UserManagement() {
                     )}
                   />
                 </div>
-                {/* Company Selection - Console Manager or Read-only display */}
-                {isConsoleManager ? (
-                  <div className="space-y-2">
-                    <Label>Select Organization *</Label>
-                    <Select value={selectedTenantId} onValueChange={(value) => {
-                      setSelectedTenantId(value);
-                      form.setValue('tenantId', value);
-                    }}>
-                      <SelectTrigger data-testid="select-company">
-                        <SelectValue placeholder="Select organization" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companies.map((company) => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Select which organization to create the user for
-                    </p>
+                {/* Company Display - Auto-populated from current user context */}
+                <div className="space-y-2">
+                  <Label>Organization</Label>
+                  <div className="px-3 py-2 bg-muted/30 border border-dashed rounded-md text-sm flex items-center justify-between" data-testid="text-current-company">
+                    <span>{currentCompany?.name || "Loading..."}</span>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-sm">Auto-populated</span>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label>Organization</Label>
-                    <div className="px-3 py-2 bg-muted border rounded-md text-sm text-muted-foreground" data-testid="text-current-company">
-                      {currentCompany?.name || "Loading..."}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      New users will be added to your organization
-                    </p>
-                  </div>
-                )}
+                  <p className="text-xs text-muted-foreground">
+                    New users will be added to your organization automatically
+                  </p>
+                </div>
                 
                 {/* Temporary Password Field */}
                 <FormField
@@ -428,20 +390,26 @@ export default function UserManagement() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Role</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={availableRoles.length === 0}>
                         <FormControl>
                           <SelectTrigger data-testid="select-user-role">
-                            <SelectValue placeholder="Select role" />
+                            <SelectValue placeholder={availableRoles.length === 0 ? "No permission to create users" : "Select role"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="viewer">Viewer</SelectItem>
-                          <SelectItem value="user">User</SelectItem>
-                          <SelectItem value="team_leader">Team Leader</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
+                          {availableRoles.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role === 'team_leader' ? 'Team Leader' : role.charAt(0).toUpperCase() + role.slice(1)}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
+                      {availableRoles.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          You don't have permission to create users
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
@@ -456,7 +424,7 @@ export default function UserManagement() {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={createUserMutation.isPending}
+                    disabled={createUserMutation.isPending || availableRoles.length === 0}
                     data-testid="button-submit-user"
                   >
                     {createUserMutation.isPending ? "Creating..." : "Create User"}

@@ -30,7 +30,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-// Create user schema
+// Create user schema - removed tenantId as backend will set companyId from auth context
 const createUserSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   firstName: z.string().min(1, "First name is required"),
@@ -38,7 +38,6 @@ const createUserSchema = z.object({
   role: z.enum(['admin', 'team_leader', 'user', 'viewer'], {
     errorMap: () => ({ message: "Please select a valid role" })
   }),
-  tenantId: z.string().min(1, "Tenant ID is required"),
   temporaryPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
@@ -54,7 +53,8 @@ interface User {
   mustChangePassword?: boolean;
   failedLoginCount?: number;
   lockedUntil?: string | null;
-  tenantId: string;
+  tenantId?: string;
+  companyId?: string;
   createdAt: string;
 }
 
@@ -106,6 +106,26 @@ export default function AdminUsers() {
     document.title = "User Management - ProjectFund";
   }, []);
 
+  // Get current user from auth context
+  const { data: currentUser } = useQuery<User>({
+    queryKey: ['/api/auth/user'],
+    staleTime: 60_000,
+  });
+
+  // Get available roles based on current user's role
+  const getAvailableRoles = () => {
+    switch (currentUser?.role) {
+      case 'console_manager':
+        return ['admin', 'team_leader', 'user', 'viewer'];
+      case 'admin':
+        return ['team_leader', 'user', 'viewer'];
+      default:
+        return []; // Other roles cannot create users
+    }
+  };
+
+  const availableRoles = getAvailableRoles();
+
   // Generate secure password
   const generatePassword = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
@@ -116,9 +136,10 @@ export default function AdminUsers() {
     return password;
   };
 
-  // Fetch companies for tenant selection
-  const { data: companies = [], isLoading: companiesLoading } = useQuery<Company[]>({
-    queryKey: ['/api/auth/companies'],
+  // Fetch current user's company for display only
+  const { data: currentCompany } = useQuery<Company>({
+    queryKey: ['/api/auth/company'],
+    enabled: !!currentUser,
     staleTime: 60_000,
   });
 
@@ -136,15 +157,19 @@ export default function AdminUsers() {
       firstName: "",
       lastName: "",
       role: "user",
-      tenantId: "",
       temporaryPassword: ""
     }
   });
 
   // Create user mutation
   const createUserMutation = useMutation({
-    mutationFn: (data: CreateUserFormValues) => apiRequest('POST', '/api/admin/users', data),
-    onSuccess: (response) => {
+    mutationFn: async (data: CreateUserFormValues) => {
+      // Remove any tenantId/companyId from payload - backend will set from auth context
+      const { ...payloadData } = data;
+      const response = await apiRequest('POST', '/api/admin/users', payloadData);
+      return response as unknown as User;
+    },
+    onSuccess: (response: User) => {
       toast({
         title: "User Created Successfully",
         description: `${response.firstName} ${response.lastName} has been added to the system.`,
@@ -304,55 +329,55 @@ export default function AdminUsers() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Role</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={availableRoles.length === 0}>
                         <FormControl>
                           <SelectTrigger data-testid="select-create-role">
-                            <SelectValue placeholder="Select role" />
+                            <SelectValue placeholder={availableRoles.length === 0 ? "No permission to create users" : "Select role"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {Object.entries(roleDescriptions).map(([key, role]) => (
-                            <SelectItem key={key} value={key}>
-                              <div className="flex items-center space-x-2">
-                                <div className={`w-3 h-3 rounded-full ${role.color}`} />
-                                <div>
-                                  <div className="font-medium">{role.title}</div>
-                                  <div className="text-xs text-muted-foreground">{role.description}</div>
+                          {availableRoles.map((roleKey) => {
+                            const role = roleDescriptions[roleKey as keyof typeof roleDescriptions];
+                            return (
+                              <SelectItem key={roleKey} value={roleKey}>
+                                <div className="flex items-center space-x-2">
+                                  <div className={`w-3 h-3 rounded-full ${role.color}`} />
+                                  <div>
+                                    <div className="font-medium">{role.title}</div>
+                                    <div className="text-xs text-muted-foreground">{role.description}</div>
+                                  </div>
                                 </div>
-                              </div>
-                            </SelectItem>
-                          ))}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                       <FormMessage />
+                      {availableRoles.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          You don't have permission to create users
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="tenantId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={companiesLoading}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-create-tenant">
-                            <SelectValue placeholder={companiesLoading ? "Loading..." : "Select company"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {companies.map((company) => (
-                            <SelectItem key={company.id} value={company.id}>
-                              {company.name} {company.industry && `(${company.industry})`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Company Display - Auto-populated from current user context */}
+                <div className="space-y-2">
+                  <Label>Company</Label>
+                  <div className="px-3 py-2 bg-muted/30 border border-dashed rounded-md text-sm flex items-center justify-between" data-testid="text-current-company">
+                    <div className="flex items-center space-x-2">
+                      <span>{currentCompany?.name || "Loading..."}</span>
+                      {currentCompany?.industry && (
+                        <span className="text-muted-foreground">({currentCompany.industry})</span>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-sm">Auto-populated</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    New users will be added to your company automatically
+                  </p>
+                </div>
 
                 <FormField
                   control={form.control}
@@ -415,7 +440,7 @@ export default function AdminUsers() {
                   </Button>
                   <Button 
                     type="submit" 
-                    disabled={createUserMutation.isPending}
+                    disabled={createUserMutation.isPending || availableRoles.length === 0}
                     data-testid="button-submit-create-user"
                   >
                     {createUserMutation.isPending ? (
