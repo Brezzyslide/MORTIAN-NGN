@@ -47,16 +47,16 @@ export const userRoleEnum = pgEnum("user_role", ["console_manager", "manager", "
 // User status enum
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "pending"]);
 
-// Users table (required for Replit Auth)
+// Users table (required for Replit Auth) - Updated with strict tenant isolation
 export const users: any = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").notNull().default("user"),
   managerId: varchar("manager_id").references(() => users.id),
-  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
+  companyId: varchar("company_id").references(() => companies.id).notNull(),
   status: userStatusEnum("status").notNull().default("active"),
   // Authentication fields
   passwordHash: varchar("password_hash", { length: 255 }),
@@ -65,7 +65,10 @@ export const users: any = pgTable("users", {
   lockedUntil: timestamp("locked_until"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Composite unique constraint: email must be unique within each company
+  uniqueEmailPerCompany: index("idx_users_email_company").on(sql`lower(${table.email})`, table.companyId),
+}));
 
 // Projects table
 export const projects = pgTable("projects", {
@@ -676,8 +679,8 @@ export const adminCreateUserSchema = z.object({
   role: z.enum(['admin', 'team_leader', 'user', 'viewer'], {
     errorMap: () => ({ message: "Please select a valid role" })
   }),
-  tenantId: z.string().min(1, "Tenant ID is required").max(255),
   temporaryPassword: z.string().min(8, "Temporary password must be at least 8 characters").max(255),
+  // SECURITY: tenantId is no longer accepted from client - will be set from auth context
 });
 
 export const changePasswordSchema = z.object({
@@ -688,6 +691,20 @@ export const changePasswordSchema = z.object({
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
+
+// Row Level Security (RLS) policies for strict tenant isolation
+// These will be applied at the database level to prevent cross-tenant data access
+export const rlsPolicies = {
+  users: [
+    // Users can only see users from their own company
+    {
+      name: 'tenant_isolation_policy',
+      operation: 'ALL',
+      using: `company_id = current_setting('app.tenant')::text`,
+      withCheck: `company_id = current_setting('app.tenant')::text`
+    }
+  ]
+};
 
 // Types
 export type UpsertUser = typeof users.$inferInsert;

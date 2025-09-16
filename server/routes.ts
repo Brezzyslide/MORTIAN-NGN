@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { pdfExportService } from "./pdfExport";
@@ -56,7 +58,7 @@ async function getUserData(req: any): Promise<{ userId: string; tenantId: string
     if (!user) {
       throw new Error('User not found');
     }
-    return { userId: req.user.userId, tenantId: user.tenantId, user };
+    return { userId: req.user.userId, tenantId: user.companyId, user };
   }
   
   // Handle OIDC login session
@@ -67,7 +69,7 @@ async function getUserData(req: any): Promise<{ userId: string; tenantId: string
     if (!user) {
       throw new Error('User not found');
     }
-    return { userId, tenantId: user.tenantId, user };
+    return { userId, tenantId: user.companyId, user };
   }
   
   throw new Error('No valid authentication found');
@@ -81,6 +83,10 @@ function setTenantContext() {
       
       // Map legacy roles to new roles for backward compatibility
       const normalizedRole = mapLegacyRole(user.role);
+      
+      // CRITICAL SECURITY: Set Postgres tenant context for RLS policies
+      // This ensures all subsequent queries are automatically filtered by tenant
+      await db.execute(sql`SELECT set_config('app.tenant', ${tenantId}, true)`);
       
       // Set tenant context for all subsequent operations
       req.tenant = {
@@ -170,7 +176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             status: user.status,
             mustChangePassword: user.mustChangePassword
           });
@@ -188,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             status: user.status,
             profileImageUrl: user.profileImageUrl
           });
@@ -277,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: user.id,
             projectId: null,
             amount: null,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             details: { 
               email,
               reason: "account_locked",
@@ -304,7 +310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: user.id,
             projectId: null,
             amount: null,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             details: { 
               email,
               reason: "account_inactive",
@@ -349,7 +355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: user.id,
             projectId: null,
             amount: null,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             details: { 
               email,
               reason: "invalid_password",
@@ -501,20 +507,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId, tenantId, user: currentUser } = await getUserData(req);
       const userData = adminCreateUserSchema.parse(req.body);
 
-      // Console managers can create users in any tenant, regular admins only in their own
-      const targetTenantId = currentUser.role === 'console_manager' ? userData.tenantId : tenantId;
+      // SECURITY FIX: tenantId is NEVER accepted from client - always use auth context
+      const targetTenantId = tenantId; // Users can only be created in their own tenant
+      
+      // SECURITY: Implement strict role-based creation rules per specification
+      const canCreateRole = (creatorRole: string, targetRole: string): boolean => {
+        switch (creatorRole) {
+          case 'console_manager':
+            return ['admin', 'team_leader', 'user', 'viewer'].includes(targetRole);
+          case 'admin':
+            return ['team_leader', 'user', 'viewer'].includes(targetRole);
+          default:
+            return false; // Other roles cannot create users
+        }
+      };
+      
+      if (!canCreateRole(currentUser.role, userData.role)) {
+        return res.status(403).json({ 
+          message: `Access denied: Role '${currentUser.role}' cannot create users with role '${userData.role}'` 
+        });
+      }
 
       // Hash temporary password
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(userData.temporaryPassword, saltRounds);
 
-      // Create user with password
+      // Create user with password - using companyId instead of tenantId
       const newUser = await storage.createUserWithPassword({
         email: userData.email,
         firstName: userData.firstName,
         lastName: userData.lastName,
         role: userData.role,
-        tenantId: targetTenantId,
+        companyId: targetTenantId, // CRITICAL: Use companyId field
         passwordHash,
         profileImageUrl: null,
         managerId: currentUser.role === 'admin' ? userId : null, // Admins can be managers

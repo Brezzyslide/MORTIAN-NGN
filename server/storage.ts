@@ -88,12 +88,16 @@ function validateTenantOwnership(requesterTenantId: string, dataObject: any, ope
     return;
   }
   
-  if (!dataObject.tenantId) {
-    throw new TenantSecurityError(`${operation} failed: Missing tenantId in data object`);
+  // For users table, check companyId; for other tables, check tenantId
+  const tenantField = dataObject.companyId !== undefined ? dataObject.companyId : dataObject.tenantId;
+  const fieldName = dataObject.companyId !== undefined ? 'companyId' : 'tenantId';
+  
+  if (!tenantField) {
+    throw new TenantSecurityError(`${operation} failed: Missing ${fieldName} in data object`);
   }
   
-  if (dataObject.tenantId !== requesterTenantId) {
-    throw new TenantSecurityError(`${operation} failed: Cannot create/modify data for tenant ${dataObject.tenantId} while authenticated to tenant ${requesterTenantId}`);
+  if (tenantField !== requesterTenantId) {
+    throw new TenantSecurityError(`${operation} failed: Cannot create/modify data for tenant ${tenantField} while authenticated to tenant ${requesterTenantId}`);
   }
 }
 
@@ -394,7 +398,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .select()
       .from(users)
-      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
+      .where(and(eq(users.id, id), eq(users.companyId, tenantId)));
     return user;
   }
 
@@ -402,7 +406,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .select()
       .from(users)
-      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
+      .where(and(eq(users.id, id), eq(users.companyId, tenantId)));
     return user;
   }
 
@@ -413,7 +417,7 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(and(
         eq(users.id, id), 
-        eq(users.tenantId, tenantId),
+        eq(users.companyId, tenantId),
         eq(users.status, 'active')
       ));
     return user;
@@ -451,9 +455,9 @@ export class DatabaseStorage implements IStorage {
           
         if (existingUser) {
           // CRITICAL SECURITY FIX: Prevent cross-tenant takeover - verify tenant ownership
-          if (existingUser.tenantId !== requesterTenantId) {
+          if (existingUser.companyId !== requesterTenantId) {
             throw new TenantSecurityError(
-              `SECURITY VIOLATION: Cannot update user with email ${userData.email} - user belongs to tenant ${existingUser.tenantId} but requester is from tenant ${requesterTenantId}. Cross-tenant user updates are forbidden.`
+              `SECURITY VIOLATION: Cannot update user with email ${userData.email} - user belongs to tenant ${existingUser.companyId} but requester is from tenant ${requesterTenantId}. Cross-tenant user updates are forbidden.`
             );
           }
           
@@ -464,7 +468,7 @@ export class DatabaseStorage implements IStorage {
               ...userData,
               updatedAt: new Date(),
             })
-            .where(and(eq(users.email, userData.email!), eq(users.tenantId, requesterTenantId)))
+            .where(and(eq(users.email, userData.email!), eq(users.companyId, requesterTenantId)))
             .returning();
           return updatedUser;
         }
@@ -625,7 +629,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(users)
-      .where(and(eq(users.managerId, managerId), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.managerId, managerId), eq(users.companyId, tenantId)))
       .orderBy(users.firstName);
   }
 
@@ -633,7 +637,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(users)
-      .where(and(eq(users.role, role), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.role, role), eq(users.companyId, tenantId)))
       .orderBy(users.firstName);
   }
 
@@ -641,7 +645,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(users)
-      .where(eq(users.tenantId, tenantId))
+      .where(eq(users.companyId, tenantId))
       .orderBy(users.firstName);
   }
 
@@ -649,7 +653,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedUser] = await db
       .update(users)
       .set({ role: role as any })
-      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.id, userId), eq(users.companyId, tenantId)))
       .returning();
     return updatedUser;
   }
@@ -658,7 +662,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedUser] = await db
       .update(users)
       .set({ status: status as any })
-      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.id, userId), eq(users.companyId, tenantId)))
       .returning();
     return updatedUser;
   }
@@ -679,7 +683,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .select()
       .from(users)
-      .where(and(eq(users.email, email), eq(users.tenantId, tenantId)));
+      .where(and(eq(users.email, email), eq(users.companyId, tenantId)));
     return user;
   }
 
@@ -699,7 +703,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedUser] = await db
       .update(users)
       .set(updateData)
-      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.id, userId), eq(users.companyId, tenantId)))
       .returning();
     return updatedUser;
   }
@@ -712,7 +716,7 @@ export class DatabaseStorage implements IStorage {
         failedLoginCount: sql`${users.failedLoginCount} + 1`,
         updatedAt: new Date()
       })
-      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.id, userId), eq(users.companyId, tenantId)))
       .returning();
     return updatedUser;
   }
@@ -725,7 +729,7 @@ export class DatabaseStorage implements IStorage {
         lockedUntil: lockUntil,
         updatedAt: new Date()
       })
-      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.id, userId), eq(users.companyId, tenantId)))
       .returning();
     return updatedUser;
   }
@@ -739,15 +743,15 @@ export class DatabaseStorage implements IStorage {
         lockedUntil: null,
         updatedAt: new Date()
       })
-      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+      .where(and(eq(users.id, userId), eq(users.companyId, tenantId)))
       .returning();
     return updatedUser;
   }
 
   async createUserWithPassword(userData: Omit<UpsertUser, 'id'> & { passwordHash: string }, requesterTenantId: string): Promise<User> {
     // CRITICAL SECURITY FIX: Validate tenant ownership
-    if (userData.tenantId !== requesterTenantId) {
-      throw new TenantSecurityError(`Cannot create user for tenant ${userData.tenantId} while authenticated to tenant ${requesterTenantId}`);
+    if (userData.companyId !== requesterTenantId) {
+      throw new TenantSecurityError(`Cannot create user for tenant ${userData.companyId} while authenticated to tenant ${requesterTenantId}`);
     }
     
     const result = await db
