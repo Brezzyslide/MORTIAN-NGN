@@ -41,6 +41,12 @@ import {
 } from "./utils/calculations";
 import { z } from "zod";
 
+// UUID validation helper
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
 // Helper function to get user and tenantId from authenticated request
 async function getUserData(req: any): Promise<{ userId: string; tenantId: string; user: any }> {
   // Handle manual login session
@@ -948,8 +954,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/projects/:id', isAuthenticated, async (req: any, res) => {
     try {
+      const projectId = req.params.id;
+      
+      // Validate UUID format
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
+      }
+      
       const { tenantId } = await getUserData(req);
-      const project = await storage.getProject(req.params.id, tenantId);
+      const project = await storage.getProject(projectId, tenantId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
@@ -1158,8 +1171,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/project/:id', isAuthenticated, async (req: any, res) => {
     try {
+      const projectId = req.params.id;
+      
+      // Validate UUID format
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
+      }
+      
       const { tenantId } = await getUserData(req);
-      const stats = await storage.getProjectStats(req.params.id, tenantId);
+      const stats = await storage.getProjectStats(projectId, tenantId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching project stats:", error);
@@ -1702,8 +1722,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/cost-allocations/:projectId', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
       const projectId = req.params.projectId;
+      
+      // Validate UUID format
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
+      }
+      
+      const { tenantId } = await getUserData(req);
       
       // Verify project access
       const project = await storage.getProject(projectId, tenantId);
@@ -2036,8 +2062,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PDF Export routes
   app.get('/api/export/project/:id/pdf', isAuthenticated, async (req: any, res) => {
     try {
+      const projectId = req.params.id;
+      
+      // Validate UUID format
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
+      }
+      
       const { tenantId } = await getUserData(req);
-      const pdfBuffer = await pdfExportService.generateProjectSummary(req.params.id, tenantId);
+      const pdfBuffer = await pdfExportService.generateProjectSummary(projectId, tenantId);
       
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="project-${req.params.id}-summary.pdf"`);
@@ -3027,8 +3060,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/projects/:id/budget-history - Get complete budget history
   app.get('/api/projects/:id/budget-history', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
       const projectId = req.params.id;
+      
+      // Validate UUID format
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
+      }
+      
+      const { tenantId } = await getUserData(req);
       
       // Validate project exists and user has access
       const project = await storage.getProject(projectId, tenantId);
