@@ -50,6 +50,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 // Critical Security Helper Functions for Tenant Isolation
 class TenantSecurityError extends Error {
@@ -654,27 +655,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTeamLeadersWithHierarchy(tenantId: string): Promise<(User & { manager?: User })[]> {
-    // Use an alias for the managers table to avoid naming conflicts
-    const managers = users;
+    // Use aliases to avoid naming conflicts in the self-join
+    const teamLeaders = alias(users, 'team_leaders');
+    const managers = alias(users, 'managers');
     
     const result = await db
       .select({
         // Team leader fields
-        id: users.id,
-        email: users.email,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        profileImageUrl: users.profileImageUrl,
-        role: users.role,
-        managerId: users.managerId,
-        companyId: users.companyId,
-        status: users.status,
-        passwordHash: users.passwordHash,
-        mustChangePassword: users.mustChangePassword,
-        failedLoginCount: users.failedLoginCount,
-        lockedUntil: users.lockedUntil,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
+        id: teamLeaders.id,
+        email: teamLeaders.email,
+        firstName: teamLeaders.firstName,
+        lastName: teamLeaders.lastName,
+        profileImageUrl: teamLeaders.profileImageUrl,
+        role: teamLeaders.role,
+        managerId: teamLeaders.managerId,
+        companyId: teamLeaders.companyId,
+        status: teamLeaders.status,
+        passwordHash: teamLeaders.passwordHash,
+        mustChangePassword: teamLeaders.mustChangePassword,
+        failedLoginCount: teamLeaders.failedLoginCount,
+        lockedUntil: teamLeaders.lockedUntil,
+        createdAt: teamLeaders.createdAt,
+        updatedAt: teamLeaders.updatedAt,
         // Manager fields (prefixed with manager_)
         manager_id: managers.id,
         manager_email: managers.email,
@@ -683,13 +685,16 @@ export class DatabaseStorage implements IStorage {
         manager_profileImageUrl: managers.profileImageUrl,
         manager_role: managers.role,
       })
-      .from(users)
-      .leftJoin(managers, eq(users.managerId, managers.id))
-      .where(and(
-        eq(users.role, 'team_leader'),
-        eq(users.companyId, tenantId)
+      .from(teamLeaders)
+      .leftJoin(managers, and(
+        eq(teamLeaders.managerId, managers.id),
+        eq(managers.companyId, tenantId) // Ensure managers are also from the same tenant
       ))
-      .orderBy(users.firstName);
+      .where(and(
+        eq(teamLeaders.role, 'team_leader'),
+        eq(teamLeaders.companyId, tenantId)
+      ))
+      .orderBy(teamLeaders.firstName);
 
     // Transform the result to include manager as a nested object
     return result.map(row => {

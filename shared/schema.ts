@@ -1,6 +1,7 @@
 import { sql, relations } from "drizzle-orm";
 import {
   index,
+  uniqueIndex,
   jsonb,
   pgTable,
   timestamp,
@@ -286,7 +287,7 @@ export const projectAssignments = pgTable("project_assignments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   // CRITICAL SECURITY: Ensure unique assignment per tenant-project-user combination to prevent cross-tenant leakage
-  uniqueTenantProjectUser: index("idx_project_assignments_unique_tenant").on(table.tenantId, table.projectId, table.userId),
+  uniqueTenantProjectUser: uniqueIndex("idx_project_assignments_unique_tenant").on(table.tenantId, table.projectId, table.userId),
 }));
 
 // Budget alert types enum
