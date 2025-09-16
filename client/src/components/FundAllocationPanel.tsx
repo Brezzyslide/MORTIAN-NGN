@@ -61,13 +61,13 @@ export default function FundAllocationPanel() {
   });
 
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useQuery<Project[]>({
-    queryKey: ["/api/projects", tenantId],
+    queryKey: ["/api/projects"],
     enabled: Boolean(tenantId),
     retry: false,
   });
 
   const { data: teamLeaders, isLoading: teamLeadersLoading, error: teamLeadersError } = useQuery<User[]>({
-    queryKey: ["/api/users/team-leaders", tenantId],
+    queryKey: ["/api/users/team-leaders"],
     enabled: Boolean(tenantId),
     retry: false,
   });
@@ -113,9 +113,9 @@ export default function FundAllocationPanel() {
         description: "Fund allocation created successfully",
       });
       form.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/fund-allocations", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/transactions", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/fund-allocations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant"] });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
