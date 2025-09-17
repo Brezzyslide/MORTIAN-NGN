@@ -685,8 +685,8 @@ export class DatabaseStorage implements IStorage {
         manager_profileImageUrl: managers.profileImageUrl,
         manager_role: managers.role,
       })
-      .from(teamLeaders)
-      .leftJoin(managers, and(
+      .from(teamLeaders as any)
+      .leftJoin(managers as any, and(
         eq(teamLeaders.managerId, managers.id),
         eq(managers.companyId, tenantId) // Ensure managers are also from the same tenant
       ))
@@ -2342,7 +2342,7 @@ export class DatabaseStorage implements IStorage {
       tenantId: result.tenantId,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
-      project: result.project,
+      project: result.project as Project,
       user: result.user,
     }));
   }
@@ -2391,7 +2391,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAssignedTeamLeadersByProject(projectId: string, tenantId: string): Promise<(User & { manager?: User })[]> {
     // Use an alias for the managers table to avoid naming conflicts
-    const managers = users;
+    const managers = alias(users, 'managers');
     
     const results = await db
       .select({
@@ -2421,7 +2421,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(projectAssignments)
       .leftJoin(users, eq(projectAssignments.userId, users.id))
-      .leftJoin(managers, eq(users.managerId, managers.id))
+      .leftJoin(managers as any, eq(users.managerId, managers.id))
       .where(and(
         eq(projectAssignments.projectId, projectId),
         eq(projectAssignments.tenantId, tenantId),
@@ -2518,7 +2518,7 @@ export class DatabaseStorage implements IStorage {
       tenantId: result.tenantId,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
-      project: result.project,
+      project: result.project as Project,
     }));
   }
 

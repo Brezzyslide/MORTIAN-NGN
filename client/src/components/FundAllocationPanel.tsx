@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Users, ArrowRight, Building, Crown } from "lucide-react";
+import { ChevronDown, ChevronUp, Users, ArrowRight, Building, Crown, UserPlus, CheckCircle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Project, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const allocationSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -69,9 +71,12 @@ const formatTeamLeaderHierarchy = (leader: UserWithManager): string => {
 export default function FundAllocationPanel() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const tenantId = user?.tenantId;
   const [selectedTeamLeaderId, setSelectedTeamLeaderId] = useState<string>("");
   const [isTeamMembersExpanded, setIsTeamMembersExpanded] = useState(false);
+  const [isAssignmentExpanded, setIsAssignmentExpanded] = useState(false);
+  const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
 
   const form = useForm<AllocationFormData>({
     resolver: zodResolver(allocationSchema),
@@ -123,6 +128,13 @@ export default function FundAllocationPanel() {
       }
     },
     enabled: Boolean(tenantId),
+    retry: false,
+  });
+
+  // Fetch all available team leaders for assignment (when in assignment mode)
+  const { data: allTeamLeaders, isLoading: allTeamLeadersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users/team-leaders"],
+    enabled: Boolean(tenantId) && Boolean(selectedProjectId) && isAssignmentExpanded,
     retry: false,
   });
 
@@ -202,6 +214,82 @@ export default function FundAllocationPanel() {
     form.setValue("toUserId", value);
   };
 
+  // Get available team leaders for assignment (excluding already assigned ones)
+  const availableForAssignment = allTeamLeaders?.filter(leader => 
+    !teamLeaders?.some(assigned => assigned.id === leader.id)
+  ) || [];
+
+  // Assignment mutation
+  const assignmentMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedAssignments.length === 0) {
+        throw new Error('No team leaders selected');
+      }
+      
+      // Create assignments for each selected team leader
+      const assignments = selectedAssignments.map(userId => ({
+        projectId: selectedProjectId,
+        userId,
+      }));
+      
+      // Send each assignment separately
+      const results = await Promise.all(
+        assignments.map(assignment => 
+          apiRequest("POST", "/api/project-assignments", assignment)
+        )
+      );
+      
+      return results;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: `${selectedAssignments.length} team leader(s) assigned successfully`,
+      });
+      
+      // Reset assignment state
+      setSelectedAssignments([]);
+      setIsAssignmentExpanded(false);
+      
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", selectedProjectId, "team-leaders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/team-leaders-with-hierarchy"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-assignments"] });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to assign team leaders",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle assignment checkbox toggle
+  const handleAssignmentToggle = (userId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedAssignments(prev => [...prev, userId]);
+    } else {
+      setSelectedAssignments(prev => prev.filter(id => id !== userId));
+    }
+  };
+
+  // Handle assignment submission
+  const handleAssignSubmit = () => {
+    assignmentMutation.mutate();
+  };
+
   const allocationMutation = useMutation({
     mutationFn: async (data: AllocationFormData) => {
       const response = await apiRequest("POST", "/api/fund-allocations", {
@@ -243,6 +331,11 @@ export default function FundAllocationPanel() {
 
   const onSubmit = (data: AllocationFormData) => {
     allocationMutation.mutate(data);
+  };
+
+  // Helper to check if assignment interface should be shown
+  const shouldShowAssignmentInterface = () => {
+    return isAdmin && selectedProjectId && teamLeaders && teamLeaders.length === 0 && availableForAssignment.length > 0;
   };
 
   return (
@@ -343,8 +436,119 @@ export default function FundAllocationPanel() {
                       )}
                     </SelectContent>
                   </Select>
-                  {selectedProjectId && teamLeaders && teamLeaders.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
+                  {/* Assignment interface for admins when no team leaders are assigned */}
+                  {shouldShowAssignmentInterface() && (
+                    <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <UserPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                            Assign Team Leaders
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsAssignmentExpanded(!isAssignmentExpanded)}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                          data-testid="button-toggle-assignment"
+                        >
+                          {isAssignmentExpanded ? (
+                            <>
+                              <ChevronUp className="h-4 w-4 mr-1" />
+                              Hide
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-4 w-4 mr-1" />
+                              Show
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      
+                      <Collapsible open={isAssignmentExpanded} onOpenChange={setIsAssignmentExpanded}>
+                        <CollapsibleContent className="space-y-3">
+                          <p className="text-xs text-blue-700 dark:text-blue-300">
+                            Select team leaders to assign to this project:
+                          </p>
+                          
+                          {allTeamLeadersLoading ? (
+                            <div className="flex items-center gap-2 p-2">
+                              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                              <span className="text-sm text-blue-700">Loading available team leaders...</span>
+                            </div>
+                          ) : availableForAssignment.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              All available team leaders are already assigned to this project.
+                            </p>
+                          ) : (
+                            <>
+                              <div className="max-h-40 overflow-y-auto space-y-2 p-2 bg-white dark:bg-gray-900/50 rounded border">
+                                {availableForAssignment.map((leader) => (
+                                  <div key={leader.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`assign-${leader.id}`}
+                                      checked={selectedAssignments.includes(leader.id)}
+                                      onCheckedChange={(checked) => 
+                                        handleAssignmentToggle(leader.id, checked as boolean)
+                                      }
+                                      data-testid={`checkbox-assign-${leader.id}`}
+                                    />
+                                    <label
+                                      htmlFor={`assign-${leader.id}`}
+                                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                                    >
+                                      {formatUserDisplayName(leader)}
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">
+                                  {selectedAssignments.length} team leader(s) selected
+                                </p>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSelectedAssignments([])}
+                                    disabled={selectedAssignments.length === 0}
+                                    data-testid="button-clear-assignments"
+                                  >
+                                    Clear
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={handleAssignSubmit}
+                                    disabled={selectedAssignments.length === 0 || assignmentMutation.isPending}
+                                    data-testid="button-assign-submit"
+                                  >
+                                    {assignmentMutation.isPending ? (
+                                      <>
+                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                        Assigning...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Assign {selectedAssignments.length > 1 ? `${selectedAssignments.length} Leaders` : 'Leader'}
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                  )}
+                  
+                  {/* Fallback message for non-admin users */}
+                  {selectedProjectId && teamLeaders && teamLeaders.length === 0 && !shouldShowAssignmentInterface() && (
+                    <p className="text-sm text-muted-foreground mt-2">
                       💡 No team leaders are assigned to this project. Contact your administrator to assign team leaders.
                     </p>
                   )}
