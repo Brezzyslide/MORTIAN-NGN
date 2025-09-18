@@ -1,0 +1,81 @@
+🔍 What’s Happening
+
+In your Fund Allocation Panel UI:
+
+You select a project (gdggd in this case).
+
+The dropdown for “Team Leader” says “No team leaders assigned to this project”.
+
+That message is being pulled from the backend → which queries projectAssignments and/or users table scoped by projectId.
+
+So the UI is not broken — it’s correctly telling you that this project has no assigned team leaders yet.
+
+⚙️ Relevant Code Paths (from your architecture doc)
+
+Database
+
+projectAssignments table holds (tenantId, projectId, userId) with role relationship.
+
+users table defines role = team_leader.
+
+API
+
+Endpoint exists:
+
+GET /api/projects/:id/team-leaders
+
+
+This should return the list of assigned team leaders for a given project.
+
+Frontend
+
+FundAllocationPanel queries the backend for assigned team leaders after a project is selected.
+
+It then populates the dropdown.
+
+⚠️ Why You’re Not Seeing Any Team Leaders
+
+From the flow, there are three possible blockers:
+
+1. No Project Assignment Exists
+
+You may have created the project (gdggd) but never assigned a team leader via:
+
+POST /api/project-assignments
+
+
+Until that assignment exists, the query will return an empty list.
+
+2. Role Mismatch
+
+The user you think is a “team leader” may not have role = team_leader in the users table.
+
+If they are admin or user, they won’t show up in the dropdown.
+
+3. Tenant Isolation Issue
+
+If you created the project under tenant A, but your team leader user belongs to tenant B, the Row Level Security (RLS) will block them.
+
+Your storage layer enforces:
+
+if (tenantId !== userTenantId) throw Error("Access denied")
+
+
+So cross-tenant assignments won’t resolve.
+
+✅ How to Fix
+
+Go to Project Assignments module (or use API directly):
+
+POST /api/project-assignments
+{
+  "projectId": "<gdggd>",
+  "userId": "<teamLeaderUserId>",
+  "assignedBy": "<adminUserId>",
+  "tenantId": "<currentTenantId>"
+}
+
+
+Ensure the userId belongs to a user with role = team_leader in the same tenant.
+
+Once assigned, re-open Fund Allocation → the dropdown should list that team leader.
