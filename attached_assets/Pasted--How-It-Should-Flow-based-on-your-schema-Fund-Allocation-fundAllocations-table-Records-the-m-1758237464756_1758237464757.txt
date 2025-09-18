@@ -1,0 +1,78 @@
+🔎 How It Should Flow (based on your schema)
+
+Fund Allocation (fundAllocations table)
+
+Records the movement: projectId, toUserId (team leader), amount, category.
+
+Transactions (transactions table)
+
+Usually, a corresponding transaction is logged (type = allocation).
+
+Projects (projects table)
+
+budget and/or consumedAmount should update, either:
+
+Automatically via a trigger, or
+
+In your storage.ts logic after a fund allocation is created.
+
+Frontend – Projects Module
+
+Fetches /api/projects or /api/projects/:id and expects the budget + consumedAmount fields to already reflect allocations.
+
+⚠️ Why Your Project Module Isn’t Updating
+
+One of these gaps is likely the cause:
+
+No link between fundAllocations and projects
+
+The allocation record exists, but the project’s budget isn’t being recalculated.
+
+Unless you explicitly call an update in your API after allocation, the numbers stay static.
+
+Transactions not being logged
+
+If the /api/fund-allocations POST doesn’t also create a transactions row, the analytics/Projects view won’t see the spend.
+
+Frontend fetching raw projects only
+
+/api/projects might just return the static project row.
+
+If your backend hasn’t updated budget/consumedAmount, the UI won’t show the change.
+
+RLS/Tenant filtering
+
+If the allocation saved with the wrong tenantId, the Projects query (scoped by tenant) won’t see it.
+
+✅ How to Fix
+
+Backend adjustment (most likely needed):
+In your POST /api/fund-allocations route:
+
+Insert into fundAllocations.
+
+Insert a matching transaction (type = allocation).
+
+Update the projects table → increment budget or consumedAmount.
+
+Alternative (cleaner design):
+Leave projects table as static, and compute budget dynamically when querying:
+
+SELECT p.id, p.title, SUM(f.amount) as allocatedBudget
+FROM projects p
+LEFT JOIN fundAllocations f ON p.id = f.projectId
+WHERE p.tenantId = $1
+GROUP BY p.id;
+
+
+Then your frontend always sees the latest state.
+
+🧪 Quick Test You Can Run
+
+After fund allocation, hit /api/fund-allocations → confirm record exists.
+
+Hit /api/transactions → see if a matching record exists.
+
+Hit /api/projects/:id → check if budget or consumedAmount updated.
+
+If allocations exist but projects didn’t change, the backend isn’t syncing them.
