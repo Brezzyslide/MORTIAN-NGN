@@ -23,6 +23,7 @@ import {
   insertApprovalWorkflowSchema,
   insertBudgetAmendmentSchema,
   insertChangeOrderSchema,
+  insertProjectAssignmentSchema,
   loginRequestSchema,
   adminCreateUserSchema,
   changePasswordSchema,
@@ -1231,33 +1232,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
-      const allocation = await storage.createFundAllocation(allocationData, tenantId);
-      
-      // Create corresponding transaction
-      await storage.createTransaction({
-        projectId: allocation.projectId,
-        userId: allocation.toUserId,
-        type: "allocation",
-        amount: allocation.amount,
-        category: allocation.category,
-        description: allocation.description || "Fund allocation",
-        allocationId: allocation.id,
-        tenantId,
-      }, tenantId);
+      // CRITICAL FIX: Use atomic transaction-wrapped method to prevent race conditions,
+      // precision errors, and ensure data consistency. This replaces the problematic
+      // read-modify-write pattern with atomic SQL operations.
+      const result = await storage.createFundAllocationWithBudgetUpdate(
+        allocationData,
+        {
+          projectId: allocationData.projectId,
+          userId: allocationData.toUserId,
+          type: "allocation",
+          amount: allocationData.amount,
+          category: allocationData.category,
+          description: allocationData.description || "Fund allocation",
+          tenantId,
+        },
+        {
+          userId,
+          action: "fund_allocated",
+          entityType: "fund_allocation",
+          entityId: "", // Will be set to allocation.id in the atomic method
+          projectId: allocationData.projectId,
+          tenantId,
+          details: { category: allocationData.category, toUser: allocationData.toUserId },
+        },
+        tenantId
+      );
 
-      // Create audit log
-      await storage.createAuditLog({
-        userId,
-        action: "fund_allocated",
-        entityType: "fund_allocation",
-        entityId: allocation.id,
-        projectId: allocation.projectId,
-        amount: allocation.amount,
-        tenantId,
-        details: { category: allocation.category, toUser: allocation.toUserId },
-      }, tenantId);
-
-      res.json(allocation);
+      res.json(result.allocation);
     } catch (error) {
       console.error("Error creating fund allocation:", error);
       if (error instanceof z.ZodError) {

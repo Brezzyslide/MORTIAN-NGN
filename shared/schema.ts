@@ -344,6 +344,9 @@ export const auditActionEnum = pgEnum("audit_action", [
   "budget_amended",
   "change_order_created",
   "approval_workflow_updated",
+  // Project assignment audit actions
+  "project_assignment_created",
+  "project_assignment_removed",
   // Auth audit actions
   "manual_login_attempt",
   "cost_allocation_submitted",

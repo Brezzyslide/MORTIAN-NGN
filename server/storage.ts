@@ -140,6 +140,12 @@ export interface IStorage {
   getFundAllocations(tenantId: string): Promise<FundAllocation[]>;
   getFundAllocationsByProject(projectId: string, tenantId: string): Promise<FundAllocation[]>;
   createFundAllocation(allocation: InsertFundAllocation, requesterTenantId: string): Promise<FundAllocation>;
+  createFundAllocationWithBudgetUpdate(
+    allocation: InsertFundAllocation,
+    transaction: InsertTransaction,
+    auditLog: InsertAuditLog,
+    requesterTenantId: string
+  ): Promise<{ allocation: FundAllocation; updatedProject: Project; transaction: Transaction; auditLog: AuditLog }>;
 
   // Transaction operations
   getTransactions(tenantId: string): Promise<Transaction[]>;
@@ -556,6 +562,77 @@ export class DatabaseStorage implements IStorage {
       .values(allocation)
       .returning();
     return newAllocation;
+  }
+
+  async createFundAllocationWithBudgetUpdate(
+    allocation: InsertFundAllocation,
+    transaction: InsertTransaction,
+    auditLog: InsertAuditLog,
+    requesterTenantId: string
+  ): Promise<{ allocation: FundAllocation; updatedProject: Project; transaction: Transaction; auditLog: AuditLog }> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership for all data
+    validateTenantOwnership(requesterTenantId, allocation, 'Create fund allocation with budget update');
+    validateTenantOwnership(requesterTenantId, transaction, 'Create transaction');
+    validateTenantOwnership(requesterTenantId, auditLog, 'Create audit log');
+
+    // CRITICAL FIX: Use database transaction to ensure atomicity and prevent race conditions
+    return await db.transaction(async (tx) => {
+      try {
+        // Step 1: Create the fund allocation
+        const [newAllocation] = await tx
+          .insert(fundAllocations)
+          .values(allocation)
+          .returning();
+
+        // Step 2: CRITICAL FIX - Atomic budget update using SQL arithmetic (no parseFloat!)
+        // This prevents race conditions and maintains decimal precision
+        const [updatedProject] = await tx
+          .update(projects)
+          .set({
+            consumedAmount: sql`consumed_amount + ${allocation.amount}`,
+            updatedAt: new Date()
+          })
+          .where(and(
+            eq(projects.id, allocation.projectId),
+            eq(projects.tenantId, allocation.tenantId)
+          ))
+          .returning();
+
+        if (!updatedProject) {
+          throw new Error(`Project not found or access denied: ${allocation.projectId}`);
+        }
+
+        // Step 3: Create the corresponding transaction record
+        const [newTransaction] = await tx
+          .insert(transactions)
+          .values({
+            ...transaction,
+            allocationId: newAllocation.id // Link to the created allocation
+          })
+          .returning();
+
+        // Step 4: Create audit log
+        const [newAuditLog] = await tx
+          .insert(auditLogs)
+          .values({
+            ...auditLog,
+            entityId: newAllocation.id, // Link to the created allocation
+            amount: allocation.amount
+          })
+          .returning();
+
+        return {
+          allocation: newAllocation,
+          updatedProject,
+          transaction: newTransaction,
+          auditLog: newAuditLog
+        };
+      } catch (error) {
+        // Transaction will automatically rollback on any error
+        console.error('Atomic fund allocation failed:', error);
+        throw error;
+      }
+    });
   }
 
   // Transaction operations
