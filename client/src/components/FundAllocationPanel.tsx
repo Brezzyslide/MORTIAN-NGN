@@ -441,7 +441,7 @@ export default function FundAllocationPanel() {
                                   <Crown className="h-3 w-3 text-amber-500" />
                                 )}
                                 <span className="font-medium">
-                                  {formatUserDisplayName(leader)}
+                                  {formatUserDisplayName(leader)} - {leader.role?.replace('_', ' ') || 'Team Leader'}
                                 </span>
                               </div>
                               {leader.manager && (
