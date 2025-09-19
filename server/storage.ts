@@ -49,7 +49,7 @@ import {
   type InsertProjectAssignment,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sum, count, sql, inArray } from "drizzle-orm";
+import { eq, and, or, desc, sum, count, sql, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 // Critical Security Helper Functions for Tenant Isolation
@@ -975,7 +975,10 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(transactions.projectId, projectId),
         eq(transactions.tenantId, tenantId),
-        eq(transactions.type, "expense")
+        or(
+          eq(transactions.type, "expense"),
+          eq(transactions.type, "allocation")
+        )
       ));
 
     const [revenueResult] = await db
@@ -1029,7 +1032,10 @@ export class DatabaseStorage implements IStorage {
       .from(transactions)
       .where(and(
         eq(transactions.tenantId, tenantId),
-        eq(transactions.type, "expense")
+        or(
+          eq(transactions.type, "expense"),
+          eq(transactions.type, "allocation")
+        )
       ));
 
     const [revenueResult] = await db
