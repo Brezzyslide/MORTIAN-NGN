@@ -41,6 +41,12 @@ type AllocationFormData = z.infer<typeof allocationSchema>;
 
 type UserWithManager = User & { manager?: User };
 
+// Type definition for team hierarchy structure
+type TeamHierarchy = {
+  teamLeader: User;
+  members: User[];
+}[];
+
 const categoryLabels: Record<string, string> = {
   development_resources: "Development Resources",
   design_tools: "Design Tools", 
@@ -158,6 +164,16 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
+  // Team hierarchy query for selected project
+  const { data: hierarchy } = useQuery<TeamHierarchy>({
+    queryKey: ['/api/projects', selectedProjectId, 'team-hierarchy'],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/projects/${selectedProjectId}/team-hierarchy`);
+      return await response.json();
+    },
+    enabled: Boolean(selectedProjectId)
+  });
+
   // Handle authentication errors
   useEffect(() => {
     if (projectsError && isUnauthorizedError(projectsError)) {
@@ -255,6 +271,10 @@ export default function FundAllocationPanel() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", selectedProjectId, "team-leaders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users/team-leaders-with-hierarchy"] });
       queryClient.invalidateQueries({ queryKey: ["/api/project-assignments"] });
+      // FRONTEND CACHE FIX: Invalidate team-hierarchy query after assignment mutations
+      queryClient.invalidateQueries({
+        queryKey: ['/api/projects', selectedProjectId, 'team-hierarchy']
+      });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -705,6 +725,24 @@ export default function FundAllocationPanel() {
                   </Card>
                 </CollapsibleContent>
               </Collapsible>
+            )}
+
+            {/* Team Hierarchy Display from new endpoint */}
+            {selectedTeamLeaderId && hierarchy && (
+              <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Team Hierarchy ({hierarchy?.find((h: TeamHierarchy[0]) => h.teamLeader.id === selectedTeamLeaderId)?.members.length || 0} members)
+                </h4>
+                <ul className="space-y-1">
+                  {hierarchy?.find((h: TeamHierarchy[0]) => h.teamLeader.id === selectedTeamLeaderId)?.members.map((m: User) => (
+                    <li key={m.id} className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2" data-testid={`hierarchy-member-${m.id}`}>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                      {m.firstName} {m.lastName} ({m.role})
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             <FormField

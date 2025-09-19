@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { storage } from "./storage";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { pdfExportService } from "./pdfExport";
@@ -29,6 +29,8 @@ import {
   changePasswordSchema,
   createCompanyWithAdminSchema,
   companyPasswordChangeSchema,
+  users,
+  projectAssignments,
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 import { 
@@ -529,6 +531,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Validate managerId if provided
+      let validatedManagerId = null;
+      if (userData.managerId) {
+        // Verify manager exists and belongs to same tenant
+        const manager = await storage.getUser(userData.managerId, targetTenantId);
+        if (!manager) {
+          return res.status(400).json({ message: "Manager not found or access denied" });
+        }
+        
+        // Verify manager has appropriate role (team_leader or above)
+        const managerRole = mapLegacyRole(manager.role);
+        if (!['team_leader', 'admin', 'console_manager'].includes(managerRole)) {
+          return res.status(400).json({ 
+            message: "Only users with role 'team_leader' or above can be managers" 
+          });
+        }
+        
+        // Verify manager is active
+        if (manager.status !== 'active') {
+          return res.status(400).json({ message: "Cannot assign inactive user as manager" });
+        }
+        
+        validatedManagerId = userData.managerId;
+      }
+
       // Hash temporary password
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(userData.temporaryPassword, saltRounds);
@@ -542,7 +569,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyId: targetTenantId, // CRITICAL: Use companyId field
         passwordHash,
         profileImageUrl: null,
-        managerId: currentUser.role === 'admin' ? userId : null, // Admins can be managers
+        managerId: validatedManagerId,
       }, targetTenantId);
 
       // Create audit log
@@ -1207,6 +1234,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error removing project assignment:", error);
       res.status(500).json({ message: "Failed to remove project assignment" });
+    }
+  });
+
+  // Team hierarchy endpoint
+  app.get('/api/projects/:id/team-hierarchy', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { id: projectId } = req.params;
+      const { tenantId } = req.tenant;
+      
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format" });
+      }
+      
+      // CRITICAL SECURITY: Verify project belongs to requesting tenant
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+      
+      // AUTHORIZATION FIX: If user is team_leader, verify they're assigned to this project
+      if (req.tenant.role === 'team_leader') {
+        const userAssignment = await db.select().from(projectAssignments)
+          .where(and(
+            eq(projectAssignments.projectId, projectId),
+            eq(projectAssignments.userId, req.tenant.userId),
+            eq(projectAssignments.tenantId, tenantId)
+          ));
+        
+        if (userAssignment.length === 0) {
+          return res.status(403).json({ message: "Access denied: not assigned to this project" });
+        }
+      }
+      
+      // Get all team leaders assigned to this project
+      const leaders = await db.select().from(projectAssignments)
+        .innerJoin(users, eq(users.id, projectAssignments.userId))
+        .where(and(
+          eq(projectAssignments.projectId, projectId),
+          eq(projectAssignments.tenantId, tenantId),
+          eq(users.role, 'team_leader')
+        ));
+
+      // FUNCTIONAL FIX: For each team leader, find their subordinates that are also assigned to this project
+      const hierarchy = await Promise.all(leaders.map(async (leader) => {
+        const members = await db
+          .select({
+            id: users.id,
+            email: users.email,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            role: users.role,
+            managerId: users.managerId,
+            companyId: users.companyId,
+            status: users.status
+          })
+          .from(projectAssignments)
+          .innerJoin(users, eq(users.id, projectAssignments.userId))
+          .where(and(
+            eq(projectAssignments.projectId, projectId),
+            eq(projectAssignments.tenantId, tenantId),
+            eq(users.managerId, leader.users.id),
+            eq(users.status, 'active')
+          ));
+
+        return {
+          teamLeader: leader.users,
+          members
+        };
+      }));
+
+      res.json(hierarchy);
+    } catch (error) {
+      console.error("Error fetching team hierarchy:", error);
+      res.status(500).json({ message: "Failed to fetch team hierarchy" });
     }
   });
 

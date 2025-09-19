@@ -1,0 +1,110 @@
+You are building a feature inside ProjectFund to properly reflect **Team Hierarchy** in the Fund Allocation module.  
+
+🔑 Requirements:
+1. **User Creation** must support assigning a `managerId` so staff can be linked under a Team Leader.  
+   - Example: user role = `user`, managerId = `teamLeaderId`.  
+   - Only roles `team_leader` or above can be managers.  
+
+2. **Project Assignment** must link both Team Leaders and their staff to a project.  
+   - Use `projectAssignments` table with fields:  
+     - projectId → projects.id  
+     - userId → users.id  
+     - assignedBy → current admin  
+     - tenantId → current tenant  
+
+3. **Fund Allocation Panel** should display:  
+   - Team Leader dropdown = list of project-assigned users with role = `team_leader`.  
+   - Team Hierarchy section = all users where `managerId = selectedTeamLeader.id` and who are assigned to the same project.  
+
+---
+
+## 🔧 Backend Code Changes
+
+**Add managerId when creating a user**  
+`server/routes.ts` → in `POST /api/users`:
+
+```ts
+app.post('/api/users', authorize(['admin']), async (req, res) => {
+  const { email, firstName, lastName, role, companyId, managerId } = req.body;
+
+  const newUser = await db.insert(users).values({
+    email,
+    firstName,
+    lastName,
+    role,
+    companyId,
+    managerId, // <-- NEW
+    status: 'active'
+  }).returning();
+
+  res.json(newUser);
+});
+Fetch team hierarchy for a project
+New endpoint GET /api/projects/:id/team-hierarchy:
+
+ts
+Copy code
+app.get('/api/projects/:id/team-hierarchy', authorize(['admin','team_leader']), async (req, res) => {
+  const { id: projectId } = req.params;
+  const tenantId = req.user.tenantId;
+
+  const leaders = await db.select().from(projectAssignments)
+    .innerJoin(users, eq(users.id, projectAssignments.userId))
+    .where(and(
+      eq(projectAssignments.projectId, projectId),
+      eq(projectAssignments.tenantId, tenantId),
+      eq(users.role, 'team_leader')
+    ));
+
+  const hierarchy = await Promise.all(leaders.map(async (leader) => {
+    const members = await db.select().from(users).where(
+      and(
+        eq(users.managerId, leader.users.id),
+        eq(users.companyId, tenantId)
+      )
+    );
+
+    return {
+      teamLeader: leader.users,
+      members
+    };
+  }));
+
+  res.json(hierarchy);
+});
+🖥️ Frontend Adjustments
+FundAllocationPanel.tsx
+Update to fetch and display hierarchy:
+
+ts
+Copy code
+const { data: hierarchy } = useQuery({
+  queryKey: ['/api/projects', projectId, 'team-hierarchy'],
+  queryFn: () => apiRequest(`/api/projects/${projectId}/team-hierarchy`)
+});
+
+// When rendering selected team leader:
+{selectedLeader && (
+  <div>
+    <h4>Team Hierarchy ({hierarchy?.find(h => h.teamLeader.id === selectedLeader.id)?.members.length || 0} members)</h4>
+    <ul>
+      {hierarchy?.find(h => h.teamLeader.id === selectedLeader.id)?.members.map(m => (
+        <li key={m.id}>{m.firstName} {m.lastName} ({m.role})</li>
+      ))}
+    </ul>
+  </div>
+)}
+🧪 Test Flow
+Create an Admin user → log in.
+
+Create a Team Leader user.
+
+Create Staff users with managerId = teamLeader.id.
+
+Assign both the Team Leader and Staff to a project via POST /api/project-assignments.
+
+Go to Fund Allocation Panel → select project.
+
+Team Leader should show in dropdown.
+
+Team Hierarchy should list their staff members.

@@ -731,6 +731,7 @@ export const adminCreateUserSchema = z.object({
     errorMap: () => ({ message: "Please select a valid role" })
   }),
   temporaryPassword: z.string().min(8, "Temporary password must be at least 8 characters").max(255),
+  managerId: z.string().optional(), // Optional managerId field
   // SECURITY: tenantId is no longer accepted from client - will be set from auth context
 });
 
