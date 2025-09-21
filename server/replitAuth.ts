@@ -57,12 +57,12 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
-  // Check if user already exists to preserve their tenantId and role
+  // Check if user already exists to preserve their companyId and role
   // Use systemContext=true since we don't have tenant context during auth flow
   const existingUser = await storage.getUser(claims["sub"], "", true);
   
-  // Determine the tenantId for the user (preserve existing or use their own ID for new users)
-  const tenantId = existingUser?.tenantId ?? claims["sub"];
+  // Determine the companyId for the user (preserve existing or use their own ID for new users)
+  const companyId = existingUser?.companyId ?? claims["sub"];
   
   await storage.upsertUser({
     id: claims["sub"],
@@ -74,10 +74,10 @@ async function upsertUser(
     role: existingUser?.role ?? (claims["role"] || "user"),
     // Preserve existing status for returning users, or use OIDC claim, default to "active"
     status: existingUser?.status ?? (claims["status"] || "active"),
-    // Preserve existing tenantId for returning users, or use their own ID for new users
+    // Preserve existing companyId for returning users, or use their own ID for new users
     // In a real app, this could be set via invitation/onboarding flows
-    tenantId: tenantId,
-  }, tenantId, true);
+    companyId: companyId,
+  }, companyId, true);
 }
 
 export async function setupAuth(app: Express) {
