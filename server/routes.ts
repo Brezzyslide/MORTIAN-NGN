@@ -513,12 +513,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin user management endpoints  
   app.post('/api/admin/users', authorize(['admin', 'console_manager']), async (req: any, res) => {
     try {
+      console.log('Admin user creation - req.tenant:', req.tenant);
+      console.log('Admin user creation - req.userContext:', req.userContext);
+      
+      if (!req.tenant || !req.tenant.tenantId) {
+        console.error('Missing tenant context in user creation');
+        return res.status(401).json({ message: 'Tenant context not found' });
+      }
+      
       const { userId, tenantId } = req.tenant;
       const currentUser = req.userContext.user;
       const userData = adminCreateUserSchema.parse(req.body);
 
       // SECURITY FIX: tenantId is NEVER accepted from client - always use auth context
       const targetTenantId = tenantId; // Users can only be created in their own tenant
+      
+      console.log('targetTenantId for user creation:', targetTenantId);
       
       // SECURITY: Implement strict role-based creation rules per specification
       const canCreateRole = (creatorRole: string, targetRole: string): boolean => {
