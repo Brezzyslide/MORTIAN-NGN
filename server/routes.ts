@@ -63,7 +63,7 @@ async function getUserData(req: any): Promise<{ userId: string; tenantId: string
     if (!user) {
       throw new Error('User not found');
     }
-    return { userId: req.user.userId, tenantId: user.tenantId, user };
+    return { userId: req.user.userId, tenantId: user.companyId, user };
   }
   
   // Handle OIDC login session
@@ -74,7 +74,7 @@ async function getUserData(req: any): Promise<{ userId: string; tenantId: string
     if (!user) {
       throw new Error('User not found');
     }
-    return { userId, tenantId: user.tenantId, user };
+    return { userId, tenantId: user.companyId, user };
   }
   
   throw new Error('No valid authentication found');
