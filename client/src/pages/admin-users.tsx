@@ -25,10 +25,12 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
-  Copy
+  Copy,
+  Home
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 // Create user schema - removed tenantId as backend will set companyId from auth context
 const createUserSchema = z.object({
@@ -250,6 +252,16 @@ export default function AdminUsers() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Home Button */}
+      <div className="flex justify-start mb-6">
+        <Button variant="outline" data-testid="button-home" asChild>
+          <Link href="/">
+            <Home className="h-4 w-4 mr-2" />
+            Home
+          </Link>
+        </Button>
+      </div>
+      
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold flex items-center">

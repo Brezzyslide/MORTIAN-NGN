@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Users, UserPlus, Edit, Trash2, Eye, Loader2 } from "lucide-react";
+import { Users, UserPlus, Edit, Trash2, Eye, Loader2, Home } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 import TeamForm from "./TeamForm";
 
 interface Team {
@@ -122,6 +123,16 @@ export default function TeamsList() {
 
   return (
     <div className="space-y-6" data-testid="teams-list">
+      {/* Home Button */}
+      <div className="flex justify-start">
+        <Button variant="outline" data-testid="button-home" asChild>
+          <Link href="/">
+            <Home className="h-4 w-4 mr-2" />
+            Home
+          </Link>
+        </Button>
+      </div>
+      
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight" data-testid="text-teams-title">Teams</h2>
