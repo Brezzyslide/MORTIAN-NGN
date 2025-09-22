@@ -2739,41 +2739,53 @@ export class DatabaseStorage implements IStorage {
         roleInTeam: teamMembers.roleInTeam,
         tenantId: teamMembers.tenantId,
         joinedAt: teamMembers.joinedAt,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          email: users.email,
-          role: users.role,
-          status: users.status,
-          companyId: users.companyId,
-          managerId: users.managerId,
-          lastLoginAt: users.lastLoginAt,
-          failedLoginCount: users.failedLoginCount,
-          lockedUntil: users.lockedUntil,
-          mustChangePassword: users.mustChangePassword,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-        },
+        // Select user fields individually to avoid null object issues
+        userId_user: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        role: users.role,
+        status: users.status,
+        companyId: users.companyId,
+        managerId: users.managerId,
+        lastLoginAt: users.lastLoginAt,
+        failedLoginCount: users.failedLoginCount,
+        lockedUntil: users.lockedUntil,
+        mustChangePassword: users.mustChangePassword,
+        userCreatedAt: users.createdAt,
+        userUpdatedAt: users.updatedAt,
       })
       .from(teamMembers)
-      .leftJoin(users, eq(teamMembers.userId, users.id))
+      .innerJoin(users, eq(teamMembers.userId, users.id)) // Use inner join to ensure user exists
       .where(and(
         eq(teamMembers.teamId, teamId),
         eq(teamMembers.tenantId, tenantId)
       ))
       .orderBy(users.firstName, users.lastName);
 
-    return results
-      .filter(result => result.user !== null) // Filter out null users
-      .map(result => ({
-        teamId: result.teamId,
-        userId: result.userId,
-        roleInTeam: result.roleInTeam,
-        tenantId: result.tenantId,
-        joinedAt: result.joinedAt,
-        user: result.user as User,
-      }));
+    return results.map(result => ({
+      teamId: result.teamId,
+      userId: result.userId,
+      roleInTeam: result.roleInTeam,
+      tenantId: result.tenantId,
+      joinedAt: result.joinedAt,
+      user: {
+        id: result.userId_user,
+        firstName: result.firstName,
+        lastName: result.lastName,
+        email: result.email,
+        role: result.role,
+        status: result.status,
+        companyId: result.companyId,
+        managerId: result.managerId,
+        lastLoginAt: result.lastLoginAt,
+        failedLoginCount: result.failedLoginCount,
+        lockedUntil: result.lockedUntil,
+        mustChangePassword: result.mustChangePassword,
+        createdAt: result.userCreatedAt,
+        updatedAt: result.userUpdatedAt,
+      } as User,
+    }));
   }
 
   async addTeamMember(membership: InsertTeamMember, requesterTenantId: string): Promise<TeamMember> {
