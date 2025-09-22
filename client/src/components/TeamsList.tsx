@@ -80,6 +80,34 @@ export default function TeamsList() {
     retry: false,
   });
 
+  // Fetch team members for all teams to display on cards
+  const teamMembersQueries = useQuery({
+    queryKey: ["/api/teams", "all-members"],
+    queryFn: async () => {
+      if (!teams.length) return {};
+      const memberPromises = teams.map(async (team: Team) => {
+        try {
+          const response = await fetch(`/api/teams/${team.id}/members`, {
+            credentials: "include"
+          });
+          if (response.ok) {
+            const members = await response.json();
+            return { [team.id]: members };
+          }
+          return { [team.id]: [] };
+        } catch (error) {
+          return { [team.id]: [] };
+        }
+      });
+      const results = await Promise.all(memberPromises);
+      return results.reduce((acc, curr) => ({ ...acc, ...curr }), {});
+    },
+    enabled: teams.length > 0,
+    retry: false,
+  });
+
+  const allTeamMembers = teamMembersQueries.data || {};
+
   // Delete team mutation
   const deleteTeamMutation = useMutation({
     mutationFn: (teamId: string) => apiRequest("DELETE", `/api/teams/${teamId}`),
@@ -120,6 +148,7 @@ export default function TeamsList() {
       apiRequest("POST", `/api/teams/${assigningTeam?.id}/members`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/teams", "all-members"] });
       queryClient.invalidateQueries({ queryKey: [`/api/teams/${assigningTeam?.id}/members`] });
       toast({
         title: "Success",
@@ -321,6 +350,39 @@ export default function TeamsList() {
                     <Badge variant="outline" className="font-mono text-xs" data-testid={`badge-team-id-${team.id}`}>
                       {team.id.slice(0, 8)}...
                     </Badge>
+                  </div>
+                  
+                  {/* Team Members Sub-card */}
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-muted-foreground">Team Members</h4>
+                      <Badge variant="secondary" className="text-xs">
+                        {allTeamMembers[team.id]?.length || 0}
+                      </Badge>
+                    </div>
+                    {allTeamMembers[team.id]?.length > 0 ? (
+                      <div className="space-y-1 max-h-24 overflow-y-auto" data-testid={`members-list-${team.id}`}>
+                        {allTeamMembers[team.id].slice(0, 3).map((member: TeamMember) => (
+                          <div key={member.userId} className="flex items-center justify-between text-xs p-1 bg-gray-50 dark:bg-gray-800 rounded">
+                            <span className="font-medium" data-testid={`member-name-${member.userId}`}>
+                              {member.user.firstName} {member.user.lastName}
+                            </span>
+                            <Badge variant="outline" className="text-xs" data-testid={`member-role-${member.userId}`}>
+                              {member.roleInTeam}
+                            </Badge>
+                          </div>
+                        ))}
+                        {allTeamMembers[team.id].length > 3 && (
+                          <div className="text-xs text-muted-foreground text-center py-1">
+                            +{allTeamMembers[team.id].length - 3} more
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic" data-testid={`no-members-${team.id}`}>
+                        No members assigned
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
