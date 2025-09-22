@@ -101,37 +101,23 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
-  // Get project-specific team leaders if a project is selected, otherwise get all team leaders
+  // Always get ALL team leaders for fund allocation (regardless of project assignment)
   const selectedProjectId = form.watch("projectId");
   
   const { data: teamLeaders, isLoading: teamLeadersLoading, error: teamLeadersError } = useQuery<UserWithManager[]>({
-    queryKey: selectedProjectId ? ["/api/projects", selectedProjectId, "team-leaders"] : ["/api/users/team-leaders-with-hierarchy"],
+    queryKey: ["/api/users/team-leaders-with-hierarchy"],
     queryFn: async () => {
-      if (selectedProjectId) {
-        // Fetch team leaders assigned to the specific project
-        const response = await fetch(`/api/projects/${selectedProjectId}/team-leaders`, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch assigned team leaders');
-        }
-        return response.json();
-      } else {
-        // Fetch all team leaders with hierarchy information
-        const response = await fetch(`/api/users/team-leaders-with-hierarchy`, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch team leaders with hierarchy');
-        }
-        return response.json();
+      // Always fetch ALL team leaders with hierarchy information for fund allocation
+      const response = await fetch(`/api/users/team-leaders-with-hierarchy`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch team leaders with hierarchy');
       }
+      return response.json();
     },
     enabled: Boolean(tenantId),
     retry: false,
@@ -414,11 +400,7 @@ export default function FundAllocationPanel() {
                   <Select onValueChange={handleTeamLeaderChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-team-leader">
-                        <SelectValue placeholder={
-                          selectedProjectId 
-                            ? "Select an assigned team leader" 
-                            : "Select a team leader"
-                        } />
+                        <SelectValue placeholder="Select a team leader" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -426,9 +408,7 @@ export default function FundAllocationPanel() {
                         <div className="p-2 text-center text-muted-foreground">Loading team leaders...</div>
                       ) : !teamLeaders || teamLeaders.length === 0 ? (
                         <div className="p-2 text-center text-muted-foreground">
-                          {selectedProjectId 
-                            ? "No team leaders assigned to this project" 
-                            : "No team leaders available"}
+                          No team leaders available
                         </div>
                       ) : (
                         teamLeaders.map((leader: UserWithManager) => (
