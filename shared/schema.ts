@@ -192,7 +192,10 @@ export const lineItems = pgTable("line_items", {
   tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint to prevent duplicate line items per tenant and category
+  uniqueLineItemPerTenant: uniqueIndex("idx_line_items_unique_tenant_category_name").on(table.tenantId, table.category, table.name),
+}));
 
 // Materials table
 export const materials = pgTable("materials", {
@@ -204,7 +207,10 @@ export const materials = pgTable("materials", {
   tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint to prevent duplicate materials per tenant
+  uniqueMaterialPerTenant: uniqueIndex("idx_materials_unique_tenant_name").on(table.tenantId, table.name),
+}));
 
 // Cost allocations table (construction-specific)
 export const costAllocations = pgTable("cost_allocations", {
