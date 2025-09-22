@@ -10,6 +10,7 @@ import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
 import AdminUsers from "@/pages/admin-users";
 import ChangePassword from "@/pages/change-password";
+import TeamsList from "@/components/TeamsList";
 
 function ProtectedRoute({ component: Component }: { component: any }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/audit" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/users" component={() => <ProtectedRoute component={AdminUsers} />} />
       <Route path="/admin/users" component={() => <ProtectedRoute component={AdminUsers} />} />
+      <Route path="/teams" component={() => <ProtectedRoute component={TeamsList} />} />
       <Route path="/companies" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/permissions" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/budget-amendments" component={() => <ProtectedRoute component={Dashboard} />} />

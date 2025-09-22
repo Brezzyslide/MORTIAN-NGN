@@ -120,6 +120,18 @@ export default function Sidebar() {
         <ProtectedComponent requiredPermission="canAccessUserManagement">
           <div className="mt-8 pt-6 border-t border-white/20">
             <h3 className="text-sm font-medium opacity-75 mb-3">Management</h3>
+            <ProtectedComponent requiredPermission="canViewTeams">
+              <Link 
+                href="/teams" 
+                className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                  isActive('/teams') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+                }`}
+                data-testid="link-teams"
+              >
+                <i className="fas fa-sitemap w-5"></i>
+                <span>Teams</span>
+              </Link>
+            </ProtectedComponent>
             <Link 
               href="/users" 
               className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
