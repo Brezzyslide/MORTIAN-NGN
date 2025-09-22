@@ -511,7 +511,7 @@ export default function CostEntryForm() {
                       name="labourCost"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Labour Cost ($)</FormLabel>
+                          <FormLabel>Labour Cost (₦)</FormLabel>
                           <FormControl>
                             <Input {...field} type="number" step="0.01" data-testid="input-labour-cost" />
                           </FormControl>
@@ -523,7 +523,7 @@ export default function CostEntryForm() {
                       <div className="w-full">
                         <FormLabel>Labour Total</FormLabel>
                         <div className="text-2xl font-bold text-primary" data-testid="text-labour-total">
-                          ${labourTotal.toFixed(2)}
+                          ₦{labourTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
                         </div>
                       </div>
                     </div>
@@ -554,9 +554,9 @@ export default function CostEntryForm() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Material</TableHead>
-                          <TableHead>Unit Price ($)</TableHead>
+                          <TableHead>Unit Price (₦)</TableHead>
                           <TableHead>Quantity</TableHead>
-                          <TableHead>Total ($)</TableHead>
+                          <TableHead>Total (₦)</TableHead>
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -629,7 +629,7 @@ export default function CostEntryForm() {
                               </TableCell>
                               <TableCell>
                                 <div className="font-semibold" data-testid={`text-row-total-${index}`}>
-                                  ${rowTotal.toFixed(2)}
+                                  ₦{rowTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
                                 </div>
                               </TableCell>
                               <TableCell>
@@ -658,7 +658,7 @@ export default function CostEntryForm() {
                     <div className="mt-4 pt-4 border-t">
                       <div className="flex justify-end">
                         <div className="text-lg font-semibold">
-                          Material Total: <span className="text-primary" data-testid="text-material-total">${materialTotal.toFixed(2)}</span>
+                          Material Total: <span className="text-primary" data-testid="text-material-total">₦{materialTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     </div>
@@ -673,12 +673,12 @@ export default function CostEntryForm() {
                     <div className="space-y-1">
                       <div className="text-sm text-muted-foreground">Grand Total</div>
                       <div className="text-3xl font-bold text-primary" data-testid="text-grand-total">
-                        ${grandTotal.toFixed(2)}
+                        ₦{grandTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
                     <div className="text-right space-y-1">
-                      <div className="text-sm text-muted-foreground">Labour: ${labourTotal.toFixed(2)}</div>
-                      <div className="text-sm text-muted-foreground">Materials: ${materialTotal.toFixed(2)}</div>
+                      <div className="text-sm text-muted-foreground">Labour: ₦{labourTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</div>
+                      <div className="text-sm text-muted-foreground">Materials: ₦{materialTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</div>
                     </div>
                   </div>
                 </CardContent>
