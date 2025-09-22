@@ -224,6 +224,18 @@ export default function TeamsList() {
                         <Edit className="h-4 w-4" />
                       </Button>
                     )}
+                    {permissions.canManageTeamMembers() && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        asChild
+                        data-testid={`button-add-member-${team.id}`}
+                      >
+                        <Link href="/users">
+                          <UserPlus className="h-4 w-4 text-blue-500" />
+                        </Link>
+                      </Button>
+                    )}
                     {permissions.canDeleteTeams() && (
                       <Button
                         variant="ghost"
