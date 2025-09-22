@@ -16,8 +16,8 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-64 sidebar-gradient text-white fixed h-full z-10">
-      <div className="p-6">
+    <div className="w-64 sidebar-gradient text-white fixed h-full z-10 flex flex-col">
+      <div className="p-6 flex-shrink-0">
         <div className="flex items-center space-x-3 mb-8">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
             <i className="fas fa-project-diagram text-primary text-sm"></i>
@@ -39,7 +39,10 @@ export default function Sidebar() {
             </div>
           </div>
         </div>
-        
+      </div>
+      
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
         {/* Navigation Menu */}
         <nav className="space-y-2">
           <Link 
