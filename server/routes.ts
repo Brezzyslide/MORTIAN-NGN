@@ -1525,8 +1525,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics routes (read access for all authenticated users)
   app.get('/api/analytics/tenant', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
-      const stats = await storage.getTenantStats(tenantId);
+      const { tenantId, role, userId } = req.tenant;
+      const stats = await storage.getTenantStats(tenantId, role, userId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching tenant stats:", error);

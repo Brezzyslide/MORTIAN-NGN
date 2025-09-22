@@ -1151,46 +1151,144 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getTenantStats(tenantId: string): Promise<{
+  async getTenantStats(tenantId: string, userRole?: string, userId?: string): Promise<{
     totalBudget: number;
     totalSpent: number;
     totalRevenue: number;
     netProfit: number;
     activeProjects: number;
   }> {
+    // Apply same role-based filtering as getProjects
+    let whereConditions = [
+      eq(projects.tenantId, tenantId),
+      eq(projects.status, "active")
+    ];
+
+    // Apply role-based filtering for team leaders and users
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+      whereConditions.push(
+        sql`(${projects.managerId} = ${userId} OR EXISTS (
+          SELECT 1 FROM ${projectAssignments} 
+          WHERE ${projectAssignments.projectId} = ${projects.id} 
+          AND ${projectAssignments.userId} = ${userId}
+          AND ${projectAssignments.tenantId} = ${tenantId}
+        ) OR EXISTS (
+          SELECT 1 FROM ${fundAllocations} 
+          WHERE ${fundAllocations.projectId} = ${projects.id} 
+          AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+          AND ${fundAllocations.tenantId} = ${tenantId}
+        ) OR EXISTS (
+          SELECT 1 FROM ${costAllocations} 
+          WHERE ${costAllocations.projectId} = ${projects.id} 
+          AND ${costAllocations.enteredBy} = ${userId}
+          AND ${costAllocations.tenantId} = ${tenantId}
+        ) OR EXISTS (
+          SELECT 1 FROM ${transactions}
+          WHERE ${transactions.projectId} = ${projects.id}
+          AND ${transactions.userId} = ${userId}
+          AND ${transactions.tenantId} = ${tenantId}
+        ))`
+      );
+    }
+
     const [budgetResult] = await db
       .select({
         totalBudget: sum(projects.budget),
         activeProjects: count(projects.id),
       })
       .from(projects)
-      .where(and(
-        eq(projects.tenantId, tenantId),
-        eq(projects.status, "active")
-      ));
+      .where(and(...whereConditions));
+
+    // Build spending query conditions
+    let spentConditions = [
+      eq(transactions.tenantId, tenantId),
+      or(
+        eq(transactions.type, "expense"),
+        eq(transactions.type, "allocation")
+      )
+    ];
+
+    // Apply role-based filtering for transactions
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+      spentConditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM ${projects} 
+          WHERE ${projects.id} = ${transactions.projectId}
+          AND (${projects.managerId} = ${userId} OR EXISTS (
+            SELECT 1 FROM ${projectAssignments} 
+            WHERE ${projectAssignments.projectId} = ${projects.id} 
+            AND ${projectAssignments.userId} = ${userId}
+            AND ${projectAssignments.tenantId} = ${tenantId}
+          ) OR EXISTS (
+            SELECT 1 FROM ${fundAllocations} 
+            WHERE ${fundAllocations.projectId} = ${projects.id} 
+            AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+            AND ${fundAllocations.tenantId} = ${tenantId}
+          ) OR EXISTS (
+            SELECT 1 FROM ${costAllocations} 
+            WHERE ${costAllocations.projectId} = ${projects.id} 
+            AND ${costAllocations.enteredBy} = ${userId}
+            AND ${costAllocations.tenantId} = ${tenantId}
+          ) OR EXISTS (
+            SELECT 1 FROM ${transactions} as t2
+            WHERE t2.projectId = ${projects.id}
+            AND t2.userId = ${userId}
+            AND t2.tenantId = ${tenantId}
+          ))
+        )`
+      );
+    }
 
     const [spentResult] = await db
       .select({
         totalSpent: sum(transactions.amount),
       })
       .from(transactions)
-      .where(and(
-        eq(transactions.tenantId, tenantId),
-        or(
-          eq(transactions.type, "expense"),
-          eq(transactions.type, "allocation")
-        )
-      ));
+      .where(and(...spentConditions));
+
+    // Build revenue query conditions
+    let revenueConditions = [
+      eq(transactions.tenantId, tenantId),
+      eq(transactions.type, "revenue")
+    ];
+
+    // Apply role-based filtering for revenue transactions
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+      revenueConditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM ${projects} 
+          WHERE ${projects.id} = ${transactions.projectId}
+          AND (${projects.managerId} = ${userId} OR EXISTS (
+            SELECT 1 FROM ${projectAssignments} 
+            WHERE ${projectAssignments.projectId} = ${projects.id} 
+            AND ${projectAssignments.userId} = ${userId}
+            AND ${projectAssignments.tenantId} = ${tenantId}
+          ) OR EXISTS (
+            SELECT 1 FROM ${fundAllocations} 
+            WHERE ${fundAllocations.projectId} = ${projects.id} 
+            AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+            AND ${fundAllocations.tenantId} = ${tenantId}
+          ) OR EXISTS (
+            SELECT 1 FROM ${costAllocations} 
+            WHERE ${costAllocations.projectId} = ${projects.id} 
+            AND ${costAllocations.enteredBy} = ${userId}
+            AND ${costAllocations.tenantId} = ${tenantId}
+          ) OR EXISTS (
+            SELECT 1 FROM ${transactions} as t2
+            WHERE t2.projectId = ${projects.id}
+            AND t2.userId = ${userId}
+            AND t2.tenantId = ${tenantId}
+          ))
+        )`
+      );
+    }
 
     const [revenueResult] = await db
       .select({
         totalRevenue: sum(transactions.amount),
       })
       .from(transactions)
-      .where(and(
-        eq(transactions.tenantId, tenantId),
-        eq(transactions.type, "revenue")
-      ));
+      .where(and(...revenueConditions));
 
     const totalBudget = parseFloat(budgetResult?.totalBudget || "0") || 0;
     const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
