@@ -39,6 +39,12 @@ export function usePermissions() {
     canUpdateUserStatus: () => normalizedRole === 'admin',
     canImportData: () => normalizedRole === 'admin',
     
+    // Team Management permissions
+    canManageTeams: () => ['admin', 'team_leader'].includes(normalizedRole),
+    canDeleteTeams: () => normalizedRole === 'admin',
+    canManageTeamMembers: () => ['admin', 'team_leader'].includes(normalizedRole),
+    canViewUserTeams: () => ['admin', 'team_leader'].includes(normalizedRole),
+    
     // Team Leader and User permissions (operational access)
     canCreateCostAllocations: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
     canCreateTransactions: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
@@ -53,12 +59,14 @@ export function usePermissions() {
     canViewTransactions: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
     canViewAuditLogs: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
     canViewAllocations: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
+    canViewTeams: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
     
     // Navigation permissions
     canAccessCostEntry: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
     canAccessUserManagement: () => normalizedRole === 'admin',
     canAccessPermissions: () => normalizedRole === 'admin',
     canAccessCompanyManagement: () => normalizedRole === 'console_manager',
+    canAccessTeamManagement: () => ['admin', 'team_leader'].includes(normalizedRole),
   };
 
   // Helper functions
