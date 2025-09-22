@@ -2193,6 +2193,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         quantity: Number(quantity),
         unitPrice: Number(unitPrice),
       }];
+
+      // Format material allocations data using schema (same as existing endpoint)
+      const materialAllocationsData = materialAllocations.map((allocation: any) => 
+        insertMaterialAllocationSchema.parse({
+          materialId: allocation.materialId,
+          quantity: allocation.quantity.toString(),
+          unitPrice: allocation.unitPrice.toString(),
+          total: (allocation.quantity * allocation.unitPrice).toString(),
+          tenantId,
+          costAllocationId: '', // Will be set automatically by storage method
+        })
+      );
       
       // Enhanced budget impact validation
       const totalBudget = parseFloat(project.budget);
@@ -2226,7 +2238,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: initialStatus,
         tenantId,
         changeOrderId: null,
-      }, materialAllocations, tenantId);
+        enteredBy: userId, // Add the required enteredBy field
+      }, materialAllocationsData, tenantId);
       
       // Create audit log
       try {
