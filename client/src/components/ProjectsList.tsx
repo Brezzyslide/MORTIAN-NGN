@@ -22,12 +22,12 @@ export default function ProjectsList() {
     gcTime: 0,
   });
 
-  // Force clear cache and refetch
+  // Force clear cache and refetch with proper tenant scoping
   useEffect(() => {
     if (tenantId && isAuthenticated && !authLoading) {
-      // Invalidate all project queries
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.removeQueries({ queryKey: ["/api/projects"] });
+      // Invalidate the specific tenant's project queries
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", tenantId] });
+      queryClient.removeQueries({ queryKey: ["/api/projects", tenantId] });
       
       // Force immediate refetch
       setTimeout(() => refetch(), 100);
