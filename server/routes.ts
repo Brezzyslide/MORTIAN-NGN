@@ -268,7 +268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: email,
             projectId: null,
             amount: null,
-            tenantId: null,
+            tenantId: "system",
             details: { 
               email,
               reason: "user_not_found",
