@@ -175,7 +175,7 @@ export default function Sidebar() {
         </ProtectedComponent>
 
         {/* Logout */}
-        <div className="absolute bottom-6 left-6 right-6">
+        <div className="mt-8 pt-6 border-t border-white/20">
           <button
             onClick={handleLogout}
             className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors w-full"
