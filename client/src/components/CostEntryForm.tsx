@@ -149,28 +149,28 @@ export default function CostEntryForm() {
 
   // Fetch projects
   const { data: projects, isLoading: projectsLoading } = useQuery({
-    queryKey: ["/api/projects", tenantId],
+    queryKey: ["/api/projects"],
     enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch line items
   const { data: lineItemsData, isLoading: lineItemsLoading } = useQuery({
-    queryKey: ["/api/line-items", tenantId],
+    queryKey: ["/api/line-items"],
     enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch materials
   const { data: materials, isLoading: materialsLoading } = useQuery({
-    queryKey: ["/api/materials", tenantId],
+    queryKey: ["/api/materials"],
     enabled: Boolean(tenantId),
     retry: false,
   });
 
   // Fetch change orders for selected project
   const { data: changeOrders, isLoading: changeOrdersLoading } = useQuery({
-    queryKey: ["/api/change-orders", tenantId, watchedProjectId ? `projectId=${watchedProjectId}` : ""],
+    queryKey: ["/api/change-orders", watchedProjectId ? `projectId=${watchedProjectId}` : ""],
     enabled: Boolean(tenantId) && !!watchedProjectId,
     retry: false,
   });
