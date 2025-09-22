@@ -2732,60 +2732,49 @@ export class DatabaseStorage implements IStorage {
 
   // Team membership operations
   async getTeamMembers(teamId: string, tenantId: string): Promise<Array<TeamMember & { user: User }>> {
-    const results = await db
-      .select({
-        teamId: teamMembers.teamId,
-        userId: teamMembers.userId,
-        roleInTeam: teamMembers.roleInTeam,
-        tenantId: teamMembers.tenantId,
-        joinedAt: teamMembers.joinedAt,
-        // Select user fields individually to avoid null object issues
-        userId_user: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        email: users.email,
-        role: users.role,
-        status: users.status,
-        companyId: users.companyId,
-        managerId: users.managerId,
-        lastLoginAt: users.lastLoginAt,
-        failedLoginCount: users.failedLoginCount,
-        lockedUntil: users.lockedUntil,
-        mustChangePassword: users.mustChangePassword,
-        userCreatedAt: users.createdAt,
-        userUpdatedAt: users.updatedAt,
-      })
-      .from(teamMembers)
-      .innerJoin(users, eq(teamMembers.userId, users.id)) // Use inner join to ensure user exists
-      .where(and(
-        eq(teamMembers.teamId, teamId),
-        eq(teamMembers.tenantId, tenantId)
-      ))
-      .orderBy(users.firstName, users.lastName);
+    try {
+      // First, get the team members
+      const memberResults = await db
+        .select()
+        .from(teamMembers)
+        .where(and(
+          eq(teamMembers.teamId, teamId),
+          eq(teamMembers.tenantId, tenantId)
+        ));
 
-    return results.map(result => ({
-      teamId: result.teamId,
-      userId: result.userId,
-      roleInTeam: result.roleInTeam,
-      tenantId: result.tenantId,
-      joinedAt: result.joinedAt,
-      user: {
-        id: result.userId_user,
-        firstName: result.firstName,
-        lastName: result.lastName,
-        email: result.email,
-        role: result.role,
-        status: result.status,
-        companyId: result.companyId,
-        managerId: result.managerId,
-        lastLoginAt: result.lastLoginAt,
-        failedLoginCount: result.failedLoginCount,
-        lockedUntil: result.lockedUntil,
-        mustChangePassword: result.mustChangePassword,
-        createdAt: result.userCreatedAt,
-        updatedAt: result.userUpdatedAt,
-      } as User,
-    }));
+      // Then get user details for each member
+      const membersWithUsers = await Promise.all(
+        memberResults.map(async (member) => {
+          const userResult = await db
+            .select()
+            .from(users)
+            .where(and(
+              eq(users.id, member.userId),
+              eq(users.companyId, tenantId)
+            ))
+            .limit(1);
+
+          if (userResult.length === 0) {
+            return null; // Skip if user not found
+          }
+
+          return {
+            teamId: member.teamId,
+            userId: member.userId,
+            roleInTeam: member.roleInTeam,
+            tenantId: member.tenantId,
+            joinedAt: member.joinedAt,
+            user: userResult[0] as User,
+          };
+        })
+      );
+
+      // Filter out null results and return
+      return membersWithUsers.filter(member => member !== null) as Array<TeamMember & { user: User }>;
+    } catch (error) {
+      console.error("Error in getTeamMembers:", error);
+      return []; // Return empty array on error
+    }
   }
 
   async addTeamMember(membership: InsertTeamMember, requesterTenantId: string): Promise<TeamMember> {
