@@ -2800,10 +2800,24 @@ export class DatabaseStorage implements IStorage {
       throw new TenantSecurityError(`Cannot add user ${membership.userId} to team: User not found in tenant ${requesterTenantId}`);
     }
 
+    // Insert team membership
     const [newMembership] = await db
       .insert(teamMembers)
       .values(membershipData)
       .returning();
+
+    // CRITICAL FIX: Update manager_id in users table for subordinate relationship
+    // If this is a regular team member (not the leader), set their manager to be the team leader
+    if (membership.roleInTeam === 'member') {
+      await db
+        .update(users)
+        .set({ managerId: team.leaderId })
+        .where(and(
+          eq(users.id, membership.userId),
+          eq(users.companyId, requesterTenantId)
+        ));
+    }
+
     return newMembership;
   }
 
