@@ -4,8 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Users, UserPlus, Edit, Trash2, Eye, Loader2, Home } from "lucide-react";
+import { Users, UserPlus, Edit, Trash2, Eye, Loader2, Home, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
@@ -37,6 +42,14 @@ interface TeamMember {
   };
 }
 
+// Schema for team member assignment
+const assignMemberSchema = z.object({
+  userId: z.string().min(1, "Please select a user"),
+  roleInTeam: z.string().min(1, "Please select a role"),
+});
+
+type AssignMemberFormValues = z.infer<typeof assignMemberSchema>;
+
 export default function TeamsList() {
   const { toast } = useToast();
   const { permissions } = usePermissions();
@@ -44,6 +57,7 @@ export default function TeamsList() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [viewingTeam, setViewingTeam] = useState<Team | null>(null);
+  const [assigningTeam, setAssigningTeam] = useState<Team | null>(null);
 
   // Fetch teams
   const { data: teams = [] as Team[], isLoading, error } = useQuery({
@@ -56,6 +70,13 @@ export default function TeamsList() {
   const { data: teamMembers = [] as TeamMember[], isLoading: loadingMembers } = useQuery({
     queryKey: [`/api/teams/${viewingTeam?.id}/members`],
     enabled: !!viewingTeam?.id,
+    retry: false,
+  });
+
+  // Fetch available users for assignment
+  const { data: availableUsers = [] as User[] } = useQuery({
+    queryKey: ["/api/admin/users"],
+    enabled: !!assigningTeam,
     retry: false,
   });
 
@@ -82,6 +103,42 @@ export default function TeamsList() {
     if (window.confirm(`Are you sure you want to delete "${team.name}"? This action cannot be undone.`)) {
       deleteTeamMutation.mutate(team.id);
     }
+  };
+
+  // Team member assignment form
+  const assignForm = useForm<AssignMemberFormValues>({
+    resolver: zodResolver(assignMemberSchema),
+    defaultValues: {
+      userId: "",
+      roleInTeam: "",
+    },
+  });
+
+  // Add team member mutation
+  const addMemberMutation = useMutation({
+    mutationFn: (data: AssignMemberFormValues) => 
+      apiRequest("POST", `/api/teams/${assigningTeam?.id}/members`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/teams/${assigningTeam?.id}/members`] });
+      toast({
+        title: "Success",
+        description: "Team member added successfully",
+      });
+      setAssigningTeam(null);
+      assignForm.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add team member",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onAssignSubmit = (data: AssignMemberFormValues) => {
+    addMemberMutation.mutate(data);
   };
 
   const formatDate = (dateString: string) => {
@@ -228,12 +285,10 @@ export default function TeamsList() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        asChild
+                        onClick={() => setAssigningTeam(team)}
                         data-testid={`button-add-member-${team.id}`}
                       >
-                        <Link href="/users">
-                          <UserPlus className="h-4 w-4 text-blue-500" />
-                        </Link>
+                        <UserPlus className="h-4 w-4 text-blue-500" />
                       </Button>
                     )}
                     {permissions.canDeleteTeams() && (
@@ -378,6 +433,105 @@ export default function TeamsList() {
                 )}
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Assign Team Member Dialog */}
+      {assigningTeam && (
+        <Dialog open={!!assigningTeam} onOpenChange={() => setAssigningTeam(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add Member to {assigningTeam.name}</DialogTitle>
+            </DialogHeader>
+            <Form {...assignForm}>
+              <form onSubmit={assignForm.handleSubmit(onAssignSubmit)} className="space-y-4">
+                <FormField
+                  control={assignForm.control}
+                  name="userId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Select User</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-user">
+                            <SelectValue placeholder="Select a user to add" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {(availableUsers as User[]).map((user: User) => (
+                            <SelectItem key={user.id} value={user.id} data-testid={`option-user-${user.id}`}>
+                              {user.firstName} {user.lastName} ({user.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={assignForm.control}
+                  name="roleInTeam"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role in Team</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-role">
+                            <SelectValue placeholder="Select role in team" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="member" data-testid="option-role-member">Member</SelectItem>
+                          <SelectItem value="lead" data-testid="option-role-lead">Lead</SelectItem>
+                          <SelectItem value="coordinator" data-testid="option-role-coordinator">Coordinator</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {addMemberMutation.error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      {(addMemberMutation.error as any)?.message || "Failed to add team member"}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAssigningTeam(null)}
+                    disabled={addMemberMutation.isPending}
+                    data-testid="button-cancel-assign"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={addMemberMutation.isPending}
+                    data-testid="button-assign-member"
+                  >
+                    {addMemberMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Member
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
       )}
