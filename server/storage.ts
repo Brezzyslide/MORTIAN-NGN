@@ -194,6 +194,11 @@ export interface IStorage {
   createMaterial(material: InsertMaterial, requesterTenantId: string): Promise<Material>;
   updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined>;
 
+  // Tenant seeding operations
+  seedTenantWithConstructionData(tenantId: string, systemContext?: boolean): Promise<{ lineItemsCount: number; materialsCount: number }>;
+  checkTenantSeedingStatus(tenantId: string): Promise<{ hasLineItems: boolean; hasMaterials: boolean; lineItemsCount: number; materialsCount: number }>;
+  seedAllTenantsWithMissingData(): Promise<Array<{ tenantId: string; tenantName: string; seeded: boolean; error?: string }>>;
+
   // Cost allocation operations
   getCostAllocations(tenantId: string): Promise<CostAllocation[]>;
   getCostAllocationsByProject(projectId: string, tenantId: string): Promise<(CostAllocation & { materialAllocations: (MaterialAllocation & { material: Material })[] })[]>;
@@ -397,6 +402,18 @@ export class DatabaseStorage implements IStorage {
       .insert(companies)
       .values(company)
       .returning();
+
+    // AUTOMATIC SEEDING: Seed the new tenant with standard construction data
+    try {
+      console.log(`🌱 Auto-seeding new tenant: ${newCompany.name} (${newCompany.id})`);
+      const seedingResult = await this.seedTenantWithConstructionData(newCompany.id, true);
+      console.log(`✅ New tenant seeded successfully: ${seedingResult.lineItemsCount} line items, ${seedingResult.materialsCount} materials`);
+    } catch (seedingError) {
+      console.error(`⚠️ Failed to auto-seed new tenant ${newCompany.id}:`, seedingError);
+      // Don't fail company creation if seeding fails - log the error for manual retry
+      // The backfill script can be used to seed this tenant later if needed
+    }
+
     return newCompany;
   }
 
@@ -3211,6 +3228,219 @@ export class DatabaseStorage implements IStorage {
         eq(teamMembers.tenantId, tenantId)
       ))
       .orderBy(teamMembers.joinedAt);
+  }
+
+  // Tenant seeding operations
+  async seedTenantWithConstructionData(tenantId: string, systemContext: boolean = false): Promise<{ lineItemsCount: number; materialsCount: number }> {
+    // Check if tenant already has data to avoid duplicates
+    const status = await this.checkTenantSeedingStatus(tenantId);
+    
+    if (status.hasLineItems && status.hasMaterials) {
+      console.log(`Tenant ${tenantId} already has construction data (${status.lineItemsCount} line items, ${status.materialsCount} materials)`);
+      return { lineItemsCount: status.lineItemsCount, materialsCount: status.materialsCount };
+    }
+
+    console.log(`Seeding tenant ${tenantId} with construction data...`);
+    
+    // Comprehensive line items data - Construction lifecycle with existing categories  
+    const lineItemsData: Array<{
+      category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works" | "marketing";
+      name: string;
+      description: string;
+      tenantId: string;
+    }> = [
+      // Land Purchase (includes Legal & Approvals)
+      { category: "land_purchase", name: "Land Purchase", description: "Acquisition of construction land", tenantId },
+      { category: "land_purchase", name: "Legal Fees", description: "Legal documentation and transfer fees", tenantId },
+      { category: "land_purchase", name: "Government Approvals", description: "Planning permits and government approvals", tenantId },
+      
+      // Site Preparation
+      { category: "site_preparation", name: "Site Clearing", description: "Clearing vegetation and debris from site", tenantId },
+      { category: "site_preparation", name: "Soil Test", description: "Soil testing and analysis", tenantId },
+      { category: "site_preparation", name: "Survey & Pegging", description: "Site surveying and boundary pegging", tenantId },
+      { category: "site_preparation", name: "Temporary Structures", description: "Site offices and temporary facilities", tenantId },
+      { category: "site_preparation", name: "Site Fencing", description: "Temporary site security fencing", tenantId },
+      
+      // Foundation
+      { category: "foundation", name: "Excavation", description: "Foundation excavation and earthworks", tenantId },
+      { category: "foundation", name: "Blinding Concrete", description: "Blinding concrete for foundation base", tenantId },
+      { category: "foundation", name: "Footings", description: "Foundation footings and strip foundations", tenantId },
+      { category: "foundation", name: "Damp Proof Course", description: "Damp proof course installation", tenantId },
+      { category: "foundation", name: "Reinforcement", description: "Steel reinforcement for foundation", tenantId },
+      
+      // Structural (includes Blockwork & Decking)
+      { category: "structural", name: "Block Molding", description: "Concrete block molding and preparation", tenantId },
+      { category: "structural", name: "Block Laying", description: "Wall construction with concrete blocks", tenantId },
+      { category: "structural", name: "Columns", description: "Concrete column construction", tenantId },
+      { category: "structural", name: "Lintels", description: "Lintel installation above openings", tenantId },
+      { category: "structural", name: "Scaffolding", description: "Scaffolding for construction", tenantId },
+      { category: "structural", name: "Formwork", description: "Formwork for concrete decking", tenantId },
+      { category: "structural", name: "Concrete Casting", description: "Concrete casting for deck slabs", tenantId },
+      
+      // Roofing
+      { category: "roofing", name: "Trusses", description: "Roof truss installation", tenantId },
+      { category: "roofing", name: "Roof Covering", description: "Roof covering installation", tenantId },
+      { category: "roofing", name: "Fascia & Soffit", description: "Fascia board and soffit installation", tenantId },
+      { category: "roofing", name: "Gutters", description: "Gutter and downpipe installation", tenantId },
+      
+      // Electrical
+      { category: "electrical", name: "Electrical Rough-in", description: "Electrical rough-in installation", tenantId },
+      { category: "electrical", name: "Electrical Final Fix", description: "Final electrical connections and testing", tenantId },
+      { category: "electrical", name: "Panel Installation", description: "Electrical panel and distribution setup", tenantId },
+      { category: "electrical", name: "Lighting Fixtures", description: "Installation of lighting fixtures", tenantId },
+      
+      // Plumbing
+      { category: "plumbing", name: "Plumbing Rough-in", description: "Plumbing rough-in installation", tenantId },
+      { category: "plumbing", name: "Septic Tank", description: "Septic tank installation", tenantId },
+      { category: "plumbing", name: "Borehole", description: "Water borehole drilling and setup", tenantId },
+      { category: "plumbing", name: "Plumbing Final Fix", description: "Final plumbing connections and testing", tenantId },
+      
+      // Finishing
+      { category: "finishing", name: "Plastering", description: "Wall and ceiling plastering", tenantId },
+      { category: "finishing", name: "Screeding", description: "Floor screeding and leveling", tenantId },
+      { category: "finishing", name: "Windows", description: "Window installation", tenantId },
+      { category: "finishing", name: "Doors", description: "Door installation", tenantId },
+      { category: "finishing", name: "Tiling", description: "Floor and wall tiling", tenantId },
+      { category: "finishing", name: "Ceiling", description: "Ceiling installation and finishing", tenantId },
+      { category: "finishing", name: "Painting", description: "Interior and exterior painting", tenantId },
+      { category: "finishing", name: "Cabinetry", description: "Kitchen and bathroom cabinetry", tenantId },
+      { category: "finishing", name: "Sanitary", description: "Sanitary ware installation", tenantId },
+      
+      // External Works
+      { category: "external_works", name: "Driveway", description: "Driveway construction", tenantId },
+      { category: "external_works", name: "Perimeter Fence & Gate", description: "Perimeter fencing and gate installation", tenantId },
+      { category: "external_works", name: "Landscaping", description: "Site landscaping and gardening", tenantId },
+      { category: "external_works", name: "Drainage", description: "Site drainage system", tenantId },
+      
+      // Marketing (includes Close-out activities)
+      { category: "marketing", name: "Marketing Collateral", description: "Marketing materials and brochures", tenantId },
+      { category: "marketing", name: "Agent Commission", description: "Sales agent commission payments", tenantId },
+      { category: "marketing", name: "Final Cleaning", description: "Construction cleanup and final inspection", tenantId },
+      { category: "marketing", name: "Occupancy Certificate", description: "Final approvals and occupancy certificate", tenantId },
+    ];
+
+    // Comprehensive materials data - Construction materials with proper units
+    const materialsData = [
+      // Basic construction materials
+      { name: "Cement", unit: "bag", currentUnitPrice: "12.50", supplier: "CemCorp Ltd", tenantId },
+      { name: "Sharp Sand", unit: "m³", currentUnitPrice: "45.00", supplier: "Quarry Supplies", tenantId },
+      { name: "Granite", unit: "m³", currentUnitPrice: "55.00", supplier: "Quarry Supplies", tenantId },
+      { name: "Laterite", unit: "m³", currentUnitPrice: "35.00", supplier: "Quarry Supplies", tenantId },
+      { name: "Water", unit: "tanker", currentUnitPrice: "85.00", supplier: "Water Services", tenantId },
+      
+      // Reinforcement materials
+      { name: "Reinforcement Rod", unit: "kg", currentUnitPrice: "4.20", supplier: "SteelWorks Inc", tenantId },
+      { name: "Binding Wire", unit: "roll", currentUnitPrice: "25.00", supplier: "SteelWorks Inc", tenantId },
+      { name: "Timber", unit: "pcs", currentUnitPrice: "15.00", supplier: "Forest Products Ltd", tenantId },
+      { name: "Nails", unit: "kg", currentUnitPrice: "3.50", supplier: "Hardware Central", tenantId },
+      
+      // Roofing materials
+      { name: "Aluminium Roofing Sheet", unit: "m²", currentUnitPrice: "28.00", supplier: "RoofTech Ltd", tenantId },
+      { name: "Fascia Board", unit: "pcs", currentUnitPrice: "45.00", supplier: "RoofTech Ltd", tenantId },
+      { name: "PVC Soffit", unit: "m²", currentUnitPrice: "22.00", supplier: "RoofTech Ltd", tenantId },
+      
+      // Electrical materials
+      { name: "Electrical Conduit", unit: "length", currentUnitPrice: "4.50", supplier: "ElectroMax", tenantId },
+      { name: "Cables", unit: "roll", currentUnitPrice: "125.00", supplier: "ElectroMax", tenantId },
+      { name: "Switches & Sockets", unit: "pcs", currentUnitPrice: "8.50", supplier: "ElectroMax", tenantId },
+      
+      // Plumbing materials
+      { name: "Plumbing Pipe", unit: "length", currentUnitPrice: "18.50", supplier: "PlumbPro", tenantId },
+      { name: "Plumbing Fittings", unit: "pcs", currentUnitPrice: "5.50", supplier: "PlumbPro", tenantId },
+      
+      // Finishing materials
+      { name: "Paint", unit: "bucket", currentUnitPrice: "35.00", supplier: "ColorMax", tenantId },
+      { name: "Floor Tiles", unit: "m²", currentUnitPrice: "42.00", supplier: "TileWorld", tenantId },
+      { name: "Ceiling Boards", unit: "m²", currentUnitPrice: "25.00", supplier: "CeilingPro", tenantId },
+      
+      // Fixtures and fittings
+      { name: "Doors", unit: "pcs", currentUnitPrice: "280.00", supplier: "DoorCraft", tenantId },
+      { name: "Windows", unit: "pcs", currentUnitPrice: "350.00", supplier: "WindowWorks", tenantId },
+      { name: "Kitchen Sink", unit: "pcs", currentUnitPrice: "150.00", supplier: "KitchenPro", tenantId },
+      { name: "WC Set", unit: "pcs", currentUnitPrice: "280.00", supplier: "SanitaryWare Co", tenantId },
+      { name: "Paving Stones", unit: "m²", currentUnitPrice: "42.00", supplier: "StoneCraft", tenantId },
+    ];
+
+    let lineItemsCount = status.lineItemsCount;
+    let materialsCount = status.materialsCount;
+
+    // Insert line items if not already present
+    if (!status.hasLineItems) {
+      await db.insert(lineItems).values(lineItemsData);
+      lineItemsCount = lineItemsData.length;
+      console.log(`✅ Inserted ${lineItemsData.length} line items for tenant ${tenantId}`);
+    }
+
+    // Insert materials if not already present
+    if (!status.hasMaterials) {
+      await db.insert(materials).values(materialsData);
+      materialsCount = materialsData.length;
+      console.log(`✅ Inserted ${materialsData.length} materials for tenant ${tenantId}`);
+    }
+
+    return { lineItemsCount, materialsCount };
+  }
+
+  async checkTenantSeedingStatus(tenantId: string): Promise<{ hasLineItems: boolean; hasMaterials: boolean; lineItemsCount: number; materialsCount: number }> {
+    const [lineItemsResult] = await db
+      .select({ count: count(lineItems.id) })
+      .from(lineItems)
+      .where(eq(lineItems.tenantId, tenantId));
+
+    const [materialsResult] = await db
+      .select({ count: count(materials.id) })
+      .from(materials)
+      .where(eq(materials.tenantId, tenantId));
+
+    const lineItemsCount = lineItemsResult?.count || 0;
+    const materialsCount = materialsResult?.count || 0;
+
+    return {
+      hasLineItems: lineItemsCount > 0,
+      hasMaterials: materialsCount > 0,
+      lineItemsCount,
+      materialsCount
+    };
+  }
+
+  async seedAllTenantsWithMissingData(): Promise<Array<{ tenantId: string; tenantName: string; seeded: boolean; error?: string }>> {
+    // Get all active companies
+    const allCompanies = await db.select().from(companies).where(eq(companies.status, 'active'));
+    
+    const results: Array<{ tenantId: string; tenantName: string; seeded: boolean; error?: string }> = [];
+
+    for (const company of allCompanies) {
+      try {
+        const status = await this.checkTenantSeedingStatus(company.id);
+        
+        if (!status.hasLineItems || !status.hasMaterials) {
+          console.log(`Seeding tenant ${company.id} (${company.name})...`);
+          await this.seedTenantWithConstructionData(company.id, true);
+          results.push({
+            tenantId: company.id,
+            tenantName: company.name,
+            seeded: true
+          });
+        } else {
+          console.log(`Tenant ${company.id} (${company.name}) already has data - skipping`);
+          results.push({
+            tenantId: company.id,
+            tenantName: company.name,
+            seeded: false
+          });
+        }
+      } catch (error) {
+        console.error(`Error seeding tenant ${company.id} (${company.name}):`, error);
+        results.push({
+          tenantId: company.id,
+          tenantName: company.name,
+          seeded: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    return results;
   }
 }
 
