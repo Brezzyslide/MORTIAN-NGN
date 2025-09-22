@@ -2764,14 +2764,16 @@ export class DatabaseStorage implements IStorage {
       ))
       .orderBy(users.firstName, users.lastName);
 
-    return results.map(result => ({
-      teamId: result.teamId,
-      userId: result.userId,
-      roleInTeam: result.roleInTeam,
-      tenantId: result.tenantId,
-      joinedAt: result.joinedAt,
-      user: result.user as User,
-    }));
+    return results
+      .filter(result => result.user !== null) // Filter out null users
+      .map(result => ({
+        teamId: result.teamId,
+        userId: result.userId,
+        roleInTeam: result.roleInTeam,
+        tenantId: result.tenantId,
+        joinedAt: result.joinedAt,
+        user: result.user as User,
+      }));
   }
 
   async addTeamMember(membership: InsertTeamMember, requesterTenantId: string): Promise<TeamMember> {

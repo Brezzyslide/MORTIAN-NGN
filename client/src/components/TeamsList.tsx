@@ -301,7 +301,22 @@ export default function TeamsList() {
               )}
               
               <div>
-                <h4 className="font-semibold mb-2">Team Members</h4>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold">Team Members</h4>
+                  {permissions.canManageTeamMembers() && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      asChild
+                      data-testid="button-add-team-member"
+                    >
+                      <Link href="/users">
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Add Team Member
+                      </Link>
+                    </Button>
+                  )}
+                </div>
                 {loadingMembers ? (
                   <div className="flex items-center">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
