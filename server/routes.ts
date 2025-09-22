@@ -129,11 +129,22 @@ function authorize(allowedRoles: string[]) {
       const userRole = req.tenant?.role || req.userContext?.normalizedRole;
       const userStatus = req.userContext?.user?.status;
       
+      console.log("DEBUG AUTHORIZE:", { 
+        url: req.url, 
+        userRole, 
+        allowedRoles, 
+        userStatus,
+        hasTenant: !!req.tenant,
+        hasUserContext: !!req.userContext 
+      });
+      
       if (!userRole) {
+        console.log("DEBUG: No user role found, returning 401");
         return res.status(401).json({ message: 'Unauthorized - no user context' });
       }
       
       if (!allowedRoles.includes(userRole)) {
+        console.log("DEBUG: Role not allowed, returning 403");
         return res.status(403).json({ 
           message: `Access denied. Required roles: ${allowedRoles.join(', ')}. Your role: ${userRole}` 
         });
@@ -141,9 +152,11 @@ function authorize(allowedRoles: string[]) {
       
       // Verify user is active
       if (userStatus !== 'active') {
+        console.log("DEBUG: User not active, returning 403");
         return res.status(403).json({ message: 'Access denied. User account is not active.' });
       }
       
+      console.log("DEBUG: Authorization successful, proceeding");
       next();
     } catch (error) {
       console.error('Authorization error:', error);
