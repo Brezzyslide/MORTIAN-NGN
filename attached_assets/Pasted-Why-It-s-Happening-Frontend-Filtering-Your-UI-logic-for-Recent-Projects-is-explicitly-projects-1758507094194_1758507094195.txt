@@ -1,0 +1,88 @@
+Why It’s Happening
+
+Frontend Filtering
+Your UI logic for "Recent Projects" is explicitly:
+
+(projects as any[]).slice(0, 3).map(...)
+
+
+This means the component depends entirely on the projects array being passed down from props or fetched via API.
+If projects.length === 0, it shows the “No projects found” fallback message.
+
+Mismatch Between DB and State
+You likely are creating projects in the backend (they show up in your DB), but the frontend query or state hook that fetches projects is returning an empty array.
+Common causes:
+
+Query is scoped incorrectly (e.g., not filtering by tenantId or companyId properly).
+
+API response is successful but the frontend isn’t updating state (useQuery, useEffect, or Redux store issue).
+
+The frontend is only fetching “active projects” but your created ones are defaulting to “draft” or another status.
+
+The “recent projects” component is reading from the wrong slice of state (e.g., cached empty list).
+
+Multi-Tenancy / Role Boundaries
+In your system, everything is scoped by companyId and sometimes clientId.
+If the backend requires those params and they weren’t included when fetching, the API will return an empty list even though projects exist in the DB.
+
+How to Fix
+
+Here’s a step-by-step checklist:
+
+1. Confirm Backend Response
+
+Run your fetch call (e.g., /api/projects) directly in Postman or your browser console.
+
+Does it return the created projects?
+
+Are they marked status: active (or whatever your UI expects)?
+
+Do they include the correct companyId?
+
+If yes → the issue is in the frontend.
+If no → the issue is in the backend query (probably missing tenant filters).
+
+2. Inspect the Frontend Query
+
+If you’re using TanStack Query:
+
+const { data: projects = [] } = useQuery({
+  queryKey: ['projects', companyId],
+  queryFn: () => fetch(`/api/projects?companyId=${companyId}`).then(res => res.json()),
+});
+
+
+Make sure the companyId is included.
+
+Ensure you’re not accidentally calling ['projects'] without tenant scoping.
+
+Verify that the response data matches what slice(0,3).map() expects.
+
+3. Validate Component State
+
+If the parent is passing projects down, log it:
+
+console.log("Projects prop:", projects);
+
+
+If you see [], that means the state never updated after creation.
+
+4. Adjust Empty State Logic
+
+If projects exist but don’t qualify as “Recent” (maybe not active), you’ll also see “No projects found.”
+Update the filter:
+
+const recentProjects = (projects ?? []).filter(p => p.status === "active").slice(0, 3);
+
+5. Quick Debug Fix
+
+Add a debug line in the component:
+
+{projects.length === 0 ? (
+  <p>No projects found</p>
+) : (
+  projects.map(p => <div key={p.id}>{p.title}</div>)
+)}
+
+
+This will confirm whether you’re really getting nothing, or filtering incorrectly.

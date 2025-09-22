@@ -11,11 +11,22 @@ export default function ProjectsList() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const tenantId = user?.tenantId || user?.companyId;
 
-  const { data: projects = [] as any[], isLoading, error } = useQuery({
+  const { data: projects = [] as any[], isLoading, error, refetch } = useQuery({
     queryKey: ["/api/projects", tenantId],
     enabled: Boolean(tenantId) && isAuthenticated && !authLoading,
     retry: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+    gcTime: 0,
   });
+
+  // Force refetch on mount to clear stale cache
+  useEffect(() => {
+    if (tenantId && isAuthenticated && !authLoading) {
+      refetch();
+    }
+  }, [tenantId, isAuthenticated, authLoading, refetch]);
 
   // Handle errors in useEffect to prevent infinite loops
   useEffect(() => {
