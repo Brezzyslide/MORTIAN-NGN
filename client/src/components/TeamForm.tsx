@@ -90,11 +90,11 @@ export default function TeamForm({ team, onSuccess, onCancel }: TeamFormProps) {
   });
 
   const onSubmit = (data: TeamFormValues) => {
-    // Remove empty fields
+    // Remove empty fields and handle "none" value
     const cleanData = {
       ...data,
       description: data.description?.trim() || undefined,
-      leaderId: data.leaderId || undefined,
+      leaderId: data.leaderId && data.leaderId !== "none" ? data.leaderId : undefined,
     };
     teamMutation.mutate(cleanData);
   };
@@ -153,8 +153,8 @@ export default function TeamForm({ team, onSuccess, onCancel }: TeamFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="" data-testid="option-no-leader">No team leader</SelectItem>
-                  {users.filter((user: User) => ['admin', 'team_leader'].includes(user.role)).map((user: User) => (
+                  <SelectItem value="none" data-testid="option-no-leader">No team leader</SelectItem>
+                  {(users as User[]).filter((user: User) => ['admin', 'team_leader'].includes(user.role)).map((user: User) => (
                     <SelectItem 
                       key={user.id} 
                       value={user.id}
