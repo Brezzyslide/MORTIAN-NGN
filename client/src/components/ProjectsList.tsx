@@ -1,52 +1,55 @@
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { queryClient } from "@/lib/queryClient";
 
 export default function ProjectsList() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const tenantId = user?.tenantId || user?.companyId;
+  
+  const [projects, setProjects] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: projects = [] as any[], isLoading, error, refetch } = useQuery({
-    queryKey: ["/api/projects", tenantId],
-    enabled: Boolean(tenantId) && isAuthenticated && !authLoading,
-    retry: false,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: false,
-    staleTime: 0,
-    gcTime: 0,
-  });
-
-  // Force clear cache and refetch with proper tenant scoping
+  // Direct fetch to bypass React Query issues
   useEffect(() => {
     if (tenantId && isAuthenticated && !authLoading) {
-      // Invalidate the specific tenant's project queries
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", tenantId] });
-      queryClient.removeQueries({ queryKey: ["/api/projects", tenantId] });
+      setIsLoading(true);
+      setError(null);
       
-      // Force immediate refetch
-      setTimeout(() => refetch(), 100);
+      console.log("Fetching projects directly...");
+      fetch('/api/projects', { credentials: 'include' })
+        .then(async (res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          console.log("Direct fetch success:", data);
+          setProjects(data || []);
+          setIsLoading(false);
+        })
+        .catch((err) => {
+          console.error("Direct fetch error:", err);
+          setError(err.message);
+          setIsLoading(false);
+          
+          if (err.message.includes('401')) {
+            toast({
+              title: "Unauthorized", 
+              description: "You are logged out. Logging in again...",
+              variant: "destructive",
+            });
+            setTimeout(() => {
+              window.location.href = "/api/login";
+            }, 500);
+          }
+        });
     }
-  }, [tenantId, isAuthenticated, authLoading, refetch]);
-
-  // Handle errors in useEffect to prevent infinite loops
-  useEffect(() => {
-    if (error && isUnauthorizedError(error as Error)) {
-      toast({
-        title: "Unauthorized", 
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-    }
-  }, [error, toast]);
+  }, [tenantId, isAuthenticated, authLoading, toast]);
 
   const formatCurrency = (amount: string | number) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
