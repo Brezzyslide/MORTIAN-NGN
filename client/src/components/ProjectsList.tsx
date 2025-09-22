@@ -8,12 +8,12 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function ProjectsList() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const tenantId = user?.tenantId || user?.companyId;
 
   const { data: projects = [] as any[], isLoading, error } = useQuery({
     queryKey: ["/api/projects", tenantId],
-    enabled: Boolean(tenantId),
+    enabled: Boolean(tenantId) && isAuthenticated && !authLoading,
     retry: false,
   });
 
