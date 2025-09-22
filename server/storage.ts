@@ -1231,9 +1231,9 @@ export class DatabaseStorage implements IStorage {
             AND ${costAllocations.tenantId} = ${tenantId}
           ) OR EXISTS (
             SELECT 1 FROM ${transactions} as t2
-            WHERE t2.projectId = ${projects.id}
-            AND t2.userId = ${userId}
-            AND t2.tenantId = ${tenantId}
+            WHERE t2.project_id = ${projects.id}
+            AND t2.user_id = ${userId}
+            AND t2.tenant_id = ${tenantId}
           ))
         )`
       );
@@ -1275,9 +1275,9 @@ export class DatabaseStorage implements IStorage {
             AND ${costAllocations.tenantId} = ${tenantId}
           ) OR EXISTS (
             SELECT 1 FROM ${transactions} as t2
-            WHERE t2.projectId = ${projects.id}
-            AND t2.userId = ${userId}
-            AND t2.tenantId = ${tenantId}
+            WHERE t2.project_id = ${projects.id}
+            AND t2.user_id = ${userId}
+            AND t2.tenant_id = ${tenantId}
           ))
         )`
       );

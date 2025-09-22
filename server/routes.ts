@@ -1019,7 +1019,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/projects', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
     try {
       const { tenantId, userId, role } = req.tenant;
+      console.log("DEBUG: /api/projects called with:", { tenantId, userId, role });
       const projects = await storage.getProjects(tenantId, role, userId);
+      console.log("DEBUG: getProjects returned:", projects.length, "projects");
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error);
