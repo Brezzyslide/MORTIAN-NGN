@@ -1068,17 +1068,24 @@ export class DatabaseStorage implements IStorage {
       throw new TenantSecurityError(`Cannot create user for tenant ${userData.companyId} while authenticated to tenant ${requesterTenantId}`);
     }
     
+    console.log('Storage createUserWithPassword received:', JSON.stringify(userData, null, 2));
+    console.log('requesterTenantId:', requesterTenantId);
+    
+    const insertValues = {
+      id: sql`gen_random_uuid()`,
+      ...userData,
+      status: 'active',
+      failedLoginCount: 0,
+      mustChangePassword: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    console.log('Values being inserted into DB:', JSON.stringify(insertValues, null, 2));
+    
     const result = await db
       .insert(users)
-      .values({
-        id: sql`gen_random_uuid()`,
-        ...userData,
-        status: 'active',
-        failedLoginCount: 0,
-        mustChangePassword: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
+      .values(insertValues)
       .returning();
     const [newUser] = result as User[];
     return newUser;

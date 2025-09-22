@@ -567,8 +567,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(userData.temporaryPassword, saltRounds);
 
-      // Create user with password - using companyId instead of tenantId
-      const newUser = await storage.createUserWithPassword({
+      // Create user with password - ensuring companyId is properly set
+      const userDataForCreation = {
         email: userData.email,
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -577,7 +577,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passwordHash,
         profileImageUrl: null,
         managerId: validatedManagerId,
-      }, targetTenantId);
+      };
+      
+      console.log('Creating user with data:', JSON.stringify(userDataForCreation, null, 2));
+      const newUser = await storage.createUserWithPassword(userDataForCreation, targetTenantId);
 
       // Create audit log
       try {
