@@ -170,7 +170,7 @@ export interface IStorage {
   getSubordinates(managerId: string, tenantId: string): Promise<User[]>;
   getUsersByRole(role: string, tenantId: string): Promise<User[]>;
   getTeamLeadersWithHierarchy(tenantId: string): Promise<(User & { manager?: User })[]>;
-  getAllUsers(tenantId: string, systemContext?: boolean): Promise<User[]>;
+  getAllUsers(tenantId: string): Promise<User[]>;
   updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined>;
   updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
 
@@ -193,26 +193,6 @@ export interface IStorage {
   getMaterial(id: string, tenantId: string): Promise<Material | undefined>;
   createMaterial(material: InsertMaterial, requesterTenantId: string): Promise<Material>;
   updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined>;
-
-  // Tenant seeding operations
-  seedTenantWithConstructionData(tenantId: string, systemContext?: boolean): Promise<{ 
-    lineItemsCount: number; 
-    materialsCount: number; 
-    auditLogId?: string;
-    success: boolean;
-    operationId: string;
-  }>;
-  checkTenantSeedingStatus(tenantId: string): Promise<{ hasLineItems: boolean; hasMaterials: boolean; lineItemsCount: number; materialsCount: number }>;
-  seedAllTenantsWithMissingData(): Promise<Array<{ 
-    tenantId: string; 
-    tenantName: string; 
-    seeded: boolean; 
-    auditLogId?: string;
-    operationId?: string;
-    error?: string;
-    preCount?: { lineItems: number; materials: number };
-    postCount?: { lineItems: number; materials: number };
-  }>>;
 
   // Cost allocation operations
   getCostAllocations(tenantId: string): Promise<CostAllocation[]>;
@@ -417,18 +397,6 @@ export class DatabaseStorage implements IStorage {
       .insert(companies)
       .values(company)
       .returning();
-
-    // AUTOMATIC SEEDING: Seed the new tenant with standard construction data
-    try {
-      console.log(`🌱 Auto-seeding new tenant: ${newCompany.name} (${newCompany.id})`);
-      const seedingResult = await this.seedTenantWithConstructionData(newCompany.id, true);
-      console.log(`✅ New tenant seeded successfully: ${seedingResult.lineItemsCount} line items, ${seedingResult.materialsCount} materials`);
-    } catch (seedingError) {
-      console.error(`⚠️ Failed to auto-seed new tenant ${newCompany.id}:`, seedingError);
-      // Don't fail company creation if seeding fails - log the error for manual retry
-      // The backfill script can be used to seed this tenant later if needed
-    }
-
     return newCompany;
   }
 
@@ -927,35 +895,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getAllUsers(tenantId: string, systemContext: boolean = false): Promise<User[]> {
-    if (systemContext) {
-      // System operations can access users from any tenant (console_manager cross-tenant access)
-      // Use raw SQL to bypass RLS when needed for legitimate console_manager operations
-      const result = await db.execute(sql`
-        SELECT * FROM users 
-        WHERE company_id = ${tenantId} 
-        ORDER BY first_name
-      `);
-      return result.rows.map(row => ({
-        id: row.id as string,
-        email: row.email as string,
-        firstName: row.first_name as string,
-        lastName: row.last_name as string,
-        profileImageUrl: row.profile_image_url as string,
-        role: row.role as any,
-        managerId: row.manager_id as string,
-        companyId: row.company_id as string,
-        status: row.status as any,
-        passwordHash: row.password_hash as string,
-        mustChangePassword: row.must_change_password as boolean,
-        failedLoginCount: row.failed_login_count as number,
-        lockedUntil: row.locked_until as Date,
-        createdAt: row.created_at as Date,
-        updatedAt: row.updated_at as Date,
-      }));
-    }
-    
-    // Regular operations are tenant-scoped by RLS policies
+  async getAllUsers(tenantId: string): Promise<User[]> {
     return await db
       .select()
       .from(users)
@@ -1068,24 +1008,17 @@ export class DatabaseStorage implements IStorage {
       throw new TenantSecurityError(`Cannot create user for tenant ${userData.companyId} while authenticated to tenant ${requesterTenantId}`);
     }
     
-    console.log('Storage createUserWithPassword received:', JSON.stringify(userData, null, 2));
-    console.log('requesterTenantId:', requesterTenantId);
-    
-    const insertValues = {
-      id: sql`gen_random_uuid()`,
-      ...userData,
-      status: 'active',
-      failedLoginCount: 0,
-      mustChangePassword: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    console.log('Values being inserted into DB:', JSON.stringify(insertValues, null, 2));
-    
     const result = await db
       .insert(users)
-      .values(insertValues)
+      .values({
+        id: sql`gen_random_uuid()`,
+        ...userData,
+        status: 'active',
+        failedLoginCount: 0,
+        mustChangePassword: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
       .returning();
     const [newUser] = result as User[];
     return newUser;
@@ -1151,144 +1084,46 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getTenantStats(tenantId: string, userRole?: string, userId?: string): Promise<{
+  async getTenantStats(tenantId: string): Promise<{
     totalBudget: number;
     totalSpent: number;
     totalRevenue: number;
     netProfit: number;
     activeProjects: number;
   }> {
-    // Apply same role-based filtering as getProjects
-    let whereConditions = [
-      eq(projects.tenantId, tenantId),
-      eq(projects.status, "active")
-    ];
-
-    // Apply role-based filtering for team leaders and users
-    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
-      whereConditions.push(
-        sql`(${projects.managerId} = ${userId} OR EXISTS (
-          SELECT 1 FROM ${projectAssignments} 
-          WHERE ${projectAssignments.projectId} = ${projects.id} 
-          AND ${projectAssignments.userId} = ${userId}
-          AND ${projectAssignments.tenantId} = ${tenantId}
-        ) OR EXISTS (
-          SELECT 1 FROM ${fundAllocations} 
-          WHERE ${fundAllocations.projectId} = ${projects.id} 
-          AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
-          AND ${fundAllocations.tenantId} = ${tenantId}
-        ) OR EXISTS (
-          SELECT 1 FROM ${costAllocations} 
-          WHERE ${costAllocations.projectId} = ${projects.id} 
-          AND ${costAllocations.enteredBy} = ${userId}
-          AND ${costAllocations.tenantId} = ${tenantId}
-        ) OR EXISTS (
-          SELECT 1 FROM ${transactions}
-          WHERE ${transactions.projectId} = ${projects.id}
-          AND ${transactions.userId} = ${userId}
-          AND ${transactions.tenantId} = ${tenantId}
-        ))`
-      );
-    }
-
     const [budgetResult] = await db
       .select({
         totalBudget: sum(projects.budget),
         activeProjects: count(projects.id),
       })
       .from(projects)
-      .where(and(...whereConditions));
-
-    // Build spending query conditions
-    let spentConditions = [
-      eq(transactions.tenantId, tenantId),
-      or(
-        eq(transactions.type, "expense"),
-        eq(transactions.type, "allocation")
-      )
-    ];
-
-    // Apply role-based filtering for transactions
-    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
-      spentConditions.push(
-        sql`EXISTS (
-          SELECT 1 FROM ${projects} 
-          WHERE ${projects.id} = ${transactions.projectId}
-          AND (${projects.managerId} = ${userId} OR EXISTS (
-            SELECT 1 FROM ${projectAssignments} 
-            WHERE ${projectAssignments.projectId} = ${projects.id} 
-            AND ${projectAssignments.userId} = ${userId}
-            AND ${projectAssignments.tenantId} = ${tenantId}
-          ) OR EXISTS (
-            SELECT 1 FROM ${fundAllocations} 
-            WHERE ${fundAllocations.projectId} = ${projects.id} 
-            AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
-            AND ${fundAllocations.tenantId} = ${tenantId}
-          ) OR EXISTS (
-            SELECT 1 FROM ${costAllocations} 
-            WHERE ${costAllocations.projectId} = ${projects.id} 
-            AND ${costAllocations.enteredBy} = ${userId}
-            AND ${costAllocations.tenantId} = ${tenantId}
-          ) OR EXISTS (
-            SELECT 1 FROM ${transactions} as t2
-            WHERE t2.project_id = ${projects.id}
-            AND t2.user_id = ${userId}
-            AND t2.tenant_id = ${tenantId}
-          ))
-        )`
-      );
-    }
+      .where(and(
+        eq(projects.tenantId, tenantId),
+        eq(projects.status, "active")
+      ));
 
     const [spentResult] = await db
       .select({
         totalSpent: sum(transactions.amount),
       })
       .from(transactions)
-      .where(and(...spentConditions));
-
-    // Build revenue query conditions
-    let revenueConditions = [
-      eq(transactions.tenantId, tenantId),
-      eq(transactions.type, "revenue")
-    ];
-
-    // Apply role-based filtering for revenue transactions
-    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
-      revenueConditions.push(
-        sql`EXISTS (
-          SELECT 1 FROM ${projects} 
-          WHERE ${projects.id} = ${transactions.projectId}
-          AND (${projects.managerId} = ${userId} OR EXISTS (
-            SELECT 1 FROM ${projectAssignments} 
-            WHERE ${projectAssignments.projectId} = ${projects.id} 
-            AND ${projectAssignments.userId} = ${userId}
-            AND ${projectAssignments.tenantId} = ${tenantId}
-          ) OR EXISTS (
-            SELECT 1 FROM ${fundAllocations} 
-            WHERE ${fundAllocations.projectId} = ${projects.id} 
-            AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
-            AND ${fundAllocations.tenantId} = ${tenantId}
-          ) OR EXISTS (
-            SELECT 1 FROM ${costAllocations} 
-            WHERE ${costAllocations.projectId} = ${projects.id} 
-            AND ${costAllocations.enteredBy} = ${userId}
-            AND ${costAllocations.tenantId} = ${tenantId}
-          ) OR EXISTS (
-            SELECT 1 FROM ${transactions} as t2
-            WHERE t2.project_id = ${projects.id}
-            AND t2.user_id = ${userId}
-            AND t2.tenant_id = ${tenantId}
-          ))
-        )`
-      );
-    }
+      .where(and(
+        eq(transactions.tenantId, tenantId),
+        or(
+          eq(transactions.type, "expense"),
+          eq(transactions.type, "allocation")
+        )
+      ));
 
     const [revenueResult] = await db
       .select({
         totalRevenue: sum(transactions.amount),
       })
       .from(transactions)
-      .where(and(...revenueConditions));
+      .where(and(
+        eq(transactions.tenantId, tenantId),
+        eq(transactions.type, "revenue")
+      ));
 
     const totalBudget = parseFloat(budgetResult?.totalBudget || "0") || 0;
     const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
@@ -1305,16 +1140,28 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // New project-specific analytics with budget utilization
+  // New project-specific analytics with budget utilization and cost breakdown
   async getProjectAnalytics(projectId: string, tenantId: string): Promise<{
-    projectId: string;
-    budget: number;
+    project: {
+      id: string;
+      title: string;
+      description: string;
+      budget: number;
+      consumedAmount: number;
+      revenue: number;
+      status: string;
+      startDate: string;
+      endDate: string;
+    };
     totalSpent: number;
-    revenue: number;
     netProfit: number;
-    budgetUtilizationPercentage: number;
+    budgetUtilization: number;
+    costBreakdown: {
+      labour: number;
+      materials: number;
+      other: number;
+    };
     remainingBudget: number;
-    transactionCount: number;
   }> {
     const project = await this.getProject(projectId, tenantId);
     if (!project) {
@@ -1404,17 +1251,27 @@ export class DatabaseStorage implements IStorage {
     const budgetUtilization = budget > 0 ? (totalSpent / budget) * 100 : 0;
     const remainingBudget = budget - totalSpent;
 
-    const transactionCount = parseInt(transactionSpent?.count?.toString() || "0") || 0;
-
     return {
-      projectId: project.id,
-      budget,
+      project: {
+        id: project.id,
+        title: project.title,
+        description: project.description || '',
+        budget,
+        consumedAmount: totalSpent,
+        revenue,
+        status: project.status,
+        startDate: project.startDate ? project.startDate.toISOString() : '',
+        endDate: project.endDate ? project.endDate.toISOString() : '',
+      },
       totalSpent,
-      revenue,
       netProfit,
-      budgetUtilizationPercentage: Math.round(budgetUtilization * 100) / 100,
+      budgetUtilization: Math.round(budgetUtilization * 100) / 100,
+      costBreakdown: {
+        labour: Math.round(labourCost * 100) / 100,
+        materials: Math.round(materialsCost * 100) / 100,
+        other: Math.round(otherCost * 100) / 100,
+      },
       remainingBudget,
-      transactionCount,
     };
   }
 
@@ -3348,425 +3205,6 @@ export class DatabaseStorage implements IStorage {
         eq(teamMembers.tenantId, tenantId)
       ))
       .orderBy(teamMembers.joinedAt);
-  }
-
-  // Tenant seeding operations - Hardened implementation
-  async seedTenantWithConstructionData(tenantId: string, systemContext: boolean = false): Promise<{ 
-    lineItemsCount: number; 
-    materialsCount: number; 
-    auditLogId?: string;
-    success: boolean;
-    operationId: string;
-  }> {
-    const operationId = `seed-${tenantId}-${Date.now()}`;
-    console.log(`🔒 Starting hardened seeding operation ${operationId} for tenant ${tenantId}...`);
-
-    // Start transaction for atomic operations
-    return await db.transaction(async (tx) => {
-      try {
-        // Step 1: Set RLS context for system-level seeding
-        console.log(`🛡️  Setting RLS context for tenant ${tenantId}...`);
-        await tx.execute(sql`SELECT set_config('app.tenant', ${tenantId}, true)`);
-        await tx.execute(sql`SELECT set_config('app.user_role', 'system', true)`);
-
-        // Step 2: Check current status for logging purposes
-        const preStatus = await this.checkTenantSeedingStatusInTransaction(tx, tenantId);
-        console.log(`📊 Pre-seed status: ${preStatus.lineItemsCount} line items, ${preStatus.materialsCount} materials`);
-
-        // Step 3: Define expected seeding data with unique constraints
-        const expectedLineItemsData: Array<{
-          category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works" | "marketing";
-          name: string;
-          description: string;
-          tenantId: string;
-        }> = [
-          // Land Purchase (includes Legal & Approvals)
-          { category: "land_purchase", name: "Land Purchase", description: "Acquisition of construction land", tenantId },
-          { category: "land_purchase", name: "Legal Fees", description: "Legal documentation and transfer fees", tenantId },
-          { category: "land_purchase", name: "Government Approvals", description: "Planning permits and government approvals", tenantId },
-          
-          // Site Preparation
-          { category: "site_preparation", name: "Site Clearing", description: "Clearing vegetation and debris from site", tenantId },
-          { category: "site_preparation", name: "Soil Test", description: "Soil testing and analysis", tenantId },
-          { category: "site_preparation", name: "Survey & Pegging", description: "Site surveying and boundary pegging", tenantId },
-          { category: "site_preparation", name: "Temporary Structures", description: "Site offices and temporary facilities", tenantId },
-          { category: "site_preparation", name: "Site Fencing", description: "Temporary site security fencing", tenantId },
-          
-          // Foundation
-          { category: "foundation", name: "Excavation", description: "Foundation excavation and earthworks", tenantId },
-          { category: "foundation", name: "Blinding Concrete", description: "Blinding concrete for foundation base", tenantId },
-          { category: "foundation", name: "Footings", description: "Foundation footings and strip foundations", tenantId },
-          { category: "foundation", name: "Damp Proof Course", description: "Damp proof course installation", tenantId },
-          { category: "foundation", name: "Reinforcement", description: "Steel reinforcement for foundation", tenantId },
-          
-          // Structural (includes Blockwork & Decking)
-          { category: "structural", name: "Block Molding", description: "Concrete block molding and preparation", tenantId },
-          { category: "structural", name: "Block Laying", description: "Wall construction with concrete blocks", tenantId },
-          { category: "structural", name: "Columns", description: "Concrete column construction", tenantId },
-          { category: "structural", name: "Lintels", description: "Lintel installation above openings", tenantId },
-          { category: "structural", name: "Scaffolding", description: "Scaffolding for construction", tenantId },
-          { category: "structural", name: "Formwork", description: "Formwork for concrete decking", tenantId },
-          { category: "structural", name: "Concrete Casting", description: "Concrete casting for deck slabs", tenantId },
-          
-          // Roofing
-          { category: "roofing", name: "Trusses", description: "Roof truss installation", tenantId },
-          { category: "roofing", name: "Roof Covering", description: "Roof covering installation", tenantId },
-          { category: "roofing", name: "Fascia & Soffit", description: "Fascia board and soffit installation", tenantId },
-          { category: "roofing", name: "Gutters", description: "Gutter and downpipe installation", tenantId },
-          
-          // Electrical
-          { category: "electrical", name: "Electrical Rough-in", description: "Electrical rough-in installation", tenantId },
-          { category: "electrical", name: "Electrical Final Fix", description: "Final electrical connections and testing", tenantId },
-          { category: "electrical", name: "Panel Installation", description: "Electrical panel and distribution setup", tenantId },
-          { category: "electrical", name: "Lighting Fixtures", description: "Installation of lighting fixtures", tenantId },
-          
-          // Plumbing
-          { category: "plumbing", name: "Plumbing Rough-in", description: "Plumbing rough-in installation", tenantId },
-          { category: "plumbing", name: "Septic Tank", description: "Septic tank installation", tenantId },
-          { category: "plumbing", name: "Borehole", description: "Water borehole drilling and setup", tenantId },
-          { category: "plumbing", name: "Plumbing Final Fix", description: "Final plumbing connections and testing", tenantId },
-          
-          // Finishing
-          { category: "finishing", name: "Plastering", description: "Wall and ceiling plastering", tenantId },
-          { category: "finishing", name: "Screeding", description: "Floor screeding and leveling", tenantId },
-          { category: "finishing", name: "Windows", description: "Window installation", tenantId },
-          { category: "finishing", name: "Doors", description: "Door installation", tenantId },
-          { category: "finishing", name: "Tiling", description: "Floor and wall tiling", tenantId },
-          { category: "finishing", name: "Ceiling", description: "Ceiling installation and finishing", tenantId },
-          { category: "finishing", name: "Painting", description: "Interior and exterior painting", tenantId },
-          { category: "finishing", name: "Cabinetry", description: "Kitchen and bathroom cabinetry", tenantId },
-          { category: "finishing", name: "Sanitary", description: "Sanitary ware installation", tenantId },
-          
-          // External Works
-          { category: "external_works", name: "Driveway", description: "Driveway construction", tenantId },
-          { category: "external_works", name: "Perimeter Fence & Gate", description: "Perimeter fencing and gate installation", tenantId },
-          { category: "external_works", name: "Landscaping", description: "Site landscaping and gardening", tenantId },
-          { category: "external_works", name: "Drainage", description: "Site drainage system", tenantId },
-          
-          // Marketing (includes Close-out activities)
-          { category: "marketing", name: "Marketing Collateral", description: "Marketing materials and brochures", tenantId },
-          { category: "marketing", name: "Agent Commission", description: "Sales agent commission payments", tenantId },
-          { category: "marketing", name: "Final Cleaning", description: "Construction cleanup and final inspection", tenantId },
-          { category: "marketing", name: "Occupancy Certificate", description: "Final approvals and occupancy certificate", tenantId },
-        ];
-
-        const expectedMaterialsData = [
-          // Basic construction materials
-          { name: "Cement", unit: "bag", currentUnitPrice: "12.50", supplier: "CemCorp Ltd", tenantId },
-          { name: "Sharp Sand", unit: "m³", currentUnitPrice: "45.00", supplier: "Quarry Supplies", tenantId },
-          { name: "Granite", unit: "m³", currentUnitPrice: "55.00", supplier: "Quarry Supplies", tenantId },
-          { name: "Laterite", unit: "m³", currentUnitPrice: "35.00", supplier: "Quarry Supplies", tenantId },
-          { name: "Water", unit: "tanker", currentUnitPrice: "85.00", supplier: "Water Services", tenantId },
-          
-          // Reinforcement materials
-          { name: "Reinforcement Rod", unit: "kg", currentUnitPrice: "4.20", supplier: "SteelWorks Inc", tenantId },
-          { name: "Binding Wire", unit: "roll", currentUnitPrice: "25.00", supplier: "SteelWorks Inc", tenantId },
-          { name: "Timber", unit: "pcs", currentUnitPrice: "15.00", supplier: "Forest Products Ltd", tenantId },
-          { name: "Nails", unit: "kg", currentUnitPrice: "3.50", supplier: "Hardware Central", tenantId },
-          
-          // Roofing materials
-          { name: "Aluminium Roofing Sheet", unit: "m²", currentUnitPrice: "28.00", supplier: "RoofTech Ltd", tenantId },
-          { name: "Fascia Board", unit: "pcs", currentUnitPrice: "45.00", supplier: "RoofTech Ltd", tenantId },
-          { name: "PVC Soffit", unit: "m²", currentUnitPrice: "22.00", supplier: "RoofTech Ltd", tenantId },
-          
-          // Electrical materials
-          { name: "Electrical Conduit", unit: "length", currentUnitPrice: "4.50", supplier: "ElectroMax", tenantId },
-          { name: "Cables", unit: "roll", currentUnitPrice: "125.00", supplier: "ElectroMax", tenantId },
-          { name: "Switches & Sockets", unit: "pcs", currentUnitPrice: "8.50", supplier: "ElectroMax", tenantId },
-          
-          // Plumbing materials
-          { name: "Plumbing Pipe", unit: "length", currentUnitPrice: "18.50", supplier: "PlumbPro", tenantId },
-          { name: "Plumbing Fittings", unit: "pcs", currentUnitPrice: "5.50", supplier: "PlumbPro", tenantId },
-          
-          // Finishing materials
-          { name: "Paint", unit: "bucket", currentUnitPrice: "35.00", supplier: "ColorMax", tenantId },
-          { name: "Floor Tiles", unit: "m²", currentUnitPrice: "42.00", supplier: "TileWorld", tenantId },
-          { name: "Ceiling Boards", unit: "m²", currentUnitPrice: "25.00", supplier: "CeilingPro", tenantId },
-          
-          // Fixtures and fittings
-          { name: "Doors", unit: "pcs", currentUnitPrice: "280.00", supplier: "DoorCraft", tenantId },
-          { name: "Windows", unit: "pcs", currentUnitPrice: "350.00", supplier: "WindowWorks", tenantId },
-          { name: "Kitchen Sink", unit: "pcs", currentUnitPrice: "150.00", supplier: "KitchenPro", tenantId },
-          { name: "WC Set", unit: "pcs", currentUnitPrice: "280.00", supplier: "SanitaryWare Co", tenantId },
-          { name: "Paving Stones", unit: "m²", currentUnitPrice: "42.00", supplier: "StoneCraft", tenantId },
-        ];
-
-        // Step 4: Idempotent insert with ON CONFLICT DO NOTHING
-        console.log(`📦 Seeding ${expectedLineItemsData.length} line items with ON CONFLICT handling...`);
-        await tx.insert(lineItems).values(expectedLineItemsData).onConflictDoNothing({
-          target: [lineItems.tenantId, lineItems.category, lineItems.name]
-        });
-
-        console.log(`🏗️  Seeding ${expectedMaterialsData.length} materials with ON CONFLICT handling...`);
-        await tx.insert(materials).values(expectedMaterialsData).onConflictDoNothing({
-          target: [materials.tenantId, materials.name]
-        });
-
-        // Step 5: Post-seed verification and count assertion
-        const postStatus = await this.checkTenantSeedingStatusInTransaction(tx, tenantId);
-        console.log(`📊 Post-seed status: ${postStatus.lineItemsCount} line items, ${postStatus.materialsCount} materials`);
-
-        // Verify expected minimums were achieved
-        const expectedLineItemsCount = expectedLineItemsData.length;
-        const expectedMaterialsCount = expectedMaterialsData.length;
-        
-        if (postStatus.lineItemsCount < expectedLineItemsCount) {
-          throw new Error(`Line items count verification failed: expected at least ${expectedLineItemsCount}, got ${postStatus.lineItemsCount}`);
-        }
-        
-        if (postStatus.materialsCount < expectedMaterialsCount) {
-          throw new Error(`Materials count verification failed: expected at least ${expectedMaterialsCount}, got ${postStatus.materialsCount}`);
-        }
-
-        // Step 6: Create audit log entry for seeding operation
-        const auditLogData: InsertAuditLog = {
-          action: 'company_updated', // Using valid enum value for tenant seeding
-          entityType: 'tenant',
-          entityId: tenantId,
-          userId: null, // System operations use null userId
-          details: {
-            operationId,
-            operationType: 'tenant_data_seeding',
-            preSeeding: {
-              lineItemsCount: preStatus.lineItemsCount,
-              materialsCount: preStatus.materialsCount
-            },
-            postSeeding: {
-              lineItemsCount: postStatus.lineItemsCount,
-              materialsCount: postStatus.materialsCount
-            },
-            expectedCounts: {
-              lineItemsCount: expectedLineItemsCount,
-              materialsCount: expectedMaterialsCount
-            },
-            systemContext,
-            seedingMethod: 'hardened_idempotent'
-          },
-          tenantId
-        };
-
-        const [auditLog] = await tx.insert(auditLogs).values(auditLogData).returning();
-
-        console.log(`✅ Seeding operation ${operationId} completed successfully!`);
-        console.log(`🔍 Verification: ${postStatus.lineItemsCount}/${expectedLineItemsCount} line items, ${postStatus.materialsCount}/${expectedMaterialsCount} materials`);
-        console.log(`📝 Audit log created: ${auditLog.id}`);
-
-        return {
-          lineItemsCount: postStatus.lineItemsCount,
-          materialsCount: postStatus.materialsCount,
-          auditLogId: auditLog.id,
-          success: true,
-          operationId
-        };
-
-      } catch (error) {
-        console.error(`❌ Seeding operation ${operationId} failed:`, error);
-        
-        // Create audit log for failed operation
-        try {
-          const failureAuditData: InsertAuditLog = {
-            action: 'company_updated', // Using valid enum value for failed seeding
-            entityType: 'tenant',
-            entityId: tenantId,
-            userId: null, // System operations use null userId
-            details: {
-              operationId,
-              operationType: 'tenant_data_seeding_failed',
-              error: error instanceof Error ? error.message : 'Unknown error',
-              systemContext,
-              seedingMethod: 'hardened_idempotent'
-            },
-            tenantId
-          };
-          
-          await tx.insert(auditLogs).values(failureAuditData);
-        } catch (auditError) {
-          console.error('❌ Failed to create failure audit log:', auditError);
-        }
-        
-        // Re-throw to trigger transaction rollback
-        throw error;
-      }
-    });
-  }
-
-  async checkTenantSeedingStatus(tenantId: string): Promise<{ hasLineItems: boolean; hasMaterials: boolean; lineItemsCount: number; materialsCount: number }> {
-    const [lineItemsResult] = await db
-      .select({ count: count(lineItems.id) })
-      .from(lineItems)
-      .where(eq(lineItems.tenantId, tenantId));
-
-    const [materialsResult] = await db
-      .select({ count: count(materials.id) })
-      .from(materials)
-      .where(eq(materials.tenantId, tenantId));
-
-    const lineItemsCount = lineItemsResult?.count || 0;
-    const materialsCount = materialsResult?.count || 0;
-
-    return {
-      hasLineItems: lineItemsCount > 0,
-      hasMaterials: materialsCount > 0,
-      lineItemsCount,
-      materialsCount
-    };
-  }
-
-  // Helper method for checking status within a transaction
-  private async checkTenantSeedingStatusInTransaction(tx: any, tenantId: string): Promise<{ hasLineItems: boolean; hasMaterials: boolean; lineItemsCount: number; materialsCount: number }> {
-    const [lineItemsResult] = await tx
-      .select({ count: count(lineItems.id) })
-      .from(lineItems)
-      .where(eq(lineItems.tenantId, tenantId));
-
-    const [materialsResult] = await tx
-      .select({ count: count(materials.id) })
-      .from(materials)
-      .where(eq(materials.tenantId, tenantId));
-
-    const lineItemsCount = lineItemsResult?.count || 0;
-    const materialsCount = materialsResult?.count || 0;
-
-    return {
-      hasLineItems: lineItemsCount > 0,
-      hasMaterials: materialsCount > 0,
-      lineItemsCount,
-      materialsCount
-    };
-  }
-
-  // Hardened bulk seeding method with comprehensive error handling
-  async seedAllTenantsWithMissingData(): Promise<Array<{ 
-    tenantId: string; 
-    tenantName: string; 
-    seeded: boolean; 
-    auditLogId?: string;
-    operationId?: string;
-    error?: string;
-    preCount?: { lineItems: number; materials: number };
-    postCount?: { lineItems: number; materials: number };
-  }>> {
-    console.log('🚀 Starting hardened bulk tenant seeding process...');
-    
-    // Get all active companies
-    const allCompanies = await db.select().from(companies).where(eq(companies.status, 'active'));
-    console.log(`📊 Found ${allCompanies.length} active companies to process`);
-    
-    const results: Array<{ 
-      tenantId: string; 
-      tenantName: string; 
-      seeded: boolean; 
-      auditLogId?: string;
-      operationId?: string;
-      error?: string;
-      preCount?: { lineItems: number; materials: number };
-      postCount?: { lineItems: number; materials: number };
-    }> = [];
-
-    let processedCount = 0;
-    let seededCount = 0;
-    let skippedCount = 0;
-    let errorCount = 0;
-
-    for (const company of allCompanies) {
-      try {
-        processedCount++;
-        console.log(`\n🏢 Processing ${processedCount}/${allCompanies.length}: ${company.name} (${company.id})`);
-        
-        // Check current status (this is outside the hardened seeding transaction)
-        const preStatus = await this.checkTenantSeedingStatus(company.id);
-        console.log(`📊 Pre-check: ${preStatus.lineItemsCount} line items, ${preStatus.materialsCount} materials`);
-        
-        // Always attempt seeding with hardened method (it will handle idempotency)
-        const seedResult = await this.seedTenantWithConstructionData(company.id, true);
-        
-        // Check if data was actually seeded or if it was already complete
-        const wasDataSeeded = seedResult.success && (
-          seedResult.lineItemsCount > preStatus.lineItemsCount || 
-          seedResult.materialsCount > preStatus.materialsCount
-        );
-        
-        if (wasDataSeeded) {
-          seededCount++;
-          console.log(`✅ Successfully seeded ${company.name}`);
-        } else {
-          skippedCount++;
-          console.log(`⏭️  ${company.name} already had complete data - verified integrity`);
-        }
-        
-        results.push({
-          tenantId: company.id,
-          tenantName: company.name,
-          seeded: wasDataSeeded,
-          auditLogId: seedResult.auditLogId,
-          operationId: seedResult.operationId,
-          preCount: { 
-            lineItems: preStatus.lineItemsCount, 
-            materials: preStatus.materialsCount 
-          },
-          postCount: { 
-            lineItems: seedResult.lineItemsCount, 
-            materials: seedResult.materialsCount 
-          }
-        });
-
-      } catch (error) {
-        errorCount++;
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`❌ Error processing tenant ${company.id} (${company.name}):`, errorMessage);
-        
-        results.push({
-          tenantId: company.id,
-          tenantName: company.name,
-          seeded: false,
-          error: errorMessage
-        });
-      }
-    }
-
-    // Create summary audit log for the bulk operation
-    try {
-      const bulkAuditData: InsertAuditLog = {
-        action: 'company_updated', // Using valid enum value for bulk seeding
-        entityType: 'system',
-        entityId: 'bulk-operation',
-        userId: null, // System operations use null userId
-        details: {
-          operationType: 'bulk_tenant_seeding',
-          totalTenants: allCompanies.length,
-          processedCount,
-          seededCount,
-          skippedCount,
-          errorCount,
-          timestamp: new Date().toISOString(),
-          results: results.map(r => ({
-            tenantId: r.tenantId,
-            tenantName: r.tenantName,
-            seeded: r.seeded,
-            operationId: r.operationId,
-            hasError: !!r.error
-          }))
-        },
-        tenantId: null // System bulk operations use null tenantId
-      };
-
-      await db.insert(auditLogs).values(bulkAuditData);
-    } catch (auditError) {
-      console.error('❌ Failed to create bulk operation audit log:', auditError);
-    }
-
-    console.log('\n🎉 Bulk seeding operation completed!');
-    console.log('====================================================================');
-    console.log(`📈 Total tenants processed: ${processedCount}`);
-    console.log(`✅ Tenants seeded: ${seededCount}`);
-    console.log(`⏭️  Tenants skipped (already complete): ${skippedCount}`);
-    console.log(`❌ Tenants with errors: ${errorCount}`);
-    
-    if (seededCount > 0) {
-      console.log(`\n🏗️  Each seeded tenant now has construction data across lifecycle phases`);
-    }
-
-    return results;
   }
 }
 

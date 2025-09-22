@@ -91,11 +91,7 @@ function setTenantContext() {
       
       // CRITICAL SECURITY: Set Postgres tenant context for RLS policies
       // This ensures all subsequent queries are automatically filtered by tenant
-      const safeTenantId = (tenantId || '').replace(/'/g, "''");
-      const safeRole = (normalizedRole || '').replace(/'/g, "''");
-      await db.execute(sql.raw(`SELECT set_config('app.tenant', '${safeTenantId}', true)`));
-      // CRITICAL SECURITY: Set user role for RLS policies that require console_manager access
-      await db.execute(sql.raw(`SELECT set_config('app.user_role', '${safeRole}', true)`));
+      await db.execute(sql`SELECT set_config('app.tenant', ${tenantId}, true)`);
       
       // Set tenant context for all subsequent operations
       req.tenant = {
@@ -129,22 +125,11 @@ function authorize(allowedRoles: string[]) {
       const userRole = req.tenant?.role || req.userContext?.normalizedRole;
       const userStatus = req.userContext?.user?.status;
       
-      console.log("DEBUG AUTHORIZE:", { 
-        url: req.url, 
-        userRole, 
-        allowedRoles, 
-        userStatus,
-        hasTenant: !!req.tenant,
-        hasUserContext: !!req.userContext 
-      });
-      
       if (!userRole) {
-        console.log("DEBUG: No user role found, returning 401");
         return res.status(401).json({ message: 'Unauthorized - no user context' });
       }
       
       if (!allowedRoles.includes(userRole)) {
-        console.log("DEBUG: Role not allowed, returning 403");
         return res.status(403).json({ 
           message: `Access denied. Required roles: ${allowedRoles.join(', ')}. Your role: ${userRole}` 
         });
@@ -152,11 +137,9 @@ function authorize(allowedRoles: string[]) {
       
       // Verify user is active
       if (userStatus !== 'active') {
-        console.log("DEBUG: User not active, returning 403");
         return res.status(403).json({ message: 'Access denied. User account is not active.' });
       }
       
-      console.log("DEBUG: Authorization successful, proceeding");
       next();
     } catch (error) {
       console.error('Authorization error:', error);
@@ -182,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-  // Public auth routes (must be BEFORE global middleware to avoid authentication requirement)
+  // Auth routes
   app.get('/api/auth/user', async (req: any, res) => {
     try {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
@@ -198,7 +181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             status: user.status,
             mustChangePassword: user.mustChangePassword
           });
@@ -216,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             firstName: user.firstName,
             lastName: user.lastName,
             role: user.role,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             status: user.status,
             profileImageUrl: user.profileImageUrl
           });
@@ -281,7 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: email,
             projectId: null,
             amount: null,
-            tenantId: "system",
+            tenantId: null,
             details: { 
               email,
               reason: "user_not_found",
@@ -305,7 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: user.id,
             projectId: null,
             amount: null,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             details: { 
               email,
               reason: "account_locked",
@@ -332,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: user.id,
             projectId: null,
             amount: null,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             details: { 
               email,
               reason: "account_inactive",
@@ -377,7 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entityId: user.id,
             projectId: null,
             amount: null,
-            tenantId: user.tenantId,
+            tenantId: user.companyId,
             details: { 
               email,
               reason: "invalid_password",
@@ -459,18 +442,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Global middleware for all remaining /api routes - ensures authentication and tenant context
-  // This applies to all routes that come after this point, excluding the public auth routes above
-  app.use('/api', isAuthenticated, setTenantContext());
-
-  // Password change endpoint - inherits authentication and tenant context from global middleware
-  app.post('/api/auth/change-password', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  // Password change endpoint
+  app.post('/api/auth/change-password', isAuthenticated, async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const passwordData = changePasswordSchema.parse(req.body);
       const { currentPassword, newPassword } = passwordData;
 
       // Get current user with proper tenant validation
+      // CRITICAL SECURITY FIX: Use tenantId to prevent cross-tenant access
       const user = await storage.getUser(userId, tenantId);
       if (!user || !user.passwordHash) {
         return res.status(404).json({ message: "User not found" });
@@ -498,11 +478,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           entityId: userId,
           projectId: null,
           amount: null,
-          tenantId: tenantId, // FIXED: Use consistent tenantId
+          tenantId: user.tenantId,
           details: { 
             ip: req.ip || req.connection?.remoteAddress || 'unknown'
           },
-        }, tenantId); // FIXED: Use consistent tenantId
+        }, user.tenantId);
       } catch (auditError) {
         console.error("Failed to create audit log for password change:", auditError);
       }
@@ -523,25 +503,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Apply tenant context middleware to all authenticated API routes
+  app.use('/api', isAuthenticated, setTenantContext());
+
   // Admin user management endpoints  
   app.post('/api/admin/users', authorize(['admin', 'console_manager']), async (req: any, res) => {
     try {
-      console.log('Admin user creation - req.tenant:', req.tenant);
-      console.log('Admin user creation - req.userContext:', req.userContext);
-      
-      if (!req.tenant || !req.tenant.tenantId) {
-        console.error('Missing tenant context in user creation');
-        return res.status(401).json({ message: 'Tenant context not found' });
-      }
-      
-      const { userId, tenantId } = req.tenant;
-      const currentUser = req.userContext.user;
+      const { userId, tenantId, user: currentUser } = await getUserData(req);
       const userData = adminCreateUserSchema.parse(req.body);
 
       // SECURITY FIX: tenantId is NEVER accepted from client - always use auth context
       const targetTenantId = tenantId; // Users can only be created in their own tenant
-      
-      console.log('targetTenantId for user creation:', targetTenantId);
       
       // SECURITY: Implement strict role-based creation rules per specification
       const canCreateRole = (creatorRole: string, targetRole: string): boolean => {
@@ -590,8 +562,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(userData.temporaryPassword, saltRounds);
 
-      // Create user with password - ensuring companyId is properly set
-      const userDataForCreation = {
+      // Create user with password - using companyId instead of tenantId
+      const newUser = await storage.createUserWithPassword({
         email: userData.email,
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -600,10 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         passwordHash,
         profileImageUrl: null,
         managerId: validatedManagerId,
-      };
-      
-      console.log('Creating user with data:', JSON.stringify(userDataForCreation, null, 2));
-      const newUser = await storage.createUserWithPassword(userDataForCreation, targetTenantId);
+      }, targetTenantId);
 
       // Create audit log
       try {
@@ -649,14 +618,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/admin/users', authorize(['admin', 'team_leader', 'console_manager']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
-      const currentUser = req.userContext.user;
+      const { tenantId, user: currentUser } = await getUserData(req);
 
       let users;
       if (currentUser.role === 'console_manager') {
         // Console managers can see users from all tenants
         const targetTenantId = req.query.tenantId as string || tenantId;
-        users = await storage.getAllUsers(targetTenantId, true); // Use systemContext for cross-tenant access
+        users = await storage.getAllUsers(targetTenantId);
       } else {
         // Regular users can only see users in their own tenant
         users = await storage.getAllUsers(tenantId);
@@ -688,9 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch('/api/admin/users/:id', authorize(['admin', 'console_manager']), async (req: any, res) => {
     try {
-      const currentUserId = req.tenant.userId;
-      const { tenantId } = req.tenant;
-      const currentUser = req.userContext.user;
+      const { userId: currentUserId, tenantId, user: currentUser } = await getUserData(req);
       const targetUserId = req.params.id;
       
       const updateSchema = z.object({
@@ -893,7 +859,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update company (PATCH for partial updates)
-  app.patch('/api/companies/:id', authorize(['console_manager']), async (req: any, res) => {
+  app.patch('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
       const { userId } = req.userContext;
       const companyData = insertCompanySchema.omit({ createdBy: true }).partial().parse(req.body);
@@ -940,7 +906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Change company admin password
-  app.post('/api/companies/:id/change-password', authorize(['console_manager']), async (req: any, res) => {
+  app.post('/api/companies/:id/change-password', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
       const { userId } = req.userContext;
       const companyId = req.params.id;
@@ -1003,7 +969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Keep PUT for backward compatibility
-  app.put('/api/companies/:id', authorize(['console_manager']), async (req: any, res) => {
+  app.put('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
       const companyData = insertCompanySchema.partial().parse(req.body);
       const company = await storage.updateCompany(req.params.id, companyData, req.tenant.tenantId, req.tenant.role);
@@ -1029,12 +995,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project routes
-  app.get('/api/projects', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/projects', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const { tenantId, userId, role } = req.tenant;
-      console.log("DEBUG: /api/projects called with:", { tenantId, userId, role });
       const projects = await storage.getProjects(tenantId, role, userId);
-      console.log("DEBUG: getProjects returned:", projects.length, "projects");
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -1042,7 +1006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/projects/:id', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/projects/:id', isAuthenticated, async (req: any, res) => {
     try {
       const projectId = req.params.id;
       
@@ -1051,7 +1015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
       }
       
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const project = await storage.getProject(projectId, tenantId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
@@ -1064,7 +1028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project-specific analytics endpoint with role-based filtering
-  app.get('/api/projects/:id/analytics', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/projects/:id/analytics', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const projectId = req.params.id;
       
@@ -1097,9 +1061,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/projects', authorize(['admin']), async (req: any, res) => {
+  app.post('/api/projects', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       
       const projectData = insertProjectSchema.parse({
         ...req.body,
@@ -1132,7 +1096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project assignment routes
-  app.get('/api/projects/:projectId/team-leaders', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/projects/:projectId/team-leaders', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const { projectId } = req.params;
       const { tenantId } = req.tenant;
@@ -1156,7 +1120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/project-assignments', authorize(['admin']), async (req: any, res) => {
+  app.get('/api/project-assignments', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
     try {
       const { tenantId } = req.tenant;
       const assignments = await storage.getProjectAssignments(tenantId);
@@ -1167,7 +1131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/project-assignments/:projectId', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/project-assignments/:projectId', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const { projectId } = req.params;
       const { tenantId } = req.tenant;
@@ -1190,7 +1154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/project-assignments', authorize(['admin']), async (req: any, res) => {
+  app.post('/api/project-assignments', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
     try {
       const { userId, tenantId } = req.tenant;
       
@@ -1255,7 +1219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/project-assignments/:projectId/:userId', authorize(['admin']), async (req: any, res) => {
+  app.delete('/api/project-assignments/:projectId/:userId', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
     try {
       const { userId: currentUserId, tenantId } = req.tenant;
       const { projectId, userId } = req.params;
@@ -1310,7 +1274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Team hierarchy endpoint
-  app.get('/api/projects/:id/team-hierarchy', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/projects/:id/team-hierarchy', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { id: projectId } = req.params;
       const { tenantId } = req.tenant;
@@ -1384,9 +1348,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Fund allocation routes
-  app.get('/api/fund-allocations', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/fund-allocations', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const allocations = await storage.getFundAllocations(tenantId);
       res.json(allocations);
     } catch (error) {
@@ -1395,9 +1359,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/fund-allocations', authorize(['admin']), async (req: any, res) => {
+  app.post('/api/fund-allocations', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       
       const allocationData = insertFundAllocationSchema.parse({
         ...req.body,
@@ -1442,14 +1406,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Transaction routes (read access for all authenticated users with role-based filtering)
-  app.get('/api/transactions', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
-      const { userId, tenantId, role } = req.tenant;
+      const { userId, tenantId, user } = await getUserData(req);
       
       // Role-based filtering: 
       // - Admins see all tenant transactions
       // - Team leaders see only transactions allocated to them
-      const transactions = await storage.getTransactions(tenantId, role === 'admin' ? undefined : userId);
+      const transactions = await storage.getTransactions(tenantId, user.role === 'admin' ? undefined : userId);
       res.json(transactions);
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -1457,9 +1421,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/transactions', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/transactions', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       
       const transactionData = insertTransactionSchema.parse({
         ...req.body,
@@ -1492,9 +1456,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Fund transfer routes
-  app.get('/api/fund-transfers', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/fund-transfers', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const transfers = await storage.getFundTransfers(tenantId);
       res.json(transfers);
     } catch (error) {
@@ -1503,9 +1467,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/fund-transfers', authorize(['admin']), async (req: any, res) => {
+  app.post('/api/fund-transfers', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       
       const transferData = insertFundTransferSchema.parse({
         ...req.body,
@@ -1538,10 +1502,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Analytics routes (read access for all authenticated users)
-  app.get('/api/analytics/tenant', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/analytics/tenant', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId, role, userId } = req.tenant;
-      const stats = await storage.getTenantStats(tenantId, role, userId);
+      const { tenantId } = await getUserData(req);
+      const stats = await storage.getTenantStats(tenantId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching tenant stats:", error);
@@ -1549,7 +1513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/project/:id', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/analytics/project/:id', isAuthenticated, async (req: any, res) => {
     try {
       const projectId = req.params.id;
       
@@ -1558,7 +1522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
       }
       
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const stats = await storage.getProjectStats(projectId, tenantId);
       res.json(stats);
     } catch (error) {
@@ -1568,10 +1532,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // New analytics endpoints for Sprint 4
-  app.get('/api/analytics/budget-summary', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/analytics/budget-summary', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId, role, userId } = req.tenant;
-      const budgetSummary = await storage.getBudgetSummary(tenantId, role, userId);
+      const { tenantId, user } = await getUserData(req);
+      const normalizedRole = mapLegacyRole(user.role);
+      const budgetSummary = await storage.getBudgetSummary(tenantId, normalizedRole, user.id);
       res.json(budgetSummary);
     } catch (error) {
       console.error("Error fetching budget summary:", error);
@@ -1579,9 +1544,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/labour-material-split', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/analytics/labour-material-split', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId, role, userId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { startDate, endDate, projectId, categories } = req.query;
       
       const filters: any = {};
@@ -1592,7 +1557,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.categories = Array.isArray(categories) ? categories : [categories];
       }
 
-      const splitData = await storage.getLabourMaterialSplit(tenantId, filters, role, userId);
+      const normalizedRole = mapLegacyRole(req.userContext.user.role);
+      const splitData = await storage.getLabourMaterialSplit(tenantId, filters, normalizedRole, req.userContext.userId);
       res.json(splitData);
     } catch (error) {
       console.error("Error fetching labour-material split:", error);
@@ -1600,9 +1566,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/category-spending', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/analytics/category-spending', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId, role, userId } = req.tenant;
+      const { tenantId, user } = await getUserData(req);
       const { startDate, endDate, projectId, categories } = req.query;
       
       const filters: any = {};
@@ -1613,7 +1579,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.categories = Array.isArray(categories) ? categories : [categories];
       }
 
-      const categoryData = await storage.getCategorySpending(tenantId, filters, role, userId);
+      const normalizedRole = mapLegacyRole(user.role);
+      const categoryData = await storage.getCategorySpending(tenantId, filters, normalizedRole, user.id);
       res.json(categoryData);
     } catch (error) {
       console.error("Error fetching category spending:", error);
@@ -1621,9 +1588,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/cost-allocations-filtered', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/cost-allocations-filtered', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { 
         startDate, 
         endDate, 
@@ -1664,9 +1631,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Audit log routes
-  app.get('/api/audit-logs', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/audit-logs', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const logs = await storage.getAuditLogs(tenantId);
       res.json(logs);
     } catch (error) {
@@ -1676,9 +1643,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User hierarchy routes - Updated to support fetching subordinates by team leader ID
-  app.get('/api/users/subordinates/:teamLeaderId', authorize(['admin']), async (req: any, res) => {
+  app.get('/api/users/subordinates/:teamLeaderId', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { teamLeaderId } = req.params;
       
       if (!teamLeaderId || !isValidUUID(teamLeaderId)) {
@@ -1694,9 +1661,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Backwards compatibility: Get subordinates for current user
-  app.get('/api/users/subordinates', authorize(['admin']), async (req: any, res) => {
+  app.get('/api/users/subordinates', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId: managerId, tenantId } = req.tenant;
+      const { userId: managerId, tenantId } = await getUserData(req);
       const subordinates = await storage.getSubordinates(managerId, tenantId);
       res.json(subordinates);
     } catch (error) {
@@ -1705,9 +1672,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/users/team-leaders', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/users/team-leaders', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const teamLeaders = await storage.getUsersByRole("team_leader", tenantId);
       res.json(teamLeaders);
     } catch (error) {
@@ -1716,9 +1683,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/users/team-leaders-with-hierarchy', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/users/team-leaders-with-hierarchy', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const teamLeadersWithHierarchy = await storage.getTeamLeadersWithHierarchy(tenantId);
       res.json(teamLeadersWithHierarchy);
     } catch (error) {
@@ -1728,9 +1695,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User management routes (admin only)
-  app.get('/api/users', authorize(['admin']), async (req: any, res) => {
+  app.get('/api/users', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const users = await storage.getAllUsers(tenantId);
       res.json(users);
     } catch (error) {
@@ -1739,9 +1706,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/users', authorize(['admin']), async (req: any, res) => {
+  app.post('/api/users', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       
       const userData = insertUserSchema.parse({
         ...req.body,
@@ -1770,9 +1737,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/users/:id/role', authorize(['admin']), async (req: any, res) => {
+  app.patch('/api/users/:id/role', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { role } = req.body;
       
       if (!['admin', 'team_leader', 'viewer'].includes(role)) {
@@ -1801,9 +1768,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch('/api/users/:id/status', authorize(['admin']), async (req: any, res) => {
+  app.patch('/api/users/:id/status', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { status } = req.body;
       
       if (!['active', 'inactive', 'pending'].includes(status)) {
@@ -1832,9 +1799,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/users/:id/reset-password', authorize(['admin']), async (req: any, res) => {
+  app.post('/api/users/:id/reset-password', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId, userId } = req.tenant;
+      const { tenantId, userId } = await getUserData(req);
       const userToReset = await storage.getUserById(req.params.id, tenantId);
       
       if (!userToReset) {
@@ -1897,13 +1864,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/objects/upload", authorize(['admin', 'team_leader', 'user']), async (req, res) => {
+  app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     res.json({ uploadURL });
   });
 
-  app.put("/api/receipts", authorize(['admin', 'team_leader', 'user']), async (req, res) => {
+  app.put("/api/receipts", isAuthenticated, async (req, res) => {
     if (!req.body.receiptURL) {
       return res.status(400).json({ error: "receiptURL is required" });
     }
@@ -1930,9 +1897,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Line items routes
-  app.get('/api/line-items', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/line-items', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const lineItems = await storage.getLineItems(tenantId);
       
       // Group by category for better organization
@@ -1958,9 +1925,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Materials routes
-  app.get('/api/materials', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/materials', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const materials = await storage.getMaterials(tenantId);
       
       // Return materials with current pricing info
@@ -1980,9 +1947,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cost allocations routes
-  app.post('/api/cost-allocations', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/cost-allocations', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const { projectId, lineItemId, labourCost = 0, quantity, unitCost, materialAllocations = [], dateIncurred } = req.body;
       
       // Validation: Require at least one material OR labour entry
@@ -2127,7 +2094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/cost-allocations/:projectId', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/cost-allocations/:projectId', isAuthenticated, async (req: any, res) => {
     try {
       const projectId = req.params.projectId;
       
@@ -2136,7 +2103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
       }
       
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       
       // Verify project access
       const project = await storage.getProject(projectId, tenantId);
@@ -2185,9 +2152,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Individual material save endpoint
-  app.post('/api/cost-allocations/material', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/cost-allocations/material', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const { projectId, lineItemId, materialId, quantity, unitPrice } = req.body;
       
       // Validation
@@ -2300,9 +2267,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Approval workflow routes
-  app.get('/api/approvals', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/approvals', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const table = req.query.table as string;
       
       const pendingApprovals = await storage.getPendingApprovals(tenantId, table === 'cost_allocations' ? 'cost_allocations' : undefined);
@@ -2314,9 +2281,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/approvals/:id/approve', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/approvals/:id/approve', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const recordId = req.params.id;
       const { comments } = req.body;
       
@@ -2387,9 +2354,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/approvals/:id/reject', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/approvals/:id/reject', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const recordId = req.params.id;
       const { comments } = req.body;
       
@@ -2453,9 +2420,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/approvals/:id/submit', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/approvals/:id/submit', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const recordId = req.params.id;
       
       // First get the current cost allocation to validate state
@@ -2517,9 +2484,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cost allocation submit route (clearer endpoint)
-  app.post('/api/cost-allocations/:id/submit', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/cost-allocations/:id/submit', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const recordId = req.params.id;
       
       // First get the current cost allocation to validate state
@@ -2582,7 +2549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PDF Export routes
-  app.get('/api/export/project/:id/pdf', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/export/project/:id/pdf', isAuthenticated, async (req: any, res) => {
     try {
       const projectId = req.params.id;
       
@@ -2591,7 +2558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
       }
       
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const pdfBuffer = await pdfExportService.generateProjectSummary(projectId, tenantId);
       
       res.setHeader('Content-Type', 'application/pdf');
@@ -2603,9 +2570,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/user-spend/:userId/pdf', authorize(['manager', 'team_leader']), async (req: any, res) => {
+  app.get('/api/export/user-spend/:userId/pdf', isAuthenticated, authorize(['manager', 'team_leader']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
       
@@ -2620,9 +2587,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/profit-statement/pdf', authorize(['manager']), async (req: any, res) => {
+  app.get('/api/export/profit-statement/pdf', isAuthenticated, authorize(['manager']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
       
@@ -2638,9 +2605,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CSV Import/Export routes
-  app.post('/api/import/transactions/csv', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/import/transactions/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId, userId } = req.tenant;
+      const { tenantId, userId } = await getUserData(req);
       const csvData = req.body.csvData;
       
       if (!csvData) {
@@ -2723,9 +2690,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/transactions/csv', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.get('/api/export/transactions/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const transactions = await storage.getTransactions(tenantId);
       
       // Convert transactions to CSV format
@@ -2743,9 +2710,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/allocations/csv', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const allocations = await storage.getFundAllocations(tenantId);
       
       // Convert allocations to CSV format
@@ -2763,9 +2730,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/import/allocations/csv', authorize(['admin']), async (req: any, res) => {
+  app.post('/api/import/allocations/csv', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { tenantId, userId } = req.tenant;
+      const { tenantId, userId } = await getUserData(req);
       const csvData = req.body.csvData;
       
       if (!csvData) {
@@ -2889,9 +2856,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/export/allocations/csv', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.get('/api/export/allocations/csv', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const allocations = await storage.getFundAllocations(tenantId);
       
       // Convert allocations to CSV format with proper schema columns
@@ -2910,9 +2877,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Line Items routes (read access for all, create/update for admin and team_leader)
-  app.get('/api/line-items', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/line-items', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const lineItems = await storage.getLineItems(tenantId);
       res.json(lineItems);
     } catch (error) {
@@ -2921,9 +2888,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/line-items/:id', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/line-items/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const lineItem = await storage.getLineItem(req.params.id, tenantId);
       if (!lineItem) {
         return res.status(404).json({ message: "Line item not found" });
@@ -2935,9 +2902,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/line-items', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/line-items', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId, userId } = req.tenant;
+      const { tenantId, userId } = await getUserData(req);
       
       const lineItemData = insertLineItemSchema.parse({
         ...req.body,
@@ -2966,9 +2933,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/line-items/:id', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.put('/api/line-items/:id', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId, userId } = req.tenant;
+      const { tenantId, userId } = await getUserData(req);
       
       const lineItemData = insertLineItemSchema.partial().parse(req.body);
       const lineItem = await storage.updateLineItem(req.params.id, lineItemData, tenantId);
@@ -2998,9 +2965,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Materials routes
-  app.get('/api/materials', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/materials', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const materials = await storage.getMaterials(tenantId);
       res.json(materials);
     } catch (error) {
@@ -3009,9 +2976,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/materials/:id', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/materials/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const material = await storage.getMaterial(req.params.id, tenantId);
       if (!material) {
         return res.status(404).json({ message: "Material not found" });
@@ -3023,9 +2990,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/materials', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.post('/api/materials', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId, userId } = req.tenant;
+      const { tenantId, userId } = await getUserData(req);
       
       const materialData = insertMaterialSchema.parse({
         ...req.body,
@@ -3054,9 +3021,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/materials/:id', authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+  app.put('/api/materials/:id', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { tenantId, userId } = req.tenant;
+      const { tenantId, userId } = await getUserData(req);
       
       const materialData = insertMaterialSchema.partial().parse(req.body);
       const material = await storage.updateMaterial(req.params.id, materialData, tenantId);
@@ -3086,9 +3053,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Budget Alerts API endpoints
-  app.get('/api/budget-alerts', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/budget-alerts', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { status } = req.query;
       
       const alerts = await storage.getBudgetAlerts(tenantId, status as 'active' | 'acknowledged' | 'resolved');
@@ -3099,9 +3066,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/budget-alerts/project/:projectId', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/budget-alerts/project/:projectId', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { projectId } = req.params;
       
       const alerts = await storage.getBudgetAlertsByProject(projectId, tenantId);
@@ -3112,9 +3079,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/budget-alerts/:alertId/acknowledge', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/budget-alerts/:alertId/acknowledge', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const { alertId } = req.params;
       
       const updatedAlert = await storage.acknowledgeBudgetAlert(alertId, userId, tenantId);
@@ -3140,9 +3107,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/budget-alerts/:alertId/resolve', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/budget-alerts/:alertId/resolve', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const { alertId } = req.params;
       
       const updatedAlert = await storage.resolveBudgetAlert(alertId, tenantId);
@@ -3169,9 +3136,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Enhanced budget impact validation endpoint for frontend confirmation dialogs
-  app.post('/api/budget/validate-impact', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.post('/api/budget/validate-impact', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       const { projectId, proposedCost } = req.body;
       
       if (!projectId || proposedCost == null) {
@@ -3213,9 +3180,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Budget Amendments API Endpoints
   
   // POST /api/budget-amendments - Create new budget amendment proposal
-  app.post('/api/budget-amendments', authorize(['team_leader', 'admin']), async (req: any, res) => {
+  app.post('/api/budget-amendments', isAuthenticated, authorize(['team_leader', 'admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       
       const amendmentData = insertBudgetAmendmentSchema.parse({
         ...req.body,
@@ -3265,9 +3232,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/budget-amendments - Retrieve budget amendments with optional filtering
-  app.get('/api/budget-amendments', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/budget-amendments', isAuthenticated, async (req: any, res) => {
     try {
-      const { userId, tenantId, role } = req.tenant;
+      const { userId, tenantId, user } = await getUserData(req);
       const { projectId, status } = req.query;
       
       const filters: any = {};
@@ -3275,7 +3242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (status) filters.status = status as string;
 
       // Role-based filtering
-      const normalizedRole = role;
+      const normalizedRole = mapLegacyRole(user.role);
 
       const budgetAmendments = await storage.getBudgetAmendments(
         tenantId, 
@@ -3292,10 +3259,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/budget-amendments/:id - Get specific budget amendment by ID
-  app.get('/api/budget-amendments/:id', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/budget-amendments/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const { userId, tenantId, role } = req.tenant;
-      const normalizedRole = role;
+      const { userId, tenantId, user } = await getUserData(req);
+      const normalizedRole = mapLegacyRole(user.role);
       const budgetAmendments = await storage.getBudgetAmendments(tenantId, undefined, undefined, normalizedRole, userId);
       const budgetAmendment = budgetAmendments.find(a => a.id === req.params.id);
       
@@ -3311,9 +3278,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PATCH /api/budget-amendments/:id/status - Update amendment status (approve/reject)
-  app.patch('/api/budget-amendments/:id/status', authorize(['admin']), async (req: any, res) => {
+  app.patch('/api/budget-amendments/:id/status', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const { status, comments } = req.body;
       
       // Validate status
@@ -3396,9 +3363,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Change Orders API Endpoints
   
   // POST /api/change-orders - Create new change order proposal
-  app.post('/api/change-orders', authorize(['team_leader', 'admin']), async (req: any, res) => {
+  app.post('/api/change-orders', isAuthenticated, authorize(['team_leader', 'admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       
       const changeOrderData = insertChangeOrderSchema.parse({
         ...req.body,
@@ -3448,9 +3415,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/change-orders - Retrieve change orders with optional filtering
-  app.get('/api/change-orders', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/change-orders', isAuthenticated, async (req: any, res) => {
     try {
-      const { userId, tenantId, role } = req.tenant;
+      const { userId, tenantId, user } = await getUserData(req);
       const { projectId, status } = req.query;
       
       const filters: any = {};
@@ -3458,7 +3425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (status) filters.status = status as string;
 
       // Role-based filtering
-      const normalizedRole = role;
+      const normalizedRole = mapLegacyRole(user.role);
 
       const changeOrders = await storage.getChangeOrders(
         tenantId, 
@@ -3475,10 +3442,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/change-orders/:id - Get specific change order by ID
-  app.get('/api/change-orders/:id', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/change-orders/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const { userId, tenantId, role } = req.tenant;
-      const normalizedRole = role;
+      const { userId, tenantId, user } = await getUserData(req);
+      const normalizedRole = mapLegacyRole(user.role);
       const changeOrders = await storage.getChangeOrders(tenantId, undefined, undefined, normalizedRole, userId);
       const changeOrder = changeOrders.find(c => c.id === req.params.id);
       
@@ -3494,9 +3461,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PATCH /api/change-orders/:id/status - Update change order status (approve/reject)
-  app.patch('/api/change-orders/:id/status', authorize(['admin']), async (req: any, res) => {
+  app.patch('/api/change-orders/:id/status', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = req.tenant;
+      const { userId, tenantId } = await getUserData(req);
       const { status, comments } = req.body;
       
       // Validate status
@@ -3580,7 +3547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/projects/:id/budget-history - Get complete budget history
-  app.get('/api/projects/:id/budget-history', authorize(['admin', 'team_leader', 'viewer']), async (req: any, res) => {
+  app.get('/api/projects/:id/budget-history', isAuthenticated, async (req: any, res) => {
     try {
       const projectId = req.params.id;
       
@@ -3589,7 +3556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
       }
       
-      const { tenantId } = req.tenant;
+      const { tenantId } = await getUserData(req);
       
       // Validate project exists and user has access
       const project = await storage.getProject(projectId, tenantId);
@@ -3686,7 +3653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team Management Routes
   
   // GET /api/teams - List all teams for tenant
-  app.get('/api/teams', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/teams', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const { tenantId } = req.tenant;
       const teams = await storage.getTeams(tenantId);
@@ -3698,7 +3665,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/teams/:id - Get specific team
-  app.get('/api/teams/:id', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/teams/:id', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3721,7 +3688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/teams - Create new team (admin or team_leader)
-  app.post('/api/teams', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/teams', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { tenantId } = req.tenant;
       
@@ -3743,7 +3710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/teams/:id - Update team (admin or team_leader)
-  app.put('/api/teams/:id', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.put('/api/teams/:id', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3772,7 +3739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/teams/:id - Delete team (admin only)
-  app.delete('/api/teams/:id', authorize(['admin']), async (req: any, res) => {
+  app.delete('/api/teams/:id', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3797,7 +3764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team Membership Routes
 
   // GET /api/teams/:id/members - Get team members
-  app.get('/api/teams/:id/members', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/teams/:id/members', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3816,7 +3783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/teams/:id/members - Add team member (admin or team_leader)
-  app.post('/api/teams/:id/members', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/teams/:id/members', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3845,7 +3812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/teams/:id/members/:userId - Remove team member (admin or team_leader)
-  app.delete('/api/teams/:id/members/:userId', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.delete('/api/teams/:id/members/:userId', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { id: teamId, userId } = req.params;
       const { tenantId } = req.tenant;
@@ -3868,7 +3835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/teams/:id/members/:userId - Update team member role (admin or team_leader)
-  app.put('/api/teams/:id/members/:userId', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.put('/api/teams/:id/members/:userId', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { id: teamId, userId } = req.params;
       const { tenantId } = req.tenant;
@@ -3899,7 +3866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User Team Routes
 
   // GET /api/users/:id/teams - Get teams for specific user (admin/team_leader only)
-  app.get('/api/users/:id/teams', authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/users/:id/teams', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const userId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3918,7 +3885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/users/me/teams - Get teams for current user
-  app.get('/api/users/me/teams', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  app.get('/api/users/me/teams', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
       const { userId, tenantId } = req.tenant;
       

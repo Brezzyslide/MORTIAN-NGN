@@ -39,9 +39,9 @@ export default function ChangeOrdersSummaryWidget({ onViewAll }: ChangeOrdersSum
 
   const formatCurrency = (amount: string | number) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return new Intl.NumberFormat('en-NG', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'NGN',
+      currency: 'USD',
       minimumFractionDigits: 0,
     }).format(numAmount);
   };
