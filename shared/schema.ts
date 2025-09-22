@@ -12,6 +12,8 @@ import {
   pgEnum,
   uuid,
   boolean,
+  primaryKey,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -69,6 +71,8 @@ export const users: any = pgTable("users", {
 }, (table) => ({
   // Composite unique constraint: email must be unique within each company
   uniqueEmailPerCompany: index("idx_users_email_company").on(sql`lower(${table.email})`, table.companyId),
+  // Unique index for foreign key support from team_members
+  uniqueUserCompany: uniqueIndex("idx_users_id_company").on(table.id, table.companyId),
 }));
 
 // Projects table
@@ -359,7 +363,15 @@ export const auditActionEnum = pgEnum("audit_action", [
   // Company audit actions
   "company_created",
   "company_updated",
-  "company_admin_password_changed"
+  "company_admin_password_changed",
+  // Team audit actions
+  "team_created",
+  "team_updated",
+  "team_deleted",
+  "team_member_added",
+  "team_member_removed",
+  "team_leader_assigned",
+  "team_leader_removed"
 ]);
 
 // Audit logs table
@@ -375,6 +387,53 @@ export const auditLogs = pgTable("audit_logs", {
   tenantId: varchar("tenant_id").references(() => companies.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Team role enum for team member roles
+export const teamRoleEnum = pgEnum("team_role", ["member", "lead"]);
+
+// Teams table
+export const teams = pgTable("teams", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  leaderId: varchar("leader_id").references(() => users.id, { onDelete: "set null" }), // Nullable - teams can exist without a leader
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Ensure team names are unique within each tenant
+  uniqueTeamNamePerTenant: uniqueIndex("idx_teams_name_tenant").on(table.name, table.tenantId),
+  // Required for foreign key support from team_members
+  uniqueTeamTenant: uniqueIndex("idx_teams_id_tenant").on(table.id, table.tenantId),
+  // Security: Ensure leader belongs to same tenant as the team
+  leaderTenantFk: foreignKey({
+    columns: [table.leaderId, table.tenantId],
+    foreignColumns: [users.id, users.companyId],
+  }),
+}));
+
+// Team members table (many-to-many relationship between users and teams)
+export const teamMembers = pgTable("team_members", {
+  teamId: uuid("team_id").references(() => teams.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  roleInTeam: teamRoleEnum("role_in_team").notNull().default("member"),
+  tenantId: varchar("tenant_id").references(() => companies.id).notNull(),
+  joinedAt: timestamp("joined_at").defaultNow(),
+}, (table) => ({
+  // Composite primary key
+  pk: primaryKey({ columns: [table.teamId, table.userId] }),
+  // Security: Ensure unique team-user combination per tenant to prevent cross-tenant leakage
+  uniqueTenantTeamUser: uniqueIndex("idx_team_members_unique_tenant").on(table.tenantId, table.teamId, table.userId),
+  // Tenant isolation: Ensure team and user belong to same tenant
+  teamTenantFk: foreignKey({
+    columns: [table.teamId, table.tenantId],
+    foreignColumns: [teams.id, teams.tenantId],
+  }),
+  userTenantFk: foreignKey({
+    columns: [table.userId, table.tenantId],
+    foreignColumns: [users.id, users.companyId],
+  }),
+}));
 
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -406,6 +465,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   assignmentsMade: many(projectAssignments, {
     relationName: "project_assignments_assigned_by"
+  }),
+  teamMemberships: many(teamMembers),
+  teamsLed: many(teams, {
+    relationName: "team_leader"
   }),
 }));
 
@@ -603,6 +666,37 @@ export const budgetAlertsRelations = relations(budgetAlerts, ({ one }) => ({
 export const companiesRelations = relations(companies, ({ many }) => ({
   users: many(users),
   projects: many(projects),
+  teams: many(teams),
+}));
+
+// Teams relations
+export const teamsRelations = relations(teams, ({ one, many }) => ({
+  leader: one(users, {
+    fields: [teams.leaderId],
+    references: [users.id],
+    relationName: "team_leader"
+  }),
+  company: one(companies, {
+    fields: [teams.tenantId],
+    references: [companies.id],
+  }),
+  teamMembers: many(teamMembers),
+}));
+
+// Team members relations
+export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
+  team: one(teams, {
+    fields: [teamMembers.teamId],
+    references: [teams.id],
+  }),
+  user: one(users, {
+    fields: [teamMembers.userId],
+    references: [users.id],
+  }),
+  company: one(companies, {
+    fields: [teamMembers.tenantId],
+    references: [companies.id],
+  }),
 }));
 
 // Insert schemas
@@ -707,6 +801,19 @@ export const insertBudgetAlertSchema = createInsertSchema(budgetAlerts).omit({
   updatedAt: true,
 });
 
+// Team schemas
+export const insertTeamSchema = createInsertSchema(teams).omit({
+  id: true,
+  tenantId: true, // Security: tenantId should be set server-side from auth context
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
+  tenantId: true, // Security: tenantId should be set server-side from auth context
+  joinedAt: true,
+});
+
 // Authentication schemas
 export const loginRequestSchema = z.object({
   email: z.string().email("Please enter a valid email address").max(255),
@@ -794,6 +901,12 @@ export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type BudgetAlert = typeof budgetAlerts.$inferSelect;
 export type InsertBudgetAlert = z.infer<typeof insertBudgetAlertSchema>;
+
+// Team types
+export type Team = typeof teams.$inferSelect;
+export type InsertTeam = z.infer<typeof insertTeamSchema>;
+export type TeamMember = typeof teamMembers.$inferSelect;
+export type InsertTeamMember = z.infer<typeof insertTeamMemberSchema>;
 
 // Authentication types
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
