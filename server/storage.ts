@@ -209,6 +209,21 @@ export interface IStorage {
     transactionCount: number;
   }>;
   
+  // New project-specific analytics with budget utilization
+  getProjectAnalytics(projectId: string, tenantId: string): Promise<{
+    projectId: string;
+    budget: number;
+    totalSpent: number;
+    revenue: number;
+    netProfit: number;
+    budgetUtilizationPercentage: number;
+    remainingBudget: number;
+    transactionCount: number;
+  }>;
+  
+  // Check if user can access a specific project based on role and assignments
+  canUserAccessProject(userId: string, projectId: string, tenantId: string, userRole: string): Promise<boolean>;
+  
   getTenantStats(tenantId: string): Promise<{
     totalBudget: number;
     totalSpent: number;
@@ -1094,6 +1109,160 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  // New project-specific analytics with budget utilization
+  async getProjectAnalytics(projectId: string, tenantId: string): Promise<{
+    projectId: string;
+    budget: number;
+    totalSpent: number;
+    revenue: number;
+    netProfit: number;
+    budgetUtilizationPercentage: number;
+    remainingBudget: number;
+    transactionCount: number;
+  }> {
+    const project = await this.getProject(projectId, tenantId);
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
+    // Get total spent from both transactions and cost allocations
+    const [transactionSpent] = await db
+      .select({
+        amount: sum(transactions.amount),
+        count: count(transactions.id),
+      })
+      .from(transactions)
+      .where(and(
+        eq(transactions.projectId, projectId),
+        eq(transactions.tenantId, tenantId),
+        or(
+          eq(transactions.type, "expense"),
+          eq(transactions.type, "allocation")
+        )
+      ));
+
+    const [costAllocationSpent] = await db
+      .select({
+        amount: sum(costAllocations.totalCost),
+      })
+      .from(costAllocations)
+      .where(and(
+        eq(costAllocations.projectId, projectId),
+        eq(costAllocations.tenantId, tenantId)
+      ));
+
+    const [revenueResult] = await db
+      .select({
+        totalRevenue: sum(transactions.amount),
+      })
+      .from(transactions)
+      .where(and(
+        eq(transactions.projectId, projectId),
+        eq(transactions.tenantId, tenantId),
+        eq(transactions.type, "revenue")
+      ));
+
+    const budget = parseFloat(project.budget) || 0;
+    const transactionAmount = parseFloat(transactionSpent?.amount || "0") || 0;
+    const costAllocationAmount = parseFloat(costAllocationSpent?.amount || "0") || 0;
+    const totalSpent = transactionAmount + costAllocationAmount;
+    const revenue = parseFloat(revenueResult?.totalRevenue || "0") || parseFloat(project.revenue || "0") || 0;
+    const netProfit = revenue - totalSpent;
+    const budgetUtilizationPercentage = budget > 0 ? (totalSpent / budget) * 100 : 0;
+    const remainingBudget = budget - totalSpent;
+    const transactionCount = transactionSpent?.count || 0;
+
+    return {
+      projectId,
+      budget,
+      totalSpent,
+      revenue,
+      netProfit,
+      budgetUtilizationPercentage: Math.round(budgetUtilizationPercentage * 100) / 100,
+      remainingBudget,
+      transactionCount,
+    };
+  }
+
+  // Check if user can access a specific project based on role and assignments
+  async canUserAccessProject(userId: string, projectId: string, tenantId: string, userRole: string): Promise<boolean> {
+    // Console managers and admins can access any project in their tenant
+    if (userRole === 'console_manager' || userRole === 'admin' || userRole === 'manager') {
+      return true;
+    }
+
+    // Get the project to check if user is the manager
+    const project = await this.getProject(projectId, tenantId);
+    if (!project) {
+      return false;
+    }
+
+    // Project manager can always access their own project
+    if (project.managerId === userId) {
+      return true;
+    }
+
+    // Check if user is assigned to the project
+    const assignments = await db
+      .select()
+      .from(projectAssignments)
+      .where(and(
+        eq(projectAssignments.projectId, projectId),
+        eq(projectAssignments.userId, userId),
+        eq(projectAssignments.tenantId, tenantId)
+      ));
+
+    if (assignments.length > 0) {
+      return true;
+    }
+
+    // Check if user has transactions with this project
+    const userTransactions = await db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(and(
+        eq(transactions.projectId, projectId),
+        eq(transactions.tenantId, tenantId),
+        eq(transactions.userId, userId)
+      ))
+      .limit(1);
+
+    if (userTransactions.length > 0) {
+      return true;
+    }
+
+    // Check fund allocations
+    const userFundAllocations = await db
+      .select({ id: fundAllocations.id })
+      .from(fundAllocations)
+      .where(and(
+        eq(fundAllocations.projectId, projectId),
+        eq(fundAllocations.tenantId, tenantId),
+        or(
+          eq(fundAllocations.fromUserId, userId),
+          eq(fundAllocations.toUserId, userId)
+        )
+      ))
+      .limit(1);
+
+    if (userFundAllocations.length > 0) {
+      return true;
+    }
+
+    // Check if user has cost allocations for this project
+    const userCostAllocations = await db
+      .select({ id: costAllocations.id })
+      .from(costAllocations)
+      .where(and(
+        eq(costAllocations.projectId, projectId),
+        eq(costAllocations.tenantId, tenantId),
+        eq(costAllocations.enteredBy, userId)
+      ))
+      .limit(1);
+
+    return userCostAllocations.length > 0;
+  }
+
   // New analytics operations for Sprint 4 & 5 with enhanced security
   async getBudgetSummary(tenantId: string, userRole?: string, userId?: string): Promise<Array<{
     projectId: string;
@@ -1110,13 +1279,24 @@ export class DatabaseStorage implements IStorage {
       eq(projects.status, "active")
     ];
 
-    // If viewer role, only show projects they are involved with
-    if (userRole === 'viewer' && userId) {
+    // Apply role-based filtering similar to project analytics access
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
       whereConditions.push(
         sql`(${projects.managerId} = ${userId} OR EXISTS (
+          SELECT 1 FROM ${projectAssignments} 
+          WHERE ${projectAssignments.projectId} = ${projects.id} 
+          AND ${projectAssignments.userId} = ${userId}
+          AND ${projectAssignments.tenantId} = ${tenantId}
+        ) OR EXISTS (
           SELECT 1 FROM ${fundAllocations} 
           WHERE ${fundAllocations.projectId} = ${projects.id} 
           AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+          AND ${fundAllocations.tenantId} = ${tenantId}
+        ) OR EXISTS (
+          SELECT 1 FROM ${costAllocations} 
+          WHERE ${costAllocations.projectId} = ${projects.id} 
+          AND ${costAllocations.enteredBy} = ${userId}
+          AND ${costAllocations.tenantId} = ${tenantId}
         ))`
       );
     }
@@ -1179,6 +1359,24 @@ export class DatabaseStorage implements IStorage {
   }> {
     let whereConditions = [eq(costAllocations.tenantId, tenantId)];
     
+    // Apply role-based filtering for project access
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+      whereConditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM ${projects}
+          WHERE ${projects.id} = ${costAllocations.projectId}
+          AND (
+            ${projects.managerId} = ${userId} OR EXISTS (
+              SELECT 1 FROM ${projectAssignments} 
+              WHERE ${projectAssignments.projectId} = ${projects.id} 
+              AND ${projectAssignments.userId} = ${userId}
+              AND ${projectAssignments.tenantId} = ${tenantId}
+            ) OR ${costAllocations.enteredBy} = ${userId}
+          )
+        )`
+      );
+    }
+    
     if (filters?.startDate) {
       whereConditions.push(sql`${costAllocations.dateIncurred} >= ${filters.startDate}`);
     }
@@ -1216,7 +1414,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getCategorySpending(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }): Promise<Array<{
+  async getCategorySpending(tenantId: string, filters?: { startDate?: Date; endDate?: Date; projectId?: string; categories?: string[] }, userRole?: string, userId?: string): Promise<Array<{
     category: string;
     totalSpent: number;
     labourCost: number;
@@ -1224,6 +1422,24 @@ export class DatabaseStorage implements IStorage {
     allocationCount: number;
   }>> {
     let whereConditions = [eq(costAllocations.tenantId, tenantId)];
+    
+    // Apply role-based filtering for project access
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+      whereConditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM ${projects}
+          WHERE ${projects.id} = ${costAllocations.projectId}
+          AND (
+            ${projects.managerId} = ${userId} OR EXISTS (
+              SELECT 1 FROM ${projectAssignments} 
+              WHERE ${projectAssignments.projectId} = ${projects.id} 
+              AND ${projectAssignments.userId} = ${userId}
+              AND ${projectAssignments.tenantId} = ${tenantId}
+            ) OR ${costAllocations.enteredBy} = ${userId}
+          )
+        )`
+      );
+    }
     
     if (filters?.startDate) {
       whereConditions.push(sql`${costAllocations.dateIncurred} >= ${filters.startDate}`);

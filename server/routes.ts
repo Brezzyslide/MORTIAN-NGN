@@ -1027,6 +1027,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Project-specific analytics endpoint with role-based filtering
+  app.get('/api/projects/:id/analytics', isAuthenticated, setTenantContext(), async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      
+      // Validate UUID format
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format. Must be a valid UUID." });
+      }
+      
+      const { tenantId, userId, role } = req.tenant;
+      const normalizedRole = role;
+      
+      // Check if user can access this project based on role and assignments
+      const canAccess = await storage.canUserAccessProject(userId, projectId, tenantId, normalizedRole);
+      if (!canAccess) {
+        return res.status(403).json({ 
+          message: "Access denied. You don't have permission to view analytics for this project." 
+        });
+      }
+      
+      // Get project analytics
+      const analytics = await storage.getProjectAnalytics(projectId, tenantId);
+      
+      res.json(analytics);
+    } catch (error) {
+      console.error("Error fetching project analytics:", error);
+      if (error instanceof Error && error.message === 'Project not found') {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      res.status(500).json({ message: "Failed to fetch project analytics" });
+    }
+  });
+
   app.post('/api/projects', isAuthenticated, authorize(['admin']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
@@ -1534,7 +1568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/category-spending', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
+      const { tenantId, user } = await getUserData(req);
       const { startDate, endDate, projectId, categories } = req.query;
       
       const filters: any = {};
@@ -1545,7 +1579,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.categories = Array.isArray(categories) ? categories : [categories];
       }
 
-      const categoryData = await storage.getCategorySpending(tenantId, filters);
+      const normalizedRole = mapLegacyRole(user.role);
+      const categoryData = await storage.getCategorySpending(tenantId, filters, normalizedRole, user.id);
       res.json(categoryData);
     } catch (error) {
       console.error("Error fetching category spending:", error);
