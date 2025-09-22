@@ -203,6 +203,31 @@ export default function CostEntryForm() {
     },
   });
 
+  // Individual material save mutation
+  const saveMaterial = useMutation({
+    mutationFn: async (data: { materialId: string; quantity: number; unitPrice: number; projectId: string; lineItemId: string }) => {
+      const response = await apiRequest("POST", "/api/cost-allocations/material", data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Material saved successfully",
+      });
+      
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save material",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Submit mutation
   const createCostAllocation = useMutation({
     mutationFn: async (data: any) => {
@@ -293,6 +318,39 @@ export default function CostEntryForm() {
       materialId: "",
       quantity: "1",
       unitPrice: "0",
+    });
+  };
+
+  // Save individual material
+  const handleSaveMaterial = (index: number) => {
+    const formData = form.getValues();
+    const material = formData.materialAllocations[index];
+    
+    // Validate material data
+    if (!material.materialId || !material.quantity || !material.unitPrice) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all material fields before saving",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!formData.projectId || !formData.lineItemId) {
+      toast({
+        title: "Validation Error", 
+        description: "Please select a project and line item first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    saveMaterial.mutate({
+      materialId: material.materialId,
+      quantity: Number(material.quantity),
+      unitPrice: Number(material.unitPrice),
+      projectId: formData.projectId,
+      lineItemId: formData.lineItemId,
     });
   };
 
@@ -633,15 +691,31 @@ export default function CostEntryForm() {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => remove(index)}
-                                  data-testid={`button-remove-material-${index}`}
-                                >
-                                  <i className="fas fa-trash text-destructive"></i>
-                                </Button>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSaveMaterial(index)}
+                                    disabled={saveMaterial.isPending}
+                                    data-testid={`button-save-material-${index}`}
+                                  >
+                                    {saveMaterial.isPending ? (
+                                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></div>
+                                    ) : (
+                                      <i className="fas fa-save text-green-600"></i>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => remove(index)}
+                                    data-testid={`button-remove-material-${index}`}
+                                  >
+                                    <i className="fas fa-trash text-destructive"></i>
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );

@@ -2151,6 +2151,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Individual material save endpoint
+  app.post('/api/cost-allocations/material', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const { projectId, lineItemId, materialId, quantity, unitPrice } = req.body;
+      
+      // Validation
+      if (!projectId || !lineItemId || !materialId || !quantity || !unitPrice) {
+        return res.status(400).json({ 
+          message: "All fields are required: projectId, lineItemId, materialId, quantity, unitPrice" 
+        });
+      }
+      
+      // Validate positive numbers
+      if (Number(quantity) <= 0 || Number(unitPrice) <= 0) {
+        return res.status(400).json({ 
+          message: "Quantity and unit price must be positive numbers" 
+        });
+      }
+      
+      // Get project to check access and budget
+      const project = await storage.getProject(projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Verify material exists in tenant
+      const materials = await storage.getMaterials(tenantId);
+      const material = materials.find(m => m.id === materialId);
+      if (!material) {
+        return res.status(404).json({ message: "Material not found" });
+      }
+      
+      // Calculate total cost for this individual material
+      const materialTotal = Number(quantity) * Number(unitPrice);
+      
+      // Create a cost allocation with only this material (no labour cost)
+      const materialAllocations = [{
+        materialId,
+        quantity: Number(quantity),
+        unitPrice: Number(unitPrice),
+      }];
+      
+      // Enhanced budget impact validation
+      const totalBudget = parseFloat(project.budget);
+      const currentSpent = parseFloat(project.consumedAmount);
+      
+      // Calculate budget impact for this single material
+      const budgetImpact = calcBudgetImpact(currentSpent, materialTotal, totalBudget);
+      
+      // Determine initial status based on budget thresholds
+      let initialStatus: 'draft' | 'pending' = 'draft';
+      let requiresApproval = false;
+      
+      if (budgetImpact.willExceedCritical) {
+        initialStatus = 'pending';
+        requiresApproval = true;
+      } else if (budgetImpact.willExceedWarning) {
+        initialStatus = 'pending';
+        requiresApproval = true;
+      }
+      
+      // Create the cost allocation
+      const costAllocation = await storage.createCostAllocation({
+        projectId,
+        lineItemId,
+        labourCost: "0", // No labour for individual material save
+        quantity: "1", // Default quantity for allocation record
+        unitCost: "0", // No unit cost for labour
+        materialCost: materialTotal.toString(),
+        totalCost: materialTotal.toString(),
+        dateIncurred: new Date(),
+        status: initialStatus,
+        tenantId,
+        changeOrderId: null,
+      }, materialAllocations, tenantId);
+      
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId,
+          action: "material_added",
+          entityType: "cost_allocation",
+          entityId: costAllocation.id,
+          projectId,
+          amount: materialTotal.toString(),
+          tenantId,
+          details: {
+            materialName: material.name,
+            quantity: Number(quantity),
+            unitPrice: Number(unitPrice),
+            requiresApproval,
+            status: initialStatus
+          },
+        }, tenantId);
+      } catch (auditError) {
+        console.error("Failed to create audit log for material save:", auditError);
+      }
+      
+      res.json({ 
+        success: true, 
+        costAllocation,
+        requiresApproval,
+        status: initialStatus,
+        message: requiresApproval ? 
+          "Material saved but requires approval due to budget impact" : 
+          "Material saved successfully"
+      });
+      
+    } catch (error) {
+      console.error("Error saving individual material:", error);
+      res.status(500).json({ message: "Failed to save material" });
+    }
+  });
+
   // Approval workflow routes
   app.get('/api/approvals', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
