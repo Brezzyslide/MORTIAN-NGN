@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 export default function ProjectsList() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const tenantId = user?.tenantId;
+  const tenantId = user?.tenantId || user?.companyId;
 
   const { data: projects = [] as any[], isLoading, error } = useQuery({
     queryKey: ["/api/projects", tenantId],
