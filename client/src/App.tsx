@@ -50,7 +50,7 @@ function Router() {
               </div>
             );
           }
-          return isAuthenticated ? <Dashboard /> : <Home />;
+          return isAuthenticated ? <Dashboard /> : <Landing />;
         }}
       </Route>
       <Route path="/login" component={Landing} />

@@ -91,9 +91,11 @@ function setTenantContext() {
       
       // CRITICAL SECURITY: Set Postgres tenant context for RLS policies
       // This ensures all subsequent queries are automatically filtered by tenant
-      await db.execute(sql.raw(`SELECT set_config('app.tenant', '${tenantId.replace(/'/g, "''")}', true)`));
+      const safeTenantId = (tenantId || '').replace(/'/g, "''");
+      const safeRole = (normalizedRole || '').replace(/'/g, "''");
+      await db.execute(sql.raw(`SELECT set_config('app.tenant', '${safeTenantId}', true)`));
       // CRITICAL SECURITY: Set user role for RLS policies that require console_manager access
-      await db.execute(sql.raw(`SELECT set_config('app.user_role', '${normalizedRole.replace(/'/g, "''")}', true)`));
+      await db.execute(sql.raw(`SELECT set_config('app.user_role', '${safeRole}', true)`));
       
       // Set tenant context for all subsequent operations
       req.tenant = {
