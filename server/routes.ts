@@ -24,6 +24,8 @@ import {
   insertBudgetAmendmentSchema,
   insertChangeOrderSchema,
   insertProjectAssignmentSchema,
+  insertTeamSchema,
+  insertTeamMemberSchema,
   loginRequestSchema,
   adminCreateUserSchema,
   changePasswordSchema,
@@ -3491,6 +3493,253 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching project budget history:", error);
       res.status(500).json({ message: "Failed to fetch project budget history" });
+    }
+  });
+
+  // Team Management Routes
+  
+  // GET /api/teams - List all teams for tenant
+  app.get('/api/teams', isAuthenticated, setTenantContext(), async (req: any, res) => {
+    try {
+      const { tenantId } = req.tenant;
+      const teams = await storage.getTeams(tenantId);
+      res.json(teams);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+      res.status(500).json({ message: "Failed to fetch teams" });
+    }
+  });
+
+  // GET /api/teams/:id - Get specific team
+  app.get('/api/teams/:id', isAuthenticated, setTenantContext(), async (req: any, res) => {
+    try {
+      const teamId = req.params.id;
+      const { tenantId } = req.tenant;
+      
+      // Validate UUID format
+      if (!isValidUUID(teamId)) {
+        return res.status(400).json({ message: "Invalid team ID format" });
+      }
+
+      const team = await storage.getTeam(teamId, tenantId);
+      if (!team) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+
+      res.json(team);
+    } catch (error) {
+      console.error("Error fetching team:", error);
+      res.status(500).json({ message: "Failed to fetch team" });
+    }
+  });
+
+  // POST /api/teams - Create new team (admin or team_leader)
+  app.post('/api/teams', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { tenantId } = req.tenant;
+      
+      // Validate request body and inject server-side tenantId
+      const teamData = insertTeamSchema.parse({
+        ...req.body,
+        tenantId // Server-side injection for security
+      });
+      
+      const team = await storage.createTeam(teamData, tenantId);
+      res.status(201).json(team);
+    } catch (error) {
+      console.error("Error creating team:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid team data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create team" });
+    }
+  });
+
+  // PUT /api/teams/:id - Update team (admin or team_leader)
+  app.put('/api/teams/:id', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const teamId = req.params.id;
+      const { tenantId } = req.tenant;
+      
+      // Validate UUID format
+      if (!isValidUUID(teamId)) {
+        return res.status(400).json({ message: "Invalid team ID format" });
+      }
+
+      // Validate request body (tenantId already omitted from insertTeamSchema)
+      const teamData = insertTeamSchema.partial().parse(req.body);
+      
+      const updatedTeam = await storage.updateTeam(teamId, teamData, tenantId);
+      if (!updatedTeam) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+
+      res.json(updatedTeam);
+    } catch (error) {
+      console.error("Error updating team:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid team data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update team" });
+    }
+  });
+
+  // DELETE /api/teams/:id - Delete team (admin only)
+  app.delete('/api/teams/:id', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
+    try {
+      const teamId = req.params.id;
+      const { tenantId } = req.tenant;
+      
+      // Validate UUID format
+      if (!isValidUUID(teamId)) {
+        return res.status(400).json({ message: "Invalid team ID format" });
+      }
+
+      const deleted = await storage.deleteTeam(teamId, tenantId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Team not found" });
+      }
+
+      res.json({ message: "Team deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting team:", error);
+      res.status(500).json({ message: "Failed to delete team" });
+    }
+  });
+
+  // Team Membership Routes
+
+  // GET /api/teams/:id/members - Get team members
+  app.get('/api/teams/:id/members', isAuthenticated, setTenantContext(), async (req: any, res) => {
+    try {
+      const teamId = req.params.id;
+      const { tenantId } = req.tenant;
+      
+      // Validate UUID format
+      if (!isValidUUID(teamId)) {
+        return res.status(400).json({ message: "Invalid team ID format" });
+      }
+
+      const members = await storage.getTeamMembers(teamId, tenantId);
+      res.json(members);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      res.status(500).json({ message: "Failed to fetch team members" });
+    }
+  });
+
+  // POST /api/teams/:id/members - Add team member (admin or team_leader)
+  app.post('/api/teams/:id/members', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const teamId = req.params.id;
+      const { tenantId } = req.tenant;
+      
+      // Validate UUID format
+      if (!isValidUUID(teamId)) {
+        return res.status(400).json({ message: "Invalid team ID format" });
+      }
+
+      // Validate request body and inject server-side fields
+      const membershipData = insertTeamMemberSchema.parse({
+        ...req.body,
+        teamId,
+        tenantId // Server-side injection for security
+      });
+      
+      const membership = await storage.addTeamMember(membershipData, tenantId);
+      res.status(201).json(membership);
+    } catch (error) {
+      console.error("Error adding team member:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid membership data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to add team member" });
+    }
+  });
+
+  // DELETE /api/teams/:id/members/:userId - Remove team member (admin or team_leader)
+  app.delete('/api/teams/:id/members/:userId', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { id: teamId, userId } = req.params;
+      const { tenantId } = req.tenant;
+      
+      // Validate UUID formats
+      if (!isValidUUID(teamId) || !isValidUUID(userId)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+
+      const removed = await storage.removeTeamMember(teamId, userId, tenantId);
+      if (!removed) {
+        return res.status(404).json({ message: "Team membership not found" });
+      }
+
+      res.json({ message: "Team member removed successfully" });
+    } catch (error) {
+      console.error("Error removing team member:", error);
+      res.status(500).json({ message: "Failed to remove team member" });
+    }
+  });
+
+  // PUT /api/teams/:id/members/:userId - Update team member role (admin or team_leader)
+  app.put('/api/teams/:id/members/:userId', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const { id: teamId, userId } = req.params;
+      const { tenantId } = req.tenant;
+      const { roleInTeam } = req.body;
+      
+      // Validate UUID formats
+      if (!isValidUUID(teamId) || !isValidUUID(userId)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+
+      // Validate role
+      if (!roleInTeam || typeof roleInTeam !== 'string') {
+        return res.status(400).json({ message: "Role in team is required" });
+      }
+
+      const updatedMembership = await storage.updateTeamMemberRole(teamId, userId, roleInTeam, tenantId);
+      if (!updatedMembership) {
+        return res.status(404).json({ message: "Team membership not found" });
+      }
+
+      res.json(updatedMembership);
+    } catch (error) {
+      console.error("Error updating team member role:", error);
+      res.status(500).json({ message: "Failed to update team member role" });
+    }
+  });
+
+  // User Team Routes
+
+  // GET /api/users/:id/teams - Get teams for specific user (admin/team_leader only)
+  app.get('/api/users/:id/teams', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+    try {
+      const userId = req.params.id;
+      const { tenantId } = req.tenant;
+      
+      // Validate UUID format
+      if (!isValidUUID(userId)) {
+        return res.status(400).json({ message: "Invalid user ID format" });
+      }
+
+      const teams = await storage.getTeamsForUser(userId, tenantId);
+      res.json(teams);
+    } catch (error) {
+      console.error("Error fetching user teams:", error);
+      res.status(500).json({ message: "Failed to fetch user teams" });
+    }
+  });
+
+  // GET /api/users/me/teams - Get teams for current user
+  app.get('/api/users/me/teams', isAuthenticated, setTenantContext(), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = req.tenant;
+      
+      const teams = await storage.getTeamsForUser(userId, tenantId);
+      res.json(teams);
+    } catch (error) {
+      console.error("Error fetching current user teams:", error);
+      res.status(500).json({ message: "Failed to fetch current user teams" });
     }
   });
 
