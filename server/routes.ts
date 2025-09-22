@@ -1371,11 +1371,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Transaction routes (read access for all authenticated users)
+  // Transaction routes (read access for all authenticated users with role-based filtering)
   app.get('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
-      const transactions = await storage.getTransactions(tenantId);
+      const { userId, tenantId, user } = await getUserData(req);
+      
+      // Role-based filtering: 
+      // - Admins see all tenant transactions
+      // - Team leaders see only transactions allocated to them
+      const transactions = await storage.getTransactions(tenantId, user.role === 'admin' ? undefined : userId);
       res.json(transactions);
     } catch (error) {
       console.error("Error fetching transactions:", error);

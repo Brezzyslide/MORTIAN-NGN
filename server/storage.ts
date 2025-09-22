@@ -154,7 +154,7 @@ export interface IStorage {
   ): Promise<{ allocation: FundAllocation; updatedProject: Project; transaction: Transaction; auditLog: AuditLog }>;
 
   // Transaction operations
-  getTransactions(tenantId: string): Promise<Transaction[]>;
+  getTransactions(tenantId: string, filterUserId?: string): Promise<Transaction[]>;
   getTransactionsByProject(projectId: string, tenantId: string): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction, requesterTenantId: string): Promise<Transaction>;
 
@@ -659,11 +659,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Transaction operations
-  async getTransactions(tenantId: string): Promise<Transaction[]> {
+  async getTransactions(tenantId: string, filterUserId?: string): Promise<Transaction[]> {
+    // Build conditions array
+    const conditions = [eq(transactions.tenantId, tenantId)];
+    
+    // If filterUserId is provided, only return transactions for that specific user
+    if (filterUserId) {
+      conditions.push(eq(transactions.userId, filterUserId));
+    }
+
     return await db
       .select()
       .from(transactions)
-      .where(eq(transactions.tenantId, tenantId))
+      .where(and(...conditions))
       .orderBy(desc(transactions.createdAt));
   }
 
