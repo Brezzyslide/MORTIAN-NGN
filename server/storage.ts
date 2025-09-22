@@ -15,6 +15,8 @@ import {
   budgetAmendments,
   changeOrders,
   projectAssignments,
+  teams,
+  teamMembers,
   type User,
   type UpsertUser,
   type Project,
@@ -47,6 +49,10 @@ import {
   type InsertChangeOrder,
   type ProjectAssignment,
   type InsertProjectAssignment,
+  type Team,
+  type InsertTeam,
+  type TeamMember,
+  type InsertTeamMember,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sum, count, sql, inArray } from "drizzle-orm";
@@ -323,6 +329,23 @@ export interface IStorage {
     amendments: Array<BudgetAmendment & { proposer: User; approver?: User }>;
     changeOrders: Array<ChangeOrder & { proposer: User; approver?: User }>;
   }>;
+
+  // Team operations
+  getTeams(tenantId: string): Promise<Team[]>;
+  getTeam(id: string, tenantId: string): Promise<Team | undefined>;
+  createTeam(team: InsertTeam, requesterTenantId: string): Promise<Team>;
+  updateTeam(id: string, team: Partial<InsertTeam>, tenantId: string): Promise<Team | undefined>;
+  deleteTeam(id: string, tenantId: string): Promise<boolean>;
+
+  // Team membership operations
+  getTeamMembers(teamId: string, tenantId: string): Promise<Array<TeamMember & { user: User }>>;
+  addTeamMember(membership: InsertTeamMember, requesterTenantId: string): Promise<TeamMember>;
+  removeTeamMember(teamId: string, userId: string, tenantId: string): Promise<boolean>;
+  updateTeamMemberRole(teamId: string, userId: string, roleInTeam: string, tenantId: string): Promise<TeamMember | undefined>;
+
+  // User team operations
+  getTeamsForUser(userId: string, tenantId: string): Promise<Array<Team & { membership: TeamMember }>>;
+  getUserTeamMemberships(userId: string, tenantId: string): Promise<TeamMember[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2626,6 +2649,230 @@ export class DatabaseStorage implements IStorage {
       ));
     
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Team operations
+  async getTeams(tenantId: string): Promise<Team[]> {
+    return await db
+      .select()
+      .from(teams)
+      .where(eq(teams.tenantId, tenantId))
+      .orderBy(teams.name);
+  }
+
+  async getTeam(id: string, tenantId: string): Promise<Team | undefined> {
+    const [team] = await db
+      .select()
+      .from(teams)
+      .where(and(eq(teams.id, id), eq(teams.tenantId, tenantId)));
+    return team;
+  }
+
+  async createTeam(team: InsertTeam, requesterTenantId: string): Promise<Team> {
+    // Security: Inject tenantId from auth context and validate leader ownership
+    const teamData = {
+      ...team,
+      tenantId: requesterTenantId,
+    };
+    
+    // Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, teamData, 'Create team');
+    
+    // If leaderId is provided, validate the leader belongs to the same tenant
+    if (team.leaderId) {
+      const leader = await this.getUser(team.leaderId, requesterTenantId);
+      if (!leader) {
+        throw new TenantSecurityError(`Cannot assign leader ${team.leaderId}: User not found in tenant ${requesterTenantId}`);
+      }
+    }
+
+    const [newTeam] = await db
+      .insert(teams)
+      .values(teamData)
+      .returning();
+    return newTeam;
+  }
+
+  async updateTeam(id: string, team: Partial<InsertTeam>, tenantId: string): Promise<Team | undefined> {
+    // Security: Ensure we can only update teams in our tenant
+    const existingTeam = await this.getTeam(id, tenantId);
+    if (!existingTeam) {
+      return undefined;
+    }
+
+    // If leaderId is being updated, validate the leader belongs to the same tenant
+    if (team.leaderId) {
+      const leader = await this.getUser(team.leaderId, tenantId);
+      if (!leader) {
+        throw new TenantSecurityError(`Cannot assign leader ${team.leaderId}: User not found in tenant ${tenantId}`);
+      }
+    }
+
+    const [updatedTeam] = await db
+      .update(teams)
+      .set({ ...team, updatedAt: new Date() })
+      .where(and(eq(teams.id, id), eq(teams.tenantId, tenantId)))
+      .returning();
+    return updatedTeam;
+  }
+
+  async deleteTeam(id: string, tenantId: string): Promise<boolean> {
+    // First delete all team memberships (cascade handled by foreign key constraint)
+    await db
+      .delete(teamMembers)
+      .where(and(eq(teamMembers.teamId, id), eq(teamMembers.tenantId, tenantId)));
+
+    // Then delete the team
+    const result = await db
+      .delete(teams)
+      .where(and(eq(teams.id, id), eq(teams.tenantId, tenantId)));
+    
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  // Team membership operations
+  async getTeamMembers(teamId: string, tenantId: string): Promise<Array<TeamMember & { user: User }>> {
+    const results = await db
+      .select({
+        teamId: teamMembers.teamId,
+        userId: teamMembers.userId,
+        roleInTeam: teamMembers.roleInTeam,
+        tenantId: teamMembers.tenantId,
+        joinedAt: teamMembers.joinedAt,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          role: users.role,
+          status: users.status,
+          companyId: users.companyId,
+          managerId: users.managerId,
+          lastLoginAt: users.lastLoginAt,
+          failedLoginCount: users.failedLoginCount,
+          lockedUntil: users.lockedUntil,
+          mustChangePassword: users.mustChangePassword,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        },
+      })
+      .from(teamMembers)
+      .leftJoin(users, eq(teamMembers.userId, users.id))
+      .where(and(
+        eq(teamMembers.teamId, teamId),
+        eq(teamMembers.tenantId, tenantId)
+      ))
+      .orderBy(users.firstName, users.lastName);
+
+    return results.map(result => ({
+      teamId: result.teamId,
+      userId: result.userId,
+      roleInTeam: result.roleInTeam,
+      tenantId: result.tenantId,
+      joinedAt: result.joinedAt,
+      user: result.user as User,
+    }));
+  }
+
+  async addTeamMember(membership: InsertTeamMember, requesterTenantId: string): Promise<TeamMember> {
+    // Security: Inject tenantId from auth context and validate ownership
+    const membershipData = {
+      ...membership,
+      tenantId: requesterTenantId,
+      joinedAt: new Date(),
+    };
+
+    // Validate tenant ownership
+    validateTenantOwnership(requesterTenantId, membershipData, 'Add team member');
+
+    // Validate the team exists in our tenant
+    const team = await this.getTeam(membership.teamId, requesterTenantId);
+    if (!team) {
+      throw new TenantSecurityError(`Cannot add member to team ${membership.teamId}: Team not found in tenant ${requesterTenantId}`);
+    }
+
+    // Validate the user exists in our tenant
+    const user = await this.getUser(membership.userId, requesterTenantId);
+    if (!user) {
+      throw new TenantSecurityError(`Cannot add user ${membership.userId} to team: User not found in tenant ${requesterTenantId}`);
+    }
+
+    const [newMembership] = await db
+      .insert(teamMembers)
+      .values(membershipData)
+      .returning();
+    return newMembership;
+  }
+
+  async removeTeamMember(teamId: string, userId: string, tenantId: string): Promise<boolean> {
+    const result = await db
+      .delete(teamMembers)
+      .where(and(
+        eq(teamMembers.teamId, teamId),
+        eq(teamMembers.userId, userId),
+        eq(teamMembers.tenantId, tenantId)
+      ));
+    
+    return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async updateTeamMemberRole(teamId: string, userId: string, roleInTeam: string, tenantId: string): Promise<TeamMember | undefined> {
+    const [updatedMembership] = await db
+      .update(teamMembers)
+      .set({ roleInTeam: roleInTeam as any })
+      .where(and(
+        eq(teamMembers.teamId, teamId),
+        eq(teamMembers.userId, userId),
+        eq(teamMembers.tenantId, tenantId)
+      ))
+      .returning();
+    return updatedMembership;
+  }
+
+  // User team operations
+  async getTeamsForUser(userId: string, tenantId: string): Promise<Array<Team & { membership: TeamMember }>> {
+    const results = await db
+      .select({
+        team: {
+          id: teams.id,
+          name: teams.name,
+          description: teams.description,
+          leaderId: teams.leaderId,
+          tenantId: teams.tenantId,
+          createdAt: teams.createdAt,
+          updatedAt: teams.updatedAt,
+        },
+        membership: {
+          teamId: teamMembers.teamId,
+          userId: teamMembers.userId,
+          roleInTeam: teamMembers.roleInTeam,
+          tenantId: teamMembers.tenantId,
+          joinedAt: teamMembers.joinedAt,
+        },
+      })
+      .from(teamMembers)
+      .leftJoin(teams, eq(teamMembers.teamId, teams.id))
+      .where(and(
+        eq(teamMembers.userId, userId),
+        eq(teamMembers.tenantId, tenantId)
+      ))
+      .orderBy(teams.name);
+
+    return results.map(result => ({
+      ...result.team as Team,
+      membership: result.membership as TeamMember,
+    }));
+  }
+
+  async getUserTeamMemberships(userId: string, tenantId: string): Promise<TeamMember[]> {
+    return await db
+      .select()
+      .from(teamMembers)
+      .where(and(
+        eq(teamMembers.userId, userId),
+        eq(teamMembers.tenantId, tenantId)
+      ))
+      .orderBy(teamMembers.joinedAt);
   }
 }
 
