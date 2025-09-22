@@ -995,10 +995,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Project routes
-  app.get('/api/projects', isAuthenticated, async (req: any, res) => {
+  app.get('/api/projects', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
-      const projects = await storage.getProjects(tenantId);
+      const { tenantId, userId, role } = req.tenant;
+      const projects = await storage.getProjects(tenantId, role, userId);
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error);

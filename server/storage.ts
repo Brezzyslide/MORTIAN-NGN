@@ -137,7 +137,7 @@ export interface IStorage {
   upsertUser(user: UpsertUser, requesterTenantId: string, systemContext?: boolean): Promise<User>;
 
   // Project operations
-  getProjects(tenantId: string): Promise<Project[]>;
+  getProjects(tenantId: string, userRole?: string, userId?: string): Promise<Project[]>;
   getProject(id: string, tenantId: string): Promise<Project | undefined>;
   createProject(project: InsertProject, requesterTenantId: string): Promise<Project>;
   updateProject(id: string, project: Partial<InsertProject>, tenantId: string): Promise<Project | undefined>;
@@ -537,12 +537,43 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Project operations
-  async getProjects(tenantId: string): Promise<Project[]> {
+  // Project operations - Enhanced with role-based filtering
+  async getProjects(tenantId: string, userRole?: string, userId?: string): Promise<Project[]> {
+    let whereConditions = [
+      eq(projects.tenantId, tenantId)
+    ];
+
+    // Apply role-based filtering similar to analytics access
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+      whereConditions.push(
+        sql`(${projects.managerId} = ${userId} OR EXISTS (
+          SELECT 1 FROM ${projectAssignments} 
+          WHERE ${projectAssignments.projectId} = ${projects.id} 
+          AND ${projectAssignments.userId} = ${userId}
+          AND ${projectAssignments.tenantId} = ${tenantId}
+        ) OR EXISTS (
+          SELECT 1 FROM ${fundAllocations} 
+          WHERE ${fundAllocations.projectId} = ${projects.id} 
+          AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
+          AND ${fundAllocations.tenantId} = ${tenantId}
+        ) OR EXISTS (
+          SELECT 1 FROM ${costAllocations} 
+          WHERE ${costAllocations.projectId} = ${projects.id} 
+          AND ${costAllocations.enteredBy} = ${userId}
+          AND ${costAllocations.tenantId} = ${tenantId}
+        ) OR EXISTS (
+          SELECT 1 FROM ${transactions}
+          WHERE ${transactions.projectId} = ${projects.id}
+          AND ${transactions.userId} = ${userId}
+          AND ${transactions.tenantId} = ${tenantId}
+        ))`
+      );
+    }
+
     return await db
       .select()
       .from(projects)
-      .where(eq(projects.tenantId, tenantId))
+      .where(and(...whereConditions))
       .orderBy(desc(projects.createdAt));
   }
 
@@ -1109,16 +1140,28 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // New project-specific analytics with budget utilization
+  // New project-specific analytics with budget utilization and cost breakdown
   async getProjectAnalytics(projectId: string, tenantId: string): Promise<{
-    projectId: string;
-    budget: number;
+    project: {
+      id: string;
+      title: string;
+      description: string;
+      budget: number;
+      consumedAmount: number;
+      revenue: number;
+      status: string;
+      startDate: string;
+      endDate: string;
+    };
     totalSpent: number;
-    revenue: number;
     netProfit: number;
-    budgetUtilizationPercentage: number;
+    budgetUtilization: number;
+    costBreakdown: {
+      labour: number;
+      materials: number;
+      other: number;
+    };
     remainingBudget: number;
-    transactionCount: number;
   }> {
     const project = await this.getProject(projectId, tenantId);
     if (!project) {
@@ -1151,6 +1194,44 @@ export class DatabaseStorage implements IStorage {
         eq(costAllocations.tenantId, tenantId)
       ));
 
+    // Get detailed cost breakdown - labour vs materials
+    const costAllocationsWithMaterials = await db
+      .select({
+        costAllocation: costAllocations,
+        materialTotal: sum(sql<number>`${materialAllocations.unitPrice} * ${materialAllocations.quantity}`),
+      })
+      .from(costAllocations)
+      .leftJoin(materialAllocations, eq(costAllocations.id, materialAllocations.costAllocationId))
+      .where(and(
+        eq(costAllocations.projectId, projectId),
+        eq(costAllocations.tenantId, tenantId)
+      ))
+      .groupBy(costAllocations.id);
+
+    // Calculate cost breakdown
+    let labourCost = 0;
+    let materialsCost = 0;
+    let otherCost = 0;
+
+    for (const allocation of costAllocationsWithMaterials) {
+      const allocationTotal = parseFloat(allocation.costAllocation.totalCost) || 0;
+      const materials = parseFloat(allocation.materialTotal || "0") || 0;
+      const labour = parseFloat(allocation.costAllocation.labourCost || "0") || 0;
+      
+      materialsCost += materials;
+      labourCost += labour;
+      
+      // Other costs = total allocation cost - labour - materials
+      const other = allocationTotal - labour - materials;
+      if (other > 0) {
+        otherCost += other;
+      }
+    }
+
+    // Add transaction expenses to "other" category
+    const transactionAmount = parseFloat(transactionSpent?.amount || "0") || 0;
+    otherCost += transactionAmount;
+
     const [revenueResult] = await db
       .select({
         totalRevenue: sum(transactions.amount),
@@ -1163,24 +1244,34 @@ export class DatabaseStorage implements IStorage {
       ));
 
     const budget = parseFloat(project.budget) || 0;
-    const transactionAmount = parseFloat(transactionSpent?.amount || "0") || 0;
     const costAllocationAmount = parseFloat(costAllocationSpent?.amount || "0") || 0;
     const totalSpent = transactionAmount + costAllocationAmount;
     const revenue = parseFloat(revenueResult?.totalRevenue || "0") || parseFloat(project.revenue || "0") || 0;
     const netProfit = revenue - totalSpent;
-    const budgetUtilizationPercentage = budget > 0 ? (totalSpent / budget) * 100 : 0;
+    const budgetUtilization = budget > 0 ? (totalSpent / budget) * 100 : 0;
     const remainingBudget = budget - totalSpent;
-    const transactionCount = transactionSpent?.count || 0;
 
     return {
-      projectId,
-      budget,
+      project: {
+        id: project.id,
+        title: project.title,
+        description: project.description || '',
+        budget,
+        consumedAmount: totalSpent,
+        revenue,
+        status: project.status,
+        startDate: project.startDate ? project.startDate.toISOString() : '',
+        endDate: project.endDate ? project.endDate.toISOString() : '',
+      },
       totalSpent,
-      revenue,
       netProfit,
-      budgetUtilizationPercentage: Math.round(budgetUtilizationPercentage * 100) / 100,
+      budgetUtilization: Math.round(budgetUtilization * 100) / 100,
+      costBreakdown: {
+        labour: Math.round(labourCost * 100) / 100,
+        materials: Math.round(materialsCost * 100) / 100,
+        other: Math.round(otherCost * 100) / 100,
+      },
       remainingBudget,
-      transactionCount,
     };
   }
 

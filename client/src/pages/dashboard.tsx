@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useLocation } from "wouter";
 import Sidebar from "@/components/Sidebar";
+import ProjectAnalytics from "@/components/ProjectAnalytics";
 import StatsCards from "@/components/StatsCards";
 import ProjectsList from "@/components/ProjectsList";
 import BudgetChart from "@/components/BudgetChart";
@@ -38,6 +39,10 @@ export default function Dashboard() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  
+  // Extract project ID from location if we're on a project-specific route
+  const projectIdMatch = location.match(/^\/projects\/([^/]+)$/);
+  const projectId = projectIdMatch ? projectIdMatch[1] : null;
   
   // Sprint 4 Analytics Filters State
   const [analyticsFilters, setAnalyticsFilters] = useState<{
@@ -78,8 +83,14 @@ export default function Dashboard() {
       '/change-orders': 'Change Orders - ProjectFund',
       '/budget-history': 'Budget History - ProjectFund'
     };
-    document.title = titles[location as keyof typeof titles] || 'ProjectFund';
-  }, [location]);
+    
+    // Handle project-specific page title
+    if (projectId) {
+      document.title = 'Project Analytics - ProjectFund';
+    } else {
+      document.title = titles[location as keyof typeof titles] || 'ProjectFund';
+    }
+  }, [location, projectId]);
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -102,8 +113,9 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-2xl font-semibold text-foreground">
-              {location === '/' && 'Dashboard Overview'}
-              {location === '/projects' && 'Projects'}
+              {projectId && 'Project Analytics'}
+              {!projectId && location === '/' && 'Dashboard Overview'}
+              {!projectId && location === '/projects' && 'Projects'}
               {location === '/allocations' && 'Fund Allocation'}
               {location === '/cost-entry' && 'Cost Entry'}
               {location === '/transactions' && 'Transactions'}
@@ -117,8 +129,9 @@ export default function Dashboard() {
               {location === '/budget-history' && 'Budget History'}
             </h2>
             <p className="text-muted-foreground mt-1">
-              {location === '/' && 'Manage your projects and fund allocations'}
-              {location === '/projects' && 'Create and manage project budgets'}
+              {projectId && 'Detailed project metrics, budget utilization, and financial performance'}
+              {!projectId && location === '/' && 'Manage your projects and fund allocations'}
+              {!projectId && location === '/projects' && 'Create and manage project budgets'}
               {location === '/allocations' && 'Allocate funds to projects and team members'}
               {location === '/cost-entry' && 'Enter construction costs with labour and material tracking'}
               {location === '/transactions' && 'Track expenses and revenue'}
@@ -132,24 +145,31 @@ export default function Dashboard() {
               {location === '/budget-history' && 'View chronological budget change timeline'}
             </p>
           </div>
-          <div className="flex items-center space-x-4">
-            <Button
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => setShowNewProjectDialog(true)}
-              data-testid="button-new-project"
-            >
-              <i className="fas fa-plus mr-2"></i>New Project
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              data-testid="button-notifications"
-            >
-              <i className="fas fa-bell text-muted-foreground"></i>
-            </Button>
-          </div>
+          {!projectId && (
+            <div className="flex items-center space-x-4">
+              <Button
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => setShowNewProjectDialog(true)}
+                data-testid="button-new-project"
+              >
+                <i className="fas fa-plus mr-2"></i>New Project
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                data-testid="button-notifications"
+              >
+                <i className="fas fa-bell text-muted-foreground"></i>
+              </Button>
+            </div>
+          )}
         </div>
         
+
+        {/* Project Analytics - Individual Project View */}
+        {projectId && (
+          <ProjectAnalytics projectId={projectId} />
+        )}
 
         {/* Dashboard Overview */}
         {location === '/' && (

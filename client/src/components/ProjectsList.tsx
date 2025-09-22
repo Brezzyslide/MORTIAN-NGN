@@ -3,10 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useLocation } from "wouter";
 
 export default function ProjectsList() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { permissions, normalizedRole, isAdmin, isTeamLeader } = usePermissions();
+  const [, setLocation] = useLocation();
   const tenantId = user?.tenantId || user?.companyId;
   
   const [projects, setProjects] = useState<any[]>([]);
@@ -46,6 +50,12 @@ export default function ProjectsList() {
             setTimeout(() => {
               window.location.href = "/api/login";
             }, 500);
+          } else if (err.message.includes('403')) {
+            toast({
+              title: "Access Denied", 
+              description: "You don't have permission to view projects.",
+              variant: "destructive",
+            });
           }
         });
     }
@@ -94,6 +104,10 @@ export default function ProjectsList() {
     return new Date(endDate) < new Date();
   };
 
+  const handleProjectClick = (projectId: string) => {
+    setLocation(`/projects/${projectId}`);
+  };
+
   if (isLoading) {
     return (
       <Card className="card-shadow border border-border">
@@ -133,8 +147,22 @@ export default function ProjectsList() {
             <div className="mb-4">
               <i className="fas fa-folder-open text-4xl opacity-50"></i>
             </div>
-            <p>No projects found</p>
-            <p className="text-sm mt-1">Create your first project to get started</p>
+            {isAdmin || permissions.canCreateProjects() ? (
+              <>
+                <p>No projects found</p>
+                <p className="text-sm mt-1">Create your first project to get started</p>
+              </>
+            ) : isTeamLeader ? (
+              <>
+                <p>No assigned projects</p>
+                <p className="text-sm mt-1">You haven't been assigned to any projects yet</p>
+              </>
+            ) : (
+              <>
+                <p>No accessible projects</p>
+                <p className="text-sm mt-1">You don't have access to any projects or haven't been involved in any project activities</p>
+              </>
+            )}
           </div>
         ) : (
           (projects as any[]).slice(0, 3).map((project: any) => {
@@ -143,7 +171,12 @@ export default function ProjectsList() {
             const overdue = isOverdue(project.endDate);
             
             return (
-              <div key={project.id} className="p-6 hover:bg-accent/50 transition-colors" data-testid={`project-item-${project.id}`}>
+              <div 
+                key={project.id} 
+                className="p-6 hover:bg-accent/50 transition-colors cursor-pointer" 
+                onClick={() => handleProjectClick(project.id)}
+                data-testid={`project-card-${project.id}`}
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h4 className="font-semibold text-foreground" data-testid={`text-project-title-${project.id}`}>

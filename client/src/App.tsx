@@ -56,6 +56,7 @@ function Router() {
       <Route path="/login" component={Landing} />
       <Route path="/change-password" component={ChangePassword} />
       <Route path="/projects" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/projects/:id" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/allocations" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/fund-allocation" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/cost-entry" component={() => <ProtectedRoute component={Dashboard} />} />
