@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { queryClient } from "@/lib/queryClient";
 
 export default function ProjectsList() {
   const { toast } = useToast();
@@ -21,10 +22,15 @@ export default function ProjectsList() {
     gcTime: 0,
   });
 
-  // Force refetch on mount to clear stale cache
+  // Force clear cache and refetch
   useEffect(() => {
     if (tenantId && isAuthenticated && !authLoading) {
-      refetch();
+      // Invalidate all project queries
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.removeQueries({ queryKey: ["/api/projects"] });
+      
+      // Force immediate refetch
+      setTimeout(() => refetch(), 100);
     }
   }, [tenantId, isAuthenticated, authLoading, refetch]);
 
