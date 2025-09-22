@@ -92,6 +92,8 @@ function setTenantContext() {
       // CRITICAL SECURITY: Set Postgres tenant context for RLS policies
       // This ensures all subsequent queries are automatically filtered by tenant
       await db.execute(sql`SELECT set_config('app.tenant', ${tenantId}, true)`);
+      // CRITICAL SECURITY: Set user role for RLS policies that require console_manager access
+      await db.execute(sql`SELECT set_config('app.user_role', ${normalizedRole}, true)`);
       
       // Set tenant context for all subsequent operations
       req.tenant = {
@@ -442,12 +444,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Note: Global middleware removed - authentication and tenant context now applied per route basis
-  // Public auth routes above don't need authentication
-  // Protected routes below will use isAuthenticated and setTenantContext as needed
+  // Global middleware for all remaining /api routes - ensures authentication and tenant context
+  // This applies to all routes that come after this point, excluding the public auth routes above
+  app.use('/api', isAuthenticated, setTenantContext());
 
-  // Password change endpoint - requires authentication and tenant context
-  app.post('/api/auth/change-password', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
+  // Password change endpoint - inherits authentication and tenant context from global middleware
+  app.post('/api/auth/change-password', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
     try {
       const { userId, tenantId } = req.tenant;
       const passwordData = changePasswordSchema.parse(req.body);
@@ -626,7 +628,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (currentUser.role === 'console_manager') {
         // Console managers can see users from all tenants
         const targetTenantId = req.query.tenantId as string || tenantId;
-        users = await storage.getAllUsers(targetTenantId);
+        users = await storage.getAllUsers(targetTenantId, true); // Use systemContext for cross-tenant access
       } else {
         // Regular users can only see users in their own tenant
         users = await storage.getAllUsers(tenantId);
@@ -863,7 +865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update company (PATCH for partial updates)
-  app.patch('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
+  app.patch('/api/companies/:id', authorize(['console_manager']), async (req: any, res) => {
     try {
       const { userId } = req.userContext;
       const companyData = insertCompanySchema.omit({ createdBy: true }).partial().parse(req.body);
@@ -910,7 +912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Change company admin password
-  app.post('/api/companies/:id/change-password', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
+  app.post('/api/companies/:id/change-password', authorize(['console_manager']), async (req: any, res) => {
     try {
       const { userId } = req.userContext;
       const companyId = req.params.id;
@@ -973,7 +975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Keep PUT for backward compatibility
-  app.put('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
+  app.put('/api/companies/:id', authorize(['console_manager']), async (req: any, res) => {
     try {
       const companyData = insertCompanySchema.partial().parse(req.body);
       const company = await storage.updateCompany(req.params.id, companyData, req.tenant.tenantId, req.tenant.role);
@@ -1865,13 +1867,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
+  app.post("/api/objects/upload", authorize(['admin', 'team_leader', 'user']), async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     res.json({ uploadURL });
   });
 
-  app.put("/api/receipts", isAuthenticated, async (req, res) => {
+  app.put("/api/receipts", authorize(['admin', 'team_leader', 'user']), async (req, res) => {
     if (!req.body.receiptURL) {
       return res.status(400).json({ error: "receiptURL is required" });
     }
@@ -3654,7 +3656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team Management Routes
   
   // GET /api/teams - List all teams for tenant
-  app.get('/api/teams', isAuthenticated, setTenantContext(), async (req: any, res) => {
+  app.get('/api/teams', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
     try {
       const { tenantId } = req.tenant;
       const teams = await storage.getTeams(tenantId);
@@ -3666,7 +3668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/teams/:id - Get specific team
-  app.get('/api/teams/:id', isAuthenticated, setTenantContext(), async (req: any, res) => {
+  app.get('/api/teams/:id', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3689,7 +3691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/teams - Create new team (admin or team_leader)
-  app.post('/api/teams', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/teams', authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { tenantId } = req.tenant;
       
@@ -3711,7 +3713,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/teams/:id - Update team (admin or team_leader)
-  app.put('/api/teams/:id', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.put('/api/teams/:id', authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3740,7 +3742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/teams/:id - Delete team (admin only)
-  app.delete('/api/teams/:id', isAuthenticated, setTenantContext(), authorize(['admin']), async (req: any, res) => {
+  app.delete('/api/teams/:id', authorize(['admin']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3765,7 +3767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team Membership Routes
 
   // GET /api/teams/:id/members - Get team members
-  app.get('/api/teams/:id/members', isAuthenticated, setTenantContext(), async (req: any, res) => {
+  app.get('/api/teams/:id/members', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3784,7 +3786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/teams/:id/members - Add team member (admin or team_leader)
-  app.post('/api/teams/:id/members', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/teams/:id/members', authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const teamId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3813,7 +3815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/teams/:id/members/:userId - Remove team member (admin or team_leader)
-  app.delete('/api/teams/:id/members/:userId', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.delete('/api/teams/:id/members/:userId', authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { id: teamId, userId } = req.params;
       const { tenantId } = req.tenant;
@@ -3836,7 +3838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PUT /api/teams/:id/members/:userId - Update team member role (admin or team_leader)
-  app.put('/api/teams/:id/members/:userId', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.put('/api/teams/:id/members/:userId', authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { id: teamId, userId } = req.params;
       const { tenantId } = req.tenant;
@@ -3867,7 +3869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User Team Routes
 
   // GET /api/users/:id/teams - Get teams for specific user (admin/team_leader only)
-  app.get('/api/users/:id/teams', isAuthenticated, setTenantContext(), authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.get('/api/users/:id/teams', authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const userId = req.params.id;
       const { tenantId } = req.tenant;
@@ -3886,7 +3888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/users/me/teams - Get teams for current user
-  app.get('/api/users/me/teams', isAuthenticated, setTenantContext(), async (req: any, res) => {
+  app.get('/api/users/me/teams', authorize(['admin', 'team_leader', 'user', 'viewer']), async (req: any, res) => {
     try {
       const { userId, tenantId } = req.tenant;
       

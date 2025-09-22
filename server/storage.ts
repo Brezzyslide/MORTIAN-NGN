@@ -170,7 +170,7 @@ export interface IStorage {
   getSubordinates(managerId: string, tenantId: string): Promise<User[]>;
   getUsersByRole(role: string, tenantId: string): Promise<User[]>;
   getTeamLeadersWithHierarchy(tenantId: string): Promise<(User & { manager?: User })[]>;
-  getAllUsers(tenantId: string): Promise<User[]>;
+  getAllUsers(tenantId: string, systemContext?: boolean): Promise<User[]>;
   updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined>;
   updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
 
@@ -895,7 +895,35 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getAllUsers(tenantId: string): Promise<User[]> {
+  async getAllUsers(tenantId: string, systemContext: boolean = false): Promise<User[]> {
+    if (systemContext) {
+      // System operations can access users from any tenant (console_manager cross-tenant access)
+      // Use raw SQL to bypass RLS when needed for legitimate console_manager operations
+      const result = await db.execute(sql`
+        SELECT * FROM users 
+        WHERE company_id = ${tenantId} 
+        ORDER BY first_name
+      `);
+      return result.rows.map(row => ({
+        id: row.id as string,
+        email: row.email as string,
+        firstName: row.first_name as string,
+        lastName: row.last_name as string,
+        profileImageUrl: row.profile_image_url as string,
+        role: row.role as any,
+        managerId: row.manager_id as string,
+        companyId: row.company_id as string,
+        status: row.status as any,
+        passwordHash: row.password_hash as string,
+        mustChangePassword: row.must_change_password as boolean,
+        failedLoginCount: row.failed_login_count as number,
+        lockedUntil: row.locked_until as Date,
+        createdAt: row.created_at as Date,
+        updatedAt: row.updated_at as Date,
+      }));
+    }
+    
+    // Regular operations are tenant-scoped by RLS policies
     return await db
       .select()
       .from(users)
@@ -1140,28 +1168,16 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // New project-specific analytics with budget utilization and cost breakdown
+  // New project-specific analytics with budget utilization
   async getProjectAnalytics(projectId: string, tenantId: string): Promise<{
-    project: {
-      id: string;
-      title: string;
-      description: string;
-      budget: number;
-      consumedAmount: number;
-      revenue: number;
-      status: string;
-      startDate: string;
-      endDate: string;
-    };
+    projectId: string;
+    budget: number;
     totalSpent: number;
+    revenue: number;
     netProfit: number;
-    budgetUtilization: number;
-    costBreakdown: {
-      labour: number;
-      materials: number;
-      other: number;
-    };
+    budgetUtilizationPercentage: number;
     remainingBudget: number;
+    transactionCount: number;
   }> {
     const project = await this.getProject(projectId, tenantId);
     if (!project) {
@@ -1251,27 +1267,17 @@ export class DatabaseStorage implements IStorage {
     const budgetUtilization = budget > 0 ? (totalSpent / budget) * 100 : 0;
     const remainingBudget = budget - totalSpent;
 
+    const transactionCount = parseInt(transactionSpent?.count?.toString() || "0") || 0;
+
     return {
-      project: {
-        id: project.id,
-        title: project.title,
-        description: project.description || '',
-        budget,
-        consumedAmount: totalSpent,
-        revenue,
-        status: project.status,
-        startDate: project.startDate ? project.startDate.toISOString() : '',
-        endDate: project.endDate ? project.endDate.toISOString() : '',
-      },
+      projectId: project.id,
+      budget,
       totalSpent,
+      revenue,
       netProfit,
-      budgetUtilization: Math.round(budgetUtilization * 100) / 100,
-      costBreakdown: {
-        labour: Math.round(labourCost * 100) / 100,
-        materials: Math.round(materialsCost * 100) / 100,
-        other: Math.round(otherCost * 100) / 100,
-      },
+      budgetUtilizationPercentage: Math.round(budgetUtilization * 100) / 100,
       remainingBudget,
+      transactionCount,
     };
   }
 
