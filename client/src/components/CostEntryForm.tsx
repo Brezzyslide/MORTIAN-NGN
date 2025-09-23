@@ -747,6 +747,86 @@ export default function CostEntryForm() {
           </Form>
         </CardContent>
       </Card>
+
+      {/* Budget Impact Alert Dialog */}
+      <AlertDialog open={showBudgetAlert} onOpenChange={setShowBudgetAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <span>Budget Impact Warning</span>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {budgetValidation && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">Current Spent</div>
+                      <div className="text-lg font-semibold">
+                        ₦{budgetValidation.currentSpent.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {budgetValidation.budgetImpact.spentPercentage.toFixed(1)}% of budget
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-muted-foreground">After This Allocation</div>
+                      <div className="text-lg font-semibold text-orange-600">
+                        ₦{(budgetValidation.currentSpent + budgetValidation.proposedCost).toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {budgetValidation.budgetImpact.newSpentPercentage.toFixed(1)}% of budget
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 p-3 border rounded-lg">
+                    <div className={`p-1 rounded-full ${
+                      budgetValidation.budgetImpact.status === 'critical' ? 'bg-red-100' :
+                      budgetValidation.budgetImpact.status === 'warning' ? 'bg-orange-100' : 'bg-green-100'
+                    }`}>
+                      {budgetValidation.budgetImpact.status === 'critical' ? 
+                        <XCircle className="h-4 w-4 text-red-600" /> :
+                      budgetValidation.budgetImpact.status === 'warning' ? 
+                        <AlertTriangle className="h-4 w-4 text-orange-600" /> :
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      }
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{budgetValidation.budgetImpact.alertMessage}</div>
+                      {budgetValidation.budgetImpact.requiresApproval && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          This allocation will require manager approval before being finalized.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <Progress 
+                    value={budgetValidation.budgetImpact.newSpentPercentage} 
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setPendingSubmission(false);
+              setShowBudgetAlert(false);
+              setBudgetValidation(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setShowBudgetAlert(false);
+              proceedWithSubmission();
+            }}>
+              Proceed Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
