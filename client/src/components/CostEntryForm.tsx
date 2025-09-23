@@ -31,19 +31,13 @@ const materialAllocationSchema = z.object({
   }),
 });
 
-// Main form schema
+// Main form schema (removed redundant quantity and unitCost fields)
 const costEntrySchema = z.object({
   projectId: z.string().min(1, "Project is required"),
   lineItemId: z.string().min(1, "Line item is required"),
   changeOrderId: z.string().optional(),
   labourCost: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
     message: "Labour cost must be a positive number",
-  }),
-  quantity: z.string().min(1, "Quantity is required").refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Quantity must be a positive number",
-  }),
-  unitCost: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-    message: "Unit cost must be a positive number",
   }),
   materialAllocations: z.array(materialAllocationSchema).default([]),
 }).refine(data => Number(data.labourCost) > 0 || data.materialAllocations.length > 0, {
@@ -131,8 +125,6 @@ export default function CostEntryForm() {
       lineItemId: "",
       changeOrderId: "",
       labourCost: "0",
-      quantity: "1",
-      unitCost: "0",
       materialAllocations: [],
     },
   });
@@ -272,16 +264,14 @@ export default function CostEntryForm() {
     if (!pendingSubmission) return;
     
     const formData = form.getValues();
-    const { projectId, lineItemId, changeOrderId, labourCost, quantity, unitCost, materialAllocations } = formData;
+    const { projectId, lineItemId, changeOrderId, labourCost, materialAllocations } = formData;
 
-    // Prepare submission data
+    // Prepare submission data (removed redundant quantity/unitCost)
     const submissionData = {
       projectId,
       lineItemId,
       changeOrderId: changeOrderId && changeOrderId !== "none" ? changeOrderId : undefined,
       labourCost: Number(labourCost),
-      quantity: Number(quantity),
-      unitCost: Number(unitCost),
       materialAllocations: materialAllocations.map((allocation) => ({
         materialId: allocation.materialId,
         quantity: Number(allocation.quantity),
@@ -527,35 +517,7 @@ export default function CostEntryForm() {
               )}
 
               {/* Basic Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="quantity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Quantity</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" step="0.01" data-testid="input-quantity" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="unitCost"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Unit Cost ($)</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" step="0.01" data-testid="input-unit-cost" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              {/* Removed redundant Quantity and Unit Cost fields - use Materials and Labour sections instead */}
 
               {/* Labour Section */}
               <Card>

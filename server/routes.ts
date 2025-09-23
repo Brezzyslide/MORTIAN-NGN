@@ -2194,15 +2194,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unitPrice: Number(unitPrice),
       }];
 
-      // Format material allocations data using schema (same as existing endpoint)
+      // Format material allocations data using schema (costAllocationId will be added by storage method)
       const materialAllocationsData = materialAllocations.map((allocation: any) => 
         insertMaterialAllocationSchema.parse({
           materialId: allocation.materialId,
           quantity: allocation.quantity.toString(),
           unitPrice: allocation.unitPrice.toString(),
           total: (allocation.quantity * allocation.unitPrice).toString(),
-          tenantId,
-          costAllocationId: '', // Will be set automatically by storage method
+          tenantId
+          // Note: costAllocationId is omitted from insertMaterialAllocationSchema
         })
       );
       
