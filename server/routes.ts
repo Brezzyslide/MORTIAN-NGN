@@ -2202,7 +2202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           unitPrice: allocation.unitPrice.toString(),
           total: (allocation.quantity * allocation.unitPrice).toString(),
           tenantId
-          // Note: costAllocationId is omitted from insertMaterialAllocationSchema
+          // Note: costAllocationId is now omitted from insertMaterialAllocationSchema
         })
       );
       

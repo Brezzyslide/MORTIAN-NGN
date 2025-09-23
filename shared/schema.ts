@@ -763,6 +763,7 @@ export const insertCostAllocationSchema = createInsertSchema(costAllocations).om
 export const insertMaterialAllocationSchema = createInsertSchema(materialAllocations).omit({
   id: true,
   createdAt: true,
+  costAllocationId: true, // This gets added automatically by storage method
 });
 
 export const insertApprovalWorkflowSchema = createInsertSchema(approvalWorkflows).omit({
