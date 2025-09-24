@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useMemo, useEffect } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,10 @@ import {
   Calendar,
   DollarSign,
   Filter,
-  Eye
+  Eye,
+  Send,
+  CheckCircle,
+  Clock
 } from "lucide-react";
 
 interface CostAllocation {
@@ -80,6 +83,31 @@ export default function ProjectCostingsView() {
   const tenantId = user?.tenantId;
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+
+  // Submit for approval mutation
+  const submitForApproval = useMutation({
+    mutationFn: async (allocationId: string) => {
+      const response = await apiRequest("POST", `/api/cost-allocations/${allocationId}/submit`);
+      return await response.json();
+    },
+    onSuccess: (data, allocationId) => {
+      toast({
+        title: "Success",
+        description: "Cost allocation submitted for approval successfully",
+      });
+      
+      // Invalidate cost allocations queries to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId, "all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to submit cost allocation for approval",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Fetch all cost allocations
   const { data: costAllocationsData, isLoading, error } = useQuery<CostAllocationsResponse>({
@@ -423,6 +451,31 @@ export default function ProjectCostingsView() {
                                       <span>{formatDate(allocation.createdAt)}</span>
                                     </span>
                                   </div>
+                                  
+                                  {/* Submit for Approval Button - Only show for draft entries */}
+                                  {allocation.status === 'draft' && (
+                                    <div className="mt-3 pt-3 border-t">
+                                      <Button
+                                        size="sm"
+                                        onClick={() => submitForApproval.mutate(allocation.id)}
+                                        disabled={submitForApproval.isPending}
+                                        className="w-full"
+                                        data-testid={`button-submit-approval-${allocation.id}`}
+                                      >
+                                        {submitForApproval.isPending ? (
+                                          <>
+                                            <Clock className="w-4 h-4 mr-2 animate-spin" />
+                                            Submitting...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Send className="w-4 h-4 mr-2" />
+                                            Submit for Approval
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </CardContent>
