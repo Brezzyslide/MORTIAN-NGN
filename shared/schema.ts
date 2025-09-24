@@ -343,6 +343,7 @@ export const auditActionEnum = pgEnum("audit_action", [
   "cost_allocated",
   "material_added",
   "material_updated",
+  "material_deleted",
   "line_item_created",
   "line_item_updated",
   "budget_amended",

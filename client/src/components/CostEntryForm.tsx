@@ -266,7 +266,7 @@ export default function CostEntryForm() {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/labour-material-split", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/category-spending", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId, "all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/budget-alerts", tenantId] });
       
       // Also invalidate broader analytics queries that may contain cost allocation data

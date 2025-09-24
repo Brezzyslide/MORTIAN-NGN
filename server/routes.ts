@@ -1590,8 +1590,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/cost-allocations-filtered', isAuthenticated, async (req: any, res) => {
     try {
-      const { tenantId } = await getUserData(req);
+      const { tenantId: userTenantId } = await getUserData(req);
       const { 
+        tenantId: queryTenantId,
+        status,
         startDate, 
         endDate, 
         projectId, 
@@ -1602,6 +1604,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit = 10 
       } = req.query;
       
+      // Use query tenantId if provided, otherwise use user's tenantId
+      const tenantId = queryTenantId || userTenantId;
+      
       const filters: any = {};
       if (startDate) filters.startDate = new Date(startDate as string);
       if (endDate) filters.endDate = new Date(endDate as string);
@@ -1611,6 +1616,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filters.categories = Array.isArray(categories) ? categories : [categories];
       }
       if (search) filters.search = search as string;
+      
+      // Handle status filtering - if "all" or not specified, don't filter by status
+      if (status && status !== 'all') {
+        filters.status = status as string;
+      }
       
       const pageNum = parseInt(page as string, 10);
       const limitNum = parseInt(limit as string, 10);
