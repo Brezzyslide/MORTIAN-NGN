@@ -1872,6 +1872,36 @@ export class DatabaseStorage implements IStorage {
     return updatedCostAllocation;
   }
 
+  async deleteMaterialAllocation(materialAllocationId: string, tenantId: string): Promise<boolean> {
+    try {
+      // CRITICAL SECURITY FIX: Validate tenant ownership by checking the related cost allocation
+      const result = await db
+        .select({ costAllocationId: materialAllocations.costAllocationId })
+        .from(materialAllocations)
+        .innerJoin(costAllocations, eq(materialAllocations.costAllocationId, costAllocations.id))
+        .where(and(
+          eq(materialAllocations.id, materialAllocationId),
+          eq(costAllocations.tenantId, tenantId)
+        ))
+        .limit(1);
+
+      if (result.length === 0) {
+        throw new Error('Material allocation not found or access denied');
+      }
+
+      // Delete the material allocation
+      const [deletedAllocation] = await db
+        .delete(materialAllocations)
+        .where(eq(materialAllocations.id, materialAllocationId))
+        .returning();
+
+      return !!deletedAllocation;
+    } catch (error) {
+      console.error('Error deleting material allocation:', error);
+      return false;
+    }
+  }
+
   // Approval workflow operations
   async getApprovalWorkflows(tenantId: string): Promise<Array<ApprovalWorkflow & { approver?: User }>> {
     return await db

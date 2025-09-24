@@ -220,6 +220,31 @@ export default function CostEntryForm() {
     },
   });
 
+  // Delete saved material mutation
+  const deleteMaterial = useMutation({
+    mutationFn: async (data: { costAllocationId: string; materialAllocationId: string }) => {
+      const response = await apiRequest("DELETE", `/api/cost-allocations/${data.costAllocationId}/material/${data.materialAllocationId}`);
+      return await response.json();
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Success",
+        description: `Material "${data.deletedMaterialAllocation?.materialName}" deleted successfully`,
+      });
+      
+      // Invalidate relevant queries  
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete material",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Submit mutation
   const createCostAllocation = useMutation({
     mutationFn: async (data: any) => {
@@ -341,6 +366,37 @@ export default function CostEntryForm() {
       unitPrice: Number(material.unitPrice),
       projectId: formData.projectId,
       lineItemId: formData.lineItemId,
+    });
+  };
+
+  // Delete saved material with confirmation
+  const handleDeleteSavedMaterial = (costAllocationId: string, materialAllocationId: string, materialName: string) => {
+    if (!window.confirm(`Are you sure you want to delete the material "${materialName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    deleteMaterial.mutate({
+      costAllocationId,
+      materialAllocationId,
+    });
+  };
+
+  // Enhanced remove row with error recovery
+  const handleRemoveMaterialRow = (index: number) => {
+    // Show confirmation for removing unsaved material data
+    const material = form.watch(`materialAllocations.${index}`);
+    if (material?.materialId && material?.quantity && material?.unitPrice) {
+      const shouldRemove = window.confirm(
+        "This material row has data. Are you sure you want to remove it? Any unsaved changes will be lost."
+      );
+      if (!shouldRemove) return;
+    }
+    
+    remove(index);
+    
+    toast({
+      title: "Material Row Removed",
+      description: "Material row has been removed from the form",
     });
   };
 
@@ -672,7 +728,7 @@ export default function CostEntryForm() {
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => remove(index)}
+                                    onClick={() => handleRemoveMaterialRow(index)}
                                     data-testid={`button-remove-material-${index}`}
                                   >
                                     <i className="fas fa-trash text-destructive"></i>

@@ -2279,6 +2279,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete individual material allocation
+  app.delete('/api/cost-allocations/:costAllocationId/material/:materialAllocationId', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const { costAllocationId, materialAllocationId } = req.params;
+      
+      // Validate UUID formats
+      if (!isValidUUID(costAllocationId) || !isValidUUID(materialAllocationId)) {
+        return res.status(400).json({ message: "Invalid ID format. Must be valid UUIDs." });
+      }
+      
+      // Verify cost allocation exists and belongs to tenant
+      const costAllocation = await storage.getCostAllocationsByProject('', tenantId);
+      const allocation = costAllocation.find(ca => ca.id === costAllocationId);
+      if (!allocation) {
+        return res.status(404).json({ message: "Cost allocation not found" });
+      }
+      
+      // Find the material allocation to delete
+      const materialAllocation = allocation.materialAllocations.find(ma => ma.id === materialAllocationId);
+      if (!materialAllocation) {
+        return res.status(404).json({ message: "Material allocation not found" });
+      }
+      
+      // Delete the material allocation
+      const success = await storage.deleteMaterialAllocation(materialAllocationId, tenantId);
+      if (!success) {
+        return res.status(500).json({ message: "Failed to delete material allocation" });
+      }
+      
+      // Create audit log
+      try {
+        await storage.createAuditLog({
+          userId,
+          action: "material_deleted",
+          entityType: "material_allocation",
+          entityId: materialAllocationId,
+          projectId: allocation.projectId,
+          amount: materialAllocation.total.toString(),
+          tenantId,
+          details: {
+            materialName: materialAllocation.material?.name || 'Unknown',
+            costAllocationId,
+            reason: 'manual_deletion'
+          },
+        }, tenantId);
+      } catch (auditError) {
+        console.error("Failed to create audit log for material deletion:", auditError);
+      }
+      
+      res.json({ 
+        success: true, 
+        message: "Material allocation deleted successfully",
+        deletedMaterialAllocation: {
+          id: materialAllocationId,
+          materialName: materialAllocation.material?.name || 'Unknown',
+          total: materialAllocation.total
+        }
+      });
+      
+    } catch (error) {
+      console.error("Error deleting material allocation:", error);
+      res.status(500).json({ message: "Failed to delete material allocation" });
+    }
+  });
+
   // Approval workflow routes
   app.get('/api/approvals', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
