@@ -83,9 +83,9 @@ export default function ProjectCostingsView() {
 
   // Fetch all cost allocations
   const { data: costAllocationsData, isLoading, error } = useQuery<CostAllocationsResponse>({
-    queryKey: ["/api/cost-allocations", tenantId],
+    queryKey: ["/api/cost-allocations-filtered", tenantId],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/cost-allocations");
+      const response = await apiRequest("GET", "/api/cost-allocations-filtered");
       return await response.json();
     },
     enabled: Boolean(tenantId),
