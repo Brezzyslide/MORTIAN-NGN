@@ -125,7 +125,7 @@ export default function StatsCards() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-muted-foreground text-sm font-medium">Net Profit</p>
+              <p className="text-muted-foreground text-sm font-medium">Budget Remaining</p>
               <p className={`text-2xl font-semibold mt-1 ${stats && stats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-net-profit">
                 {stats ? formatCurrency(stats.netProfit) : '$0'}
               </p>
@@ -135,7 +135,7 @@ export default function StatsCards() {
             </div>
           </div>
           <div className="mt-4 flex items-center text-sm">
-            <span className="text-green-600 font-medium">Revenue - Spend</span>
+            <span className="text-green-600 font-medium">Available Funds</span>
           </div>
         </CardContent>
       </Card>

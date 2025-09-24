@@ -261,7 +261,7 @@ export default function ProjectAnalytics({ projectId }: ProjectAnalyticsProps) {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-muted-foreground text-sm font-medium">Net Profit</p>
+                <p className="text-muted-foreground text-sm font-medium">Budget Remaining</p>
                 <p className={`text-2xl font-semibold mt-1 ${analytics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-project-profit">
                   {formatCurrency(analytics.netProfit)}
                 </p>
@@ -272,7 +272,7 @@ export default function ProjectAnalytics({ projectId }: ProjectAnalyticsProps) {
             </div>
             <div className="mt-4 flex items-center text-sm">
               <span className={`font-medium ${analytics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                Revenue - Costs
+                Available Funds
               </span>
             </div>
           </CardContent>

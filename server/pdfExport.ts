@@ -39,8 +39,7 @@ export class PDFExportService {
     doc.text(`Total Budget: ₦${Number(project.budget).toLocaleString()}`, 20, 125);
     doc.text(`Total Revenue: ₦${Number(project.revenue || 0).toLocaleString()}`, 20, 135);
     doc.text(`Total Spent: ₦${stats.totalSpent.toLocaleString()}`, 20, 145);
-    doc.text(`Net Profit: ₦${stats.netProfit.toLocaleString()}`, 20, 155);
-    doc.text(`Budget Remaining: ₦${(stats.totalBudget - stats.totalSpent).toLocaleString()}`, 20, 165);
+    doc.text(`Budget Remaining: ₦${stats.netProfit.toLocaleString()}`, 20, 155);
 
     // Allocations table
     if (projectAllocations.length > 0) {
@@ -247,7 +246,7 @@ export class PDFExportService {
     doc.setFontSize(16);
     const profitColor = netProfit >= 0 ? [0, 128, 0] : [255, 0, 0];
     doc.setTextColor(profitColor[0], profitColor[1], profitColor[2]);
-    doc.text(`Net Profit: ₦${netProfit.toLocaleString()}`, 20, currentY + 30);
+    doc.text(`Budget Remaining: ₦${netProfit.toLocaleString()}`, 20, currentY + 30);
 
     return Buffer.from(doc.output('arraybuffer'));
   }

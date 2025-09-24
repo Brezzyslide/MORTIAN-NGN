@@ -23,7 +23,8 @@ import {
   Eye,
   Send,
   CheckCircle,
-  Clock
+  Clock,
+  TrendingUp
 } from "lucide-react";
 
 interface CostAllocation {
@@ -104,6 +105,30 @@ export default function ProjectCostingsView() {
       toast({
         title: "Error",
         description: error.message || "Failed to submit cost allocation for approval",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Request more funds mutation
+  const requestMoreFunds = useMutation({
+    mutationFn: async (data: { projectId: string; amount: number; reason: string }) => {
+      const response = await apiRequest("POST", "/api/budget-amendments", data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Budget amendment request submitted successfully",
+      });
+      
+      // Invalidate queries to refresh the UI
+      queryClient.invalidateQueries({ queryKey: ["/api/budget-amendments", tenantId] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error", 
+        description: error.message || "Failed to submit budget amendment request",
         variant: "destructive",
       });
     },
@@ -452,7 +477,7 @@ export default function ProjectCostingsView() {
                                     </span>
                                   </div>
                                   
-                                  {/* Submit for Approval Button - Only show for draft entries */}
+                                  {/* Action Buttons - Based on status */}
                                   {allocation.status === 'draft' && (
                                     <div className="mt-3 pt-3 border-t">
                                       <Button
@@ -476,6 +501,40 @@ export default function ProjectCostingsView() {
                                       </Button>
                                     </div>
                                   )}
+                                  
+                                  {allocation.status === 'pending' && (
+                                    <div className="mt-3 pt-3 border-t">
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
+                                          const amount = parseFloat(allocation.totalCost);
+                                          const reason = `Additional funds required for cost allocation: ${allocation.lineItemName} - ${allocation.materialDescription}. Original allocation exceeds current budget.`;
+                                          requestMoreFunds.mutate({
+                                            projectId: allocation.projectId,
+                                            amount,
+                                            reason
+                                          });
+                                        }}
+                                        disabled={requestMoreFunds.isPending}
+                                        variant="outline"
+                                        className="w-full"
+                                        data-testid={`button-request-funds-${allocation.id}`}
+                                      >
+                                        {requestMoreFunds.isPending ? (
+                                          <>
+                                            <Clock className="w-4 h-4 mr-2 animate-spin" />
+                                            Requesting...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <TrendingUp className="w-4 h-4 mr-2" />
+                                            Request More Funds
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  )}
+                                  
                                 </div>
                               </div>
                             </CardContent>
