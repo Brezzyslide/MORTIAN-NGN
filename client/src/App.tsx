@@ -71,6 +71,7 @@ function Router() {
       <Route path="/budget-amendments" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/change-orders" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/budget-history" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/project-costings" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route component={NotFound} />
     </Switch>
   );
