@@ -88,6 +88,16 @@ export default function Sidebar() {
             </Link>
           </ProtectedComponent>
           <Link 
+            href="/project-costings" 
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              isActive('/project-costings') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+            }`}
+            data-testid="link-project-costings"
+          >
+            <i className="fas fa-list-alt w-5"></i>
+            <span>Project Costings</span>
+          </Link>
+          <Link 
             href="/transactions" 
             className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
               isActive('/transactions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'

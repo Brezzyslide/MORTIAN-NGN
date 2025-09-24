@@ -18,6 +18,7 @@ import NewProjectDialog from "@/components/NewProjectDialog";
 import UserManagement from "@/components/UserManagement";
 import { CompanyManagement } from "@/components/CompanyManagement";
 import CostEntryForm from "@/components/CostEntryForm";
+import ProjectCostingsView from "@/components/ProjectCostingsView";
 import { Button } from "@/components/ui/button";
 // Sprint 4 Analytics Components
 import BudgetProgressBar from "@/components/BudgetProgressBar";
@@ -81,7 +82,8 @@ export default function Dashboard() {
       '/permissions': 'Permissions - ProjectFund',
       '/budget-amendments': 'Budget Amendments - ProjectFund',
       '/change-orders': 'Change Orders - ProjectFund',
-      '/budget-history': 'Budget History - ProjectFund'
+      '/budget-history': 'Budget History - ProjectFund',
+      '/project-costings': 'Project Costings - ProjectFund'
     };
     
     // Handle project-specific page title
@@ -127,6 +129,7 @@ export default function Dashboard() {
               {location === '/budget-amendments' && 'Budget Amendments'}
               {location === '/change-orders' && 'Change Orders'}
               {location === '/budget-history' && 'Budget History'}
+              {location === '/project-costings' && 'Project Costings'}
             </h2>
             <p className="text-muted-foreground mt-1">
               {projectId && 'Detailed project metrics, budget utilization, and financial performance'}
@@ -346,6 +349,11 @@ export default function Dashboard() {
         {/* Budget History Page */}
         {location === '/budget-history' && (
           <BudgetHistoryView />
+        )}
+
+        {/* Project Costings Page */}
+        {location === '/project-costings' && (
+          <ProjectCostingsView />
         )}
 
         {/* Permissions Page */}
