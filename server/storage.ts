@@ -1364,31 +1364,16 @@ export class DatabaseStorage implements IStorage {
     remainingBudget: number;
     status: 'healthy' | 'warning' | 'critical';
   }>> {
-    // Enhanced query with role-based filtering
+    // Simplified query to match working cost allocation access patterns
     let whereConditions = [
       eq(projects.tenantId, tenantId),
       eq(projects.status, "active")
     ];
 
-    // Apply role-based filtering similar to project analytics access
-    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+    // Simplified role filtering - focus on admin access and manager relationship
+    if (userRole && !['console_manager', 'admin'].includes(userRole) && userId) {
       whereConditions.push(
-        sql`(${projects.managerId} = ${userId} OR EXISTS (
-          SELECT 1 FROM ${projectAssignments} 
-          WHERE ${projectAssignments.projectId} = ${projects.id} 
-          AND ${projectAssignments.userId} = ${userId}
-          AND ${projectAssignments.tenantId} = ${tenantId}
-        ) OR EXISTS (
-          SELECT 1 FROM ${fundAllocations} 
-          WHERE ${fundAllocations.projectId} = ${projects.id} 
-          AND (${fundAllocations.fromUserId} = ${userId} OR ${fundAllocations.toUserId} = ${userId})
-          AND ${fundAllocations.tenantId} = ${tenantId}
-        ) OR EXISTS (
-          SELECT 1 FROM ${costAllocations} 
-          WHERE ${costAllocations.projectId} = ${projects.id} 
-          AND ${costAllocations.enteredBy} = ${userId}
-          AND ${costAllocations.tenantId} = ${tenantId}
-        ))`
+        sql`${projects.managerId} = ${userId}`
       );
     }
 
@@ -1450,21 +1435,15 @@ export class DatabaseStorage implements IStorage {
   }> {
     let whereConditions = [eq(costAllocations.tenantId, tenantId)];
     
-    // Apply role-based filtering for project access
-    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+    // Simplified role filtering for broader access to cost data
+    if (userRole && !['console_manager', 'admin'].includes(userRole) && userId) {
       whereConditions.push(
-        sql`EXISTS (
+        sql`(${costAllocations.enteredBy} = ${userId} OR EXISTS (
           SELECT 1 FROM ${projects}
           WHERE ${projects.id} = ${costAllocations.projectId}
-          AND (
-            ${projects.managerId} = ${userId} OR EXISTS (
-              SELECT 1 FROM ${projectAssignments} 
-              WHERE ${projectAssignments.projectId} = ${projects.id} 
-              AND ${projectAssignments.userId} = ${userId}
-              AND ${projectAssignments.tenantId} = ${tenantId}
-            ) OR ${costAllocations.enteredBy} = ${userId}
-          )
-        )`
+          AND ${projects.managerId} = ${userId}
+          AND ${projects.tenantId} = ${tenantId}
+        ))`
       );
     }
     
@@ -1514,21 +1493,15 @@ export class DatabaseStorage implements IStorage {
   }>> {
     let whereConditions = [eq(costAllocations.tenantId, tenantId)];
     
-    // Apply role-based filtering for project access
-    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userRole !== 'manager' && userId) {
+    // Simplified role filtering for broader access to cost data
+    if (userRole && !['console_manager', 'admin'].includes(userRole) && userId) {
       whereConditions.push(
-        sql`EXISTS (
+        sql`(${costAllocations.enteredBy} = ${userId} OR EXISTS (
           SELECT 1 FROM ${projects}
           WHERE ${projects.id} = ${costAllocations.projectId}
-          AND (
-            ${projects.managerId} = ${userId} OR EXISTS (
-              SELECT 1 FROM ${projectAssignments} 
-              WHERE ${projectAssignments.projectId} = ${projects.id} 
-              AND ${projectAssignments.userId} = ${userId}
-              AND ${projectAssignments.tenantId} = ${tenantId}
-            ) OR ${costAllocations.enteredBy} = ${userId}
-          )
-        )`
+          AND ${projects.managerId} = ${userId}
+          AND ${projects.tenantId} = ${tenantId}
+        ))`
       );
     }
     
