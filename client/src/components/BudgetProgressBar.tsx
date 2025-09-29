@@ -33,7 +33,8 @@ export default function BudgetProgressBar({ projectId }: BudgetProgressBarProps)
     : '/api/analytics/budget-summary';
   
   const { data: budgetSummary, isLoading, error } = useQuery<BudgetSummaryItem[]>({
-    queryKey: [queryUrl, tenantId],
+    queryKey: ['budget-summary', tenantId, projectId],
+    queryFn: () => fetch(queryUrl).then(res => res.json()),
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates

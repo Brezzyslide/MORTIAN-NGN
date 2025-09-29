@@ -33,7 +33,7 @@ export default function StatsCards({ projectId }: StatsCardsProps) {
   
   // Fetch project-specific stats when projectId is provided
   const { data: projectStats, isLoading: isProjectLoading, error: projectError } = useQuery<ProjectStats>({
-    queryKey: ["/api/analytics/projects", projectId],
+    queryKey: [`/api/projects/${projectId}/analytics`],
     enabled: Boolean(projectId),
     retry: false,
   });
