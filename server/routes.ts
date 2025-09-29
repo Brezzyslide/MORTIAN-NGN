@@ -1536,7 +1536,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { tenantId, user } = await getUserData(req);
       const normalizedRole = mapLegacyRole(user.role);
-      const budgetSummary = await storage.getBudgetSummary(tenantId, normalizedRole, user.id);
+      
+      // Handle optional projectId filter for project-specific analytics
+      const projectId = req.query.projectId as string | undefined;
+      
+      const budgetSummary = await storage.getBudgetSummary(tenantId, normalizedRole, user.id, projectId);
       res.json(budgetSummary);
     } catch (error) {
       console.error("Error fetching budget summary:", error);

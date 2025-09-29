@@ -233,7 +233,7 @@ export interface IStorage {
   }>;
 
   // New analytics operations for Sprint 4 & 5 (with enhanced security)
-  getBudgetSummary(tenantId: string, userRole?: string, userId?: string): Promise<Array<{
+  getBudgetSummary(tenantId: string, userRole?: string, userId?: string, projectId?: string): Promise<Array<{
     projectId: string;
     projectTitle: string;
     totalBudget: number;
@@ -1355,7 +1355,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // New analytics operations for Sprint 4 & 5 with enhanced security
-  async getBudgetSummary(tenantId: string, userRole?: string, userId?: string): Promise<Array<{
+  async getBudgetSummary(tenantId: string, userRole?: string, userId?: string, projectId?: string): Promise<Array<{
     projectId: string;
     projectTitle: string;
     totalBudget: number;
@@ -1369,6 +1369,11 @@ export class DatabaseStorage implements IStorage {
       eq(projects.tenantId, tenantId),
       eq(projects.status, "active")
     ];
+
+    // Add project-specific filtering when projectId is provided
+    if (projectId) {
+      whereConditions.push(eq(projects.id, projectId));
+    }
 
     // Simplified role filtering - focus on admin access and manager relationship
     if (userRole && !['console_manager', 'admin'].includes(userRole) && userId) {
