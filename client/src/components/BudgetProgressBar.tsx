@@ -18,13 +18,26 @@ interface BudgetSummaryItem {
   status: 'healthy' | 'warning' | 'critical';
 }
 
-export default function BudgetProgressBar() {
+interface BudgetProgressBarProps {
+  projectId?: string | null;
+}
+
+export default function BudgetProgressBar({ projectId }: BudgetProgressBarProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const tenantId = user?.tenantId;
   
   const { data: budgetSummary, isLoading, error } = useQuery<BudgetSummaryItem[]>({
-    queryKey: ["/api/analytics/budget-summary", tenantId],
+    queryKey: ["/api/analytics/budget-summary", tenantId, projectId],
+    queryFn: ({ queryKey }) => {
+      const [url, tenantId, projectId] = queryKey;
+      const params = new URLSearchParams();
+      if (projectId) {
+        params.set('projectId', projectId as string);
+      }
+      const fullUrl = `${url}${params.toString() ? `?${params.toString()}` : ''}`;
+      return fetch(fullUrl).then(res => res.json());
+    },
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates

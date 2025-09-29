@@ -13,13 +13,41 @@ interface TenantStats {
   netProfit: number;
 }
 
-export default function StatsCards() {
+interface ProjectStats {
+  projectId: string;
+  budget: number;
+  totalSpent: number;
+  revenue: number;
+  netProfit: number;
+  budgetUtilizationPercentage: number;
+  remainingBudget: number;
+  transactionCount: number;
+}
+
+interface StatsCardsProps {
+  projectId?: string | null;
+}
+
+export default function StatsCards({ projectId }: StatsCardsProps) {
   const { toast } = useToast();
   
-  const { data: stats, isLoading, error } = useQuery<TenantStats>({
-    queryKey: ["/api/analytics/tenant"],
+  // Fetch project-specific stats when projectId is provided
+  const { data: projectStats, isLoading: isProjectLoading, error: projectError } = useQuery<ProjectStats>({
+    queryKey: ["/api/analytics/projects", projectId],
+    enabled: Boolean(projectId),
     retry: false,
   });
+
+  // Fetch tenant-level stats when no projectId is provided
+  const { data: tenantStats, isLoading: isTenantLoading, error: tenantError } = useQuery<TenantStats>({
+    queryKey: ["/api/analytics/tenant"],
+    enabled: !projectId,
+    retry: false,
+  });
+
+  const stats = projectId ? projectStats : tenantStats;
+  const isLoading = projectId ? isProjectLoading : isTenantLoading;
+  const error = projectId ? projectError : tenantError;
 
   // Handle authentication errors
   useEffect(() => {
@@ -57,7 +85,11 @@ export default function StatsCards() {
     );
   }
 
-  const budgetUtilization = stats ? ((stats.totalSpent / stats.totalBudget) * 100).toFixed(1) : '0.0';
+  const budgetUtilization = stats 
+    ? projectId 
+      ? ((projectStats?.totalSpent || 0) / (projectStats?.budget || 1) * 100).toFixed(1)
+      : ((tenantStats?.totalSpent || 0) / (tenantStats?.totalBudget || 1) * 100).toFixed(1)
+    : '0.0';
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -65,9 +97,14 @@ export default function StatsCards() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-muted-foreground text-sm font-medium">Total Budget</p>
+              <p className="text-muted-foreground text-sm font-medium">
+                {projectId ? 'Project Budget' : 'Total Budget'}
+              </p>
               <p className="text-2xl font-semibold text-foreground mt-1" data-testid="text-total-budget">
-                {stats ? formatCurrency(stats.totalBudget) : '$0'}
+                {stats 
+                  ? formatCurrency(projectId ? (projectStats?.budget || 0) : (tenantStats?.totalBudget || 0))
+                  : '₦0'
+                }
               </p>
             </div>
             <div className="p-3 bg-primary/10 rounded-full">
@@ -85,9 +122,14 @@ export default function StatsCards() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-muted-foreground text-sm font-medium">Total Spent</p>
+              <p className="text-muted-foreground text-sm font-medium">
+                {projectId ? 'Project Spent' : 'Total Spent'}
+              </p>
               <p className="text-2xl font-semibold text-foreground mt-1" data-testid="text-total-spent">
-                {stats ? formatCurrency(stats.totalSpent) : '$0'}
+                {stats 
+                  ? formatCurrency(projectId ? (projectStats?.totalSpent || 0) : (tenantStats?.totalSpent || 0))
+                  : '₦0'
+                }
               </p>
             </div>
             <div className="p-3 bg-orange-100 rounded-full">
@@ -105,9 +147,14 @@ export default function StatsCards() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-muted-foreground text-sm font-medium">Active Projects</p>
+              <p className="text-muted-foreground text-sm font-medium">
+                {projectId ? 'Transaction Count' : 'Active Projects'}
+              </p>
               <p className="text-2xl font-semibold text-foreground mt-1" data-testid="text-active-projects">
-                {stats?.activeProjects || 0}
+                {projectId 
+                  ? (projectStats?.transactionCount || 0)
+                  : (tenantStats?.activeProjects || 0)
+                }
               </p>
             </div>
             <div className="p-3 bg-blue-100 rounded-full">
@@ -115,8 +162,12 @@ export default function StatsCards() {
             </div>
           </div>
           <div className="mt-4 flex items-center text-sm">
-            <span className="text-blue-600 font-medium">Current</span>
-            <span className="text-muted-foreground ml-2">active projects</span>
+            <span className="text-blue-600 font-medium">
+              {projectId ? 'Total' : 'Current'}
+            </span>
+            <span className="text-muted-foreground ml-2">
+              {projectId ? 'transactions' : 'active projects'}
+            </span>
           </div>
         </CardContent>
       </Card>
@@ -126,8 +177,15 @@ export default function StatsCards() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-muted-foreground text-sm font-medium">Budget Remaining</p>
-              <p className={`text-2xl font-semibold mt-1 ${stats && stats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-net-profit">
-                {stats ? formatCurrency(stats.netProfit) : '$0'}
+              <p className={`text-2xl font-semibold mt-1 ${
+                projectId 
+                  ? (projectStats?.remainingBudget || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                  : (tenantStats?.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+              }`} data-testid="text-net-profit">
+                {projectId 
+                  ? formatCurrency(projectStats?.remainingBudget || 0)
+                  : formatCurrency(tenantStats?.netProfit || 0)
+                }
               </p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
