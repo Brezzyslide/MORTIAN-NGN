@@ -20,7 +20,7 @@ export default function AnalyticsSelector({ selectedProjectId, onProjectChange }
 
   // Fetch accessible projects for the dropdown
   const { data: projects, isLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects", tenantId],
+    queryKey: ["/api/projects"],
     enabled: Boolean(tenantId),
     retry: false,
   });
