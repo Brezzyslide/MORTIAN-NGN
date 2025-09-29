@@ -25,6 +25,7 @@ import BudgetProgressBar from "@/components/BudgetProgressBar";
 import CostAllocationsTable from "@/components/CostAllocationsTable";
 import SpendingCharts from "@/components/SpendingCharts";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
+import AnalyticsSelector from "@/components/AnalyticsSelector";
 import PendingApprovalsWidget from "@/components/PendingApprovalsWidget";
 // Sprint 3 Budget Amendments & Change Orders Components
 import BudgetAmendmentForm from "@/components/BudgetAmendmentForm";
@@ -52,6 +53,18 @@ export default function Dashboard() {
     projectId?: string;
     categories?: string[];
   }>({});
+
+  // Project Selection State for Analytics
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Parse projectId from URL query parameters
+  useEffect(() => {
+    if (location === '/analytics') {
+      const params = new URLSearchParams(window.location.search);
+      const projectIdFromUrl = params.get('projectId');
+      setSelectedProjectId(projectIdFromUrl);
+    }
+  }, [location]);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -248,24 +261,37 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* Analytics Page - Sprint 4 Enhanced */}
+        {/* Analytics Page - Sprint 4 Enhanced with Project Selection */}
         {location === '/analytics' && (
           <>
+            {/* Project Selection Interface */}
+            <AnalyticsSelector 
+              selectedProjectId={selectedProjectId}
+              onProjectChange={setSelectedProjectId}
+            />
+
             {/* Analytics Filters */}
             <div className="mb-8">
               <AnalyticsFilters 
-                filters={analyticsFilters}
-                onFiltersChange={setAnalyticsFilters}
+                filters={{
+                  ...analyticsFilters,
+                  projectId: selectedProjectId || undefined
+                }}
+                onFiltersChange={(filters) => {
+                  // Don't let filters override our project selection
+                  const { projectId, ...otherFilters } = filters;
+                  setAnalyticsFilters(otherFilters);
+                }}
               />
             </div>
 
             {/* Key Metrics Overview */}
-            <StatsCards />
+            <StatsCards projectId={selectedProjectId} />
 
             {/* Budget Progress and Spending Charts */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
               <div className="xl:col-span-2">
-                <BudgetProgressBar />
+                <BudgetProgressBar projectId={selectedProjectId} />
               </div>
               <div>
                 <div className="space-y-6">
@@ -278,7 +304,10 @@ export default function Dashboard() {
                       <div>
                         <h3 className="font-semibold text-blue-900 dark:text-blue-100">Live Analytics</h3>
                         <p className="text-sm text-blue-700 dark:text-blue-300">
-                          Real-time budget tracking with automatic updates every 30 seconds
+                          {selectedProjectId 
+                            ? "Real-time project analytics with automatic updates every 30 seconds"
+                            : "Real-time organizational analytics with automatic updates every 30 seconds"
+                          }
                         </p>
                       </div>
                     </div>
@@ -289,12 +318,22 @@ export default function Dashboard() {
 
             {/* Spending Analysis Charts */}
             <div className="mb-8">
-              <SpendingCharts filters={analyticsFilters} />
+              <SpendingCharts 
+                filters={{
+                  ...analyticsFilters,
+                  projectId: selectedProjectId || undefined
+                }} 
+              />
             </div>
 
             {/* Cost Allocations Ledger Table */}
             <div className="mb-8">
-              <CostAllocationsTable filters={analyticsFilters} />
+              <CostAllocationsTable 
+                filters={{
+                  ...analyticsFilters,
+                  projectId: selectedProjectId || undefined
+                }} 
+              />
             </div>
 
             {/* Legacy Analytics Components (kept for backward compatibility) */}
