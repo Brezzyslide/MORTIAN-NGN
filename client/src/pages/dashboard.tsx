@@ -59,7 +59,10 @@ export default function Dashboard() {
 
   // Parse projectId from URL query parameters
   useEffect(() => {
-    if (location === '/analytics') {
+    // Extract base path from location (remove query params)
+    const basePath = location.split('?')[0];
+    
+    if (basePath === '/analytics') {
       const params = new URLSearchParams(window.location.search);
       const projectIdFromUrl = params.get('projectId');
       setSelectedProjectId(projectIdFromUrl);

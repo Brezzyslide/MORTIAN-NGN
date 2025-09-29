@@ -27,17 +27,13 @@ export default function BudgetProgressBar({ projectId }: BudgetProgressBarProps)
   const { user } = useAuth();
   const tenantId = user?.tenantId;
   
+  // Construct query URL with optional projectId parameter
+  const queryUrl = projectId 
+    ? `/api/analytics/budget-summary?projectId=${projectId}`
+    : '/api/analytics/budget-summary';
+  
   const { data: budgetSummary, isLoading, error } = useQuery<BudgetSummaryItem[]>({
-    queryKey: ["/api/analytics/budget-summary", tenantId, projectId],
-    queryFn: ({ queryKey }) => {
-      const [url, tenantId, projectId] = queryKey;
-      const params = new URLSearchParams();
-      if (projectId) {
-        params.set('projectId', projectId as string);
-      }
-      const fullUrl = `${url}${params.toString() ? `?${params.toString()}` : ''}`;
-      return fetch(fullUrl).then(res => res.json());
-    },
+    queryKey: [queryUrl, tenantId],
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
