@@ -239,11 +239,11 @@ export default function AnalyticsFilters({ filters, onFiltersChange }: Analytics
           )}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Filter analytics data by date range, project, and categories
+          Filter analytics data by date range and categories
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Date Range Filter */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Date Range</label>
@@ -306,36 +306,6 @@ export default function AnalyticsFilters({ filters, onFiltersChange }: Analytics
                 </div>
               </PopoverContent>
             </Popover>
-          </div>
-
-          {/* Project Filter */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Project</label>
-            <Select
-              value={filters.projectId || 'all'}
-              onValueChange={handleProjectChange}
-            >
-              <SelectTrigger data-testid="select-project">
-                <Building className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="All projects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Projects</SelectItem>
-                {projects && projects.length > 0 ? (
-                  projects
-                    .filter(project => project.status === 'active')
-                    .map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.title}
-                      </SelectItem>
-                    ))
-                ) : (
-                  <SelectItem value="none" disabled>
-                    No projects available
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Category Filter */}
@@ -425,20 +395,6 @@ export default function AnalyticsFilters({ filters, onFiltersChange }: Analytics
                 </Badge>
               )}
 
-              {filters.projectId && (
-                <Badge variant="secondary" className="flex items-center space-x-1">
-                  <Building className="h-3 w-3" />
-                  <span>
-                    {projects?.find(p => p.id === filters.projectId)?.title || 'Project'}
-                  </span>
-                  <button
-                    onClick={() => handleProjectChange('all')}
-                    className="ml-1 hover:bg-muted rounded-full p-0.5"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
 
               {filters.categories && filters.categories.length > 0 && (
                 <Badge variant="secondary" className="flex items-center space-x-1">
