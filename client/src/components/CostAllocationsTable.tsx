@@ -313,6 +313,11 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       });
       queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["/api/approvals", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/labour-material-split"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/category-spending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     },
     onError: (error: any) => {
       toast({
@@ -336,6 +341,11 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       setRejectComments("");
       queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["/api/approvals", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/labour-material-split"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/category-spending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     },
     onError: (error: any) => {
       toast({
