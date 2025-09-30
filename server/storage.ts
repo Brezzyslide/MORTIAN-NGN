@@ -1238,7 +1238,7 @@ export class DatabaseStorage implements IStorage {
     const netProfit = revenue - totalSpent;
     const budgetUtilization = budget > 0 ? (totalSpent / budget) * 100 : 0;
     const remainingBudget = budget - totalSpent;
-    const transactionCount = parseInt(transactionSpent?.count || "0") || 0;
+    const transactionCount = Number(transactionSpent?.count) || 0;
 
     return {
       projectId: project.id,

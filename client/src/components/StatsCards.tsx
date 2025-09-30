@@ -33,9 +33,13 @@ export default function StatsCards({ projectId }: StatsCardsProps) {
   
   // Fetch project-specific stats when projectId is provided
   const { data: projectStats, isLoading: isProjectLoading, error: projectError } = useQuery<ProjectStats>({
-    queryKey: [`/api/projects/${projectId}/analytics`],
+    queryKey: ['project-analytics', projectId],
+    queryFn: () => fetch(`/api/projects/${projectId}/analytics?_cb=${Date.now()}`, {
+      headers: { 'Cache-Control': 'no-cache' }
+    }).then(res => res.json()),
     enabled: Boolean(projectId),
     retry: false,
+    staleTime: 0,
   });
 
   // Fetch tenant-level stats when no projectId is provided

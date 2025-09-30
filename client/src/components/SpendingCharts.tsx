@@ -111,16 +111,20 @@ export default function SpendingCharts({ filters }: SpendingChartsProps) {
   }, [filters]);
 
   // Fetch labour vs material split data
+  const labourMaterialUrl = `/api/analytics/labour-material-split${queryParams ? `?${queryParams}` : ''}`;
   const { data: labourMaterialData, isLoading: isLoadingLabourMaterial, error: labourMaterialError } = useQuery<LabourMaterialSplit>({
-    queryKey: ["/api/analytics/labour-material-split", tenantId, queryParams],
+    queryKey: ['labour-material-split', tenantId, queryParams],
+    queryFn: () => fetch(labourMaterialUrl).then(res => res.json()),
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   });
 
   // Fetch category spending data
+  const categorySpendingUrl = `/api/analytics/category-spending${queryParams ? `?${queryParams}` : ''}`;
   const { data: categoryData, isLoading: isLoadingCategory, error: categoryError } = useQuery<CategorySpending[]>({
-    queryKey: ["/api/analytics/category-spending", tenantId, queryParams],
+    queryKey: ['category-spending', tenantId, queryParams],
+    queryFn: () => fetch(categorySpendingUrl).then(res => res.json()),
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
