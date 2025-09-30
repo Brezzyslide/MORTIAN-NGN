@@ -125,7 +125,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
   }, [currentPage, pageSize, searchQuery, filters, changeOrderFilter]);
 
   const { data: costAllocationsData, isLoading, error } = useQuery<CostAllocationsResponse>({
-    queryKey: ["/api/cost-allocations-filtered", tenantId, queryParams],
+    queryKey: [`/api/cost-allocations-filtered?${queryParams}`],
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
