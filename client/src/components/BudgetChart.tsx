@@ -19,7 +19,7 @@ export default function BudgetChart() {
   const tenantId = user?.tenantId;
 
   const { data: stats, isLoading, error } = useQuery<TenantStats>({
-    queryKey: ["/api/analytics/tenant", tenantId],
+    queryKey: ["/api/analytics/tenant"],
     enabled: Boolean(tenantId),
     retry: false,
   });

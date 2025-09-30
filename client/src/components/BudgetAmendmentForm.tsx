@@ -138,7 +138,7 @@ export default function BudgetAmendmentForm() {
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["/api/budget-amendments", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant"] });
     },
     onError: (error: any) => {
       if (isUnauthorizedError(error)) {

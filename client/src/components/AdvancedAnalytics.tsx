@@ -36,7 +36,7 @@ export default function AdvancedAnalytics() {
   const tenantId = user?.tenantId;
 
   const { data: tenantStats } = useQuery<TenantStats>({
-    queryKey: ["/api/analytics/tenant", tenantId],
+    queryKey: ["/api/analytics/tenant"],
     enabled: Boolean(tenantId),
     retry: false,
   });

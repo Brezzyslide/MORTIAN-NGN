@@ -33,7 +33,7 @@ export default function AnalyticsDashboard({ selectedProjectId }: AnalyticsDashb
 
   // Fetch tenant-wide stats when no project is selected
   const { data: tenantStats, isLoading: tenantLoading, error: tenantError } = useQuery<TenantStats>({
-    queryKey: ["/api/analytics/tenant", tenantId],
+    queryKey: ["/api/analytics/tenant"],
     enabled: Boolean(tenantId) && !selectedProjectId,
     retry: false,
   });
