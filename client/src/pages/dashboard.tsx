@@ -217,7 +217,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <TransactionsList />
             </div>
-            <AnalyticsDashboard />
+            <AnalyticsDashboard selectedProjectId={null} />
           </>
         )}
 
@@ -347,7 +347,7 @@ export default function Dashboard() {
                   <h3 className="text-lg font-semibold text-foreground">Historical Analytics</h3>
                   <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">Legacy View</span>
                 </div>
-                <AnalyticsDashboard />
+                <AnalyticsDashboard selectedProjectId={selectedProjectId} />
               </div>
               
               <div className="mb-8">

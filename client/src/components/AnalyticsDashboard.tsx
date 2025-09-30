@@ -14,16 +14,40 @@ interface TenantStats {
   completedProjects: number;
 }
 
-export default function AnalyticsDashboard() {
+interface ProjectStats {
+  totalBudget: number;
+  totalSpent: number;
+  totalRevenue: number;
+  netProfit: number;
+  transactionCount: number;
+}
+
+interface AnalyticsDashboardProps {
+  selectedProjectId?: string | null;
+}
+
+export default function AnalyticsDashboard({ selectedProjectId }: AnalyticsDashboardProps = {}) {
   const { toast } = useToast();
   const { user } = useAuth();
   const tenantId = user?.tenantId;
 
-  const { data: stats, isLoading, error } = useQuery<TenantStats>({
+  // Fetch tenant-wide stats when no project is selected
+  const { data: tenantStats, isLoading: tenantLoading, error: tenantError } = useQuery<TenantStats>({
     queryKey: ["/api/analytics/tenant", tenantId],
-    enabled: Boolean(tenantId),
+    enabled: Boolean(tenantId) && !selectedProjectId,
     retry: false,
   });
+
+  // Fetch project-specific stats when a project is selected
+  const { data: projectStats, isLoading: projectLoading, error: projectError } = useQuery<ProjectStats>({
+    queryKey: ["/api/analytics/project", selectedProjectId],
+    enabled: Boolean(tenantId) && Boolean(selectedProjectId),
+    retry: false,
+  });
+
+  const stats = selectedProjectId ? projectStats : tenantStats;
+  const isLoading = selectedProjectId ? projectLoading : tenantLoading;
+  const error = selectedProjectId ? projectError : tenantError;
 
   useEffect(() => {
     if (error && isUnauthorizedError(error)) {
@@ -104,7 +128,12 @@ export default function AnalyticsDashboard() {
               </div>
             </div>
             <div className="text-sm text-muted-foreground">Total Budget</div>
-            <div className="text-xs text-blue-600 mt-1">{stats?.activeProjects || 0} active projects</div>
+            <div className="text-xs text-blue-600 mt-1">
+              {selectedProjectId 
+                ? 'Project Budget' 
+                : `${(tenantStats as TenantStats)?.activeProjects || 0} active projects`
+              }
+            </div>
           </div>
           
           <div className="text-center p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
