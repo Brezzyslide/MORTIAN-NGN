@@ -361,7 +361,7 @@ export default function Dashboard() {
               </div>
               
               <div className="mb-8">
-                <AdvancedAnalytics />
+                <AdvancedAnalytics projectId={selectedProjectId} />
               </div>
             </div>
           </>

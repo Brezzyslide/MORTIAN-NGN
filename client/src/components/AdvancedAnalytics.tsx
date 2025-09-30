@@ -23,13 +23,38 @@ interface TenantStats {
   completedProjects: number;
 }
 
-export default function AdvancedAnalytics() {
+interface ProjectAnalyticsData {
+  project: {
+    id: string;
+    title: string;
+    budget: number;
+    revenue: number;
+  };
+  totalSpent: number;
+  netProfit: number;
+  budgetUtilization: number;
+  remainingBudget: number;
+}
+
+interface AdvancedAnalyticsProps {
+  projectId?: string | null;
+}
+
+export default function AdvancedAnalytics({ projectId }: AdvancedAnalyticsProps) {
   const { user } = useAuth();
   const tenantId = user?.tenantId;
 
+  // Fetch tenant-wide stats when no project is selected
   const { data: tenantStats } = useQuery<TenantStats>({
     queryKey: ["/api/analytics/tenant"],
-    enabled: Boolean(tenantId),
+    enabled: Boolean(tenantId) && !projectId,
+    retry: false,
+  });
+
+  // Fetch project-specific analytics when a project is selected
+  const { data: projectAnalytics } = useQuery<ProjectAnalyticsData>({
+    queryKey: [`/api/projects/${projectId}/analytics`],
+    enabled: Boolean(projectId),
     retry: false,
   });
 
@@ -40,7 +65,7 @@ export default function AdvancedAnalytics() {
   });
 
   const { data: transactions } = useQuery<Transaction[]>({
-    queryKey: ["/api/transactions", tenantId],
+    queryKey: projectId ? ["/api/transactions", projectId] : ["/api/transactions", tenantId],
     enabled: Boolean(tenantId),
     retry: false,
   });
@@ -77,7 +102,19 @@ export default function AdvancedAnalytics() {
   };
 
   const projectData = processProjectData();
-  const totalNetProfit = (tenantStats?.totalRevenue || 0) - (tenantStats?.totalSpent || 0);
+  
+  // Use project-specific data if a project is selected, otherwise use tenant stats
+  const displayStats = projectId && projectAnalytics ? {
+    totalBudget: projectAnalytics.project.budget,
+    totalRevenue: projectAnalytics.project.revenue,
+    totalSpent: projectAnalytics.totalSpent,
+    netProfit: projectAnalytics.netProfit,
+  } : {
+    totalBudget: tenantStats?.totalBudget || 0,
+    totalRevenue: tenantStats?.totalRevenue || 0,
+    totalSpent: tenantStats?.totalSpent || 0,
+    netProfit: (tenantStats?.totalRevenue || 0) - (tenantStats?.totalSpent || 0),
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -91,10 +128,10 @@ export default function AdvancedAnalytics() {
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-foreground">
-          Advanced Analytics
+          {projectId && projectAnalytics ? `${projectAnalytics.project.title} Analytics` : 'Advanced Analytics'}
         </h2>
         <p className="text-muted-foreground">
-          Comprehensive financial insights and performance metrics
+          {projectId ? 'Project-specific financial insights and performance metrics' : 'Comprehensive financial insights and performance metrics'}
         </p>
       </div>
 
@@ -102,36 +139,36 @@ export default function AdvancedAnalytics() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Budget</CardTitle>
+            <CardTitle className="text-sm font-medium">{projectId ? 'Project Budget' : 'Total Budget'}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground" data-testid="text-total-budget-advanced">
-              {formatCurrency(tenantStats?.totalBudget || 0)}
+              {formatCurrency(displayStats.totalBudget)}
             </div>
           </CardContent>
         </Card>
 
         <Card className="border border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">{projectId ? 'Project Revenue' : 'Total Revenue'}</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600" data-testid="text-total-revenue-advanced">
-              {formatCurrency(tenantStats?.totalRevenue || 0)}
+              {formatCurrency(displayStats.totalRevenue)}
             </div>
           </CardContent>
         </Card>
 
         <Card className="border border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
+            <CardTitle className="text-sm font-medium">{projectId ? 'Project Spent' : 'Total Spent'}</CardTitle>
             <TrendingDown className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground" data-testid="text-total-spent-advanced">
-              {formatCurrency(tenantStats?.totalSpent || 0)}
+              {formatCurrency(displayStats.totalSpent)}
             </div>
           </CardContent>
         </Card>
@@ -139,14 +176,14 @@ export default function AdvancedAnalytics() {
         <Card className="border border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Net Profit / Loss</CardTitle>
-            <Target className={`h-4 w-4 ${totalNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+            <Target className={`h-4 w-4 ${displayStats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${totalNetProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-net-profit-advanced">
-              {formatCurrency(totalNetProfit)}
+            <div className={`text-2xl font-bold ${displayStats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-net-profit-advanced">
+              {formatCurrency(displayStats.netProfit)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {totalNetProfit >= 0 ? 'Profit' : 'Loss'}
+              {displayStats.netProfit >= 0 ? 'Profit' : 'Loss'}
             </p>
           </CardContent>
         </Card>
