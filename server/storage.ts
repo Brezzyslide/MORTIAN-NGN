@@ -211,14 +211,26 @@ export interface IStorage {
   
   // New project-specific analytics with budget utilization
   getProjectAnalytics(projectId: string, tenantId: string): Promise<{
-    projectId: string;
-    budget: number;
+    project: {
+      id: string;
+      title: string;
+      description: string;
+      budget: number;
+      consumedAmount: number;
+      revenue: number;
+      status: string;
+      startDate: string;
+      endDate: string;
+    };
     totalSpent: number;
-    revenue: number;
     netProfit: number;
-    budgetUtilizationPercentage: number;
+    budgetUtilization: number;
+    costBreakdown: {
+      labour: number;
+      materials: number;
+      other: number;
+    };
     remainingBudget: number;
-    transactionCount: number;
   }>;
   
   // Check if user can access a specific project based on role and assignments
@@ -1156,14 +1168,26 @@ export class DatabaseStorage implements IStorage {
 
   // New project-specific analytics with budget utilization and cost breakdown
   async getProjectAnalytics(projectId: string, tenantId: string): Promise<{
-    projectId: string;
-    budget: number;
+    project: {
+      id: string;
+      title: string;
+      description: string;
+      budget: number;
+      consumedAmount: number;
+      revenue: number;
+      status: string;
+      startDate: string;
+      endDate: string;
+    };
     totalSpent: number;
-    revenue: number;
     netProfit: number;
-    budgetUtilizationPercentage: number;
+    budgetUtilization: number;
+    costBreakdown: {
+      labour: number;
+      materials: number;
+      other: number;
+    };
     remainingBudget: number;
-    transactionCount: number;
   }> {
     const project = await this.getProject(projectId, tenantId);
     if (!project) {
@@ -1255,14 +1279,26 @@ export class DatabaseStorage implements IStorage {
     const transactionCount = Number(transactionSpent?.count) || 0;
 
     return {
-      projectId: project.id,
-      budget,
+      project: {
+        id: project.id,
+        title: project.title,
+        description: project.description || '',
+        budget: parseFloat(project.budget) || 0,
+        consumedAmount: parseFloat(project.consumedAmount) || 0,
+        revenue,
+        status: project.status || 'active',
+        startDate: project.startDate.toISOString(),
+        endDate: project.endDate.toISOString(),
+      },
       totalSpent,
-      revenue,
       netProfit,
-      budgetUtilizationPercentage: Math.round(budgetUtilization * 100) / 100,
+      budgetUtilization: budgetUtilization / 100,
+      costBreakdown: {
+        labour: labourCost,
+        materials: materialsCost,
+        other: otherCost,
+      },
       remainingBudget,
-      transactionCount,
     };
   }
 
