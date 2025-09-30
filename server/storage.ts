@@ -1369,10 +1369,26 @@ export class DatabaseStorage implements IStorage {
       .from(projects)
       .where(and(...whereConditions));
 
-    // Get cost allocations spending for each project
+    // Get spending from both transactions and cost allocations for each project
     const budgetSummary = await Promise.all(
       projectsData.map(async (project) => {
-        const [spentResult] = await db
+        // Get spending from transactions
+        const [transactionSpent] = await db
+          .select({
+            amount: sum(transactions.amount),
+          })
+          .from(transactions)
+          .where(and(
+            eq(transactions.projectId, project.id),
+            eq(transactions.tenantId, tenantId),
+            or(
+              eq(transactions.type, "expense"),
+              eq(transactions.type, "allocation")
+            )
+          ));
+
+        // Get spending from cost allocations
+        const [costAllocationSpent] = await db
           .select({
             totalSpent: sum(costAllocations.totalCost),
           })
@@ -1383,7 +1399,9 @@ export class DatabaseStorage implements IStorage {
           ));
 
         const totalBudget = parseFloat(project.budget) || 0;
-        const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
+        const transactionAmount = parseFloat(transactionSpent?.amount || "0") || 0;
+        const costAllocationAmount = parseFloat(costAllocationSpent?.totalSpent || "0") || 0;
+        const totalSpent = transactionAmount + costAllocationAmount;
         const spentPercentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
         const remainingBudget = totalBudget - totalSpent;
 
