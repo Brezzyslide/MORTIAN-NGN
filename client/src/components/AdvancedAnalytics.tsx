@@ -74,7 +74,12 @@ export default function AdvancedAnalytics({ projectId }: AdvancedAnalyticsProps)
   const processProjectData = () => {
     if (!projects || !Array.isArray(projects)) return [];
     
-    return projects.map((project: any) => {
+    // If a specific project is selected, show only that project's data
+    const projectsToDisplay = projectId 
+      ? projects.filter((p: any) => p.id === projectId)
+      : projects;
+    
+    return projectsToDisplay.map((project: any) => {
       // Calculate spent from expense transactions
       const projectExpenses = (transactions || []).filter((t: any) => 
         t.projectId === project.id && t.type === 'expense'
@@ -190,48 +195,55 @@ export default function AdvancedAnalytics({ projectId }: AdvancedAnalyticsProps)
       </div>
 
       {/* Project Revenue vs Spending with Net Profit */}
-      <Card className="border border-border">
-        <CardHeader>
-          <CardTitle>Project Revenue vs Spending</CardTitle>
-          <CardDescription>
-            Net profit/loss analysis per project
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={projectData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis 
-                dataKey="name" 
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-                tickFormatter={(value) => formatCurrency(value)}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--background))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '6px',
-                  color: 'hsl(var(--foreground))'
-                }}
-                formatter={(value, name) => [formatCurrency(Number(value)), name]}
-              />
-              <Legend />
-              <Bar dataKey="revenue" fill="#22c55e" name="Revenue" />
-              <Bar dataKey="spent" fill="#ef4444" name="Spent" />
-              <Bar dataKey="netProfit" name="Net Profit/Loss">
-                {projectData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.netProfit >= 0 ? '#22c55e' : '#ef4444'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {projectData.length > 0 && (
+        <Card className="border border-border">
+          <CardHeader>
+            <CardTitle>
+              {projectId ? 'Financial Performance' : 'Project Revenue vs Spending'}
+            </CardTitle>
+            <CardDescription>
+              {projectId 
+                ? 'Revenue, spending, and net profit/loss breakdown' 
+                : 'Net profit/loss analysis per project'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={projectData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                  tickFormatter={(value) => formatCurrency(value)}
+                />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '6px',
+                    color: 'hsl(var(--foreground))'
+                  }}
+                  formatter={(value, name) => [formatCurrency(Number(value)), name]}
+                />
+                <Legend />
+                <Bar dataKey="budget" fill="#8884d8" name="Budget" />
+                <Bar dataKey="revenue" fill="#22c55e" name="Revenue" />
+                <Bar dataKey="spent" fill="#ef4444" name="Spent" />
+                <Bar dataKey="netProfit" name="Net Profit/Loss">
+                  {projectData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.netProfit >= 0 ? '#22c55e' : '#ef4444'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
