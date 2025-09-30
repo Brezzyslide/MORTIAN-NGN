@@ -1142,26 +1142,14 @@ export class DatabaseStorage implements IStorage {
 
   // New project-specific analytics with budget utilization and cost breakdown
   async getProjectAnalytics(projectId: string, tenantId: string): Promise<{
-    project: {
-      id: string;
-      title: string;
-      description: string;
-      budget: number;
-      consumedAmount: number;
-      revenue: number;
-      status: string;
-      startDate: string;
-      endDate: string;
-    };
+    projectId: string;
+    budget: number;
     totalSpent: number;
+    revenue: number;
     netProfit: number;
-    budgetUtilization: number;
-    costBreakdown: {
-      labour: number;
-      materials: number;
-      other: number;
-    };
+    budgetUtilizationPercentage: number;
     remainingBudget: number;
+    transactionCount: number;
   }> {
     const project = await this.getProject(projectId, tenantId);
     if (!project) {
@@ -1250,28 +1238,17 @@ export class DatabaseStorage implements IStorage {
     const netProfit = revenue - totalSpent;
     const budgetUtilization = budget > 0 ? (totalSpent / budget) * 100 : 0;
     const remainingBudget = budget - totalSpent;
+    const transactionCount = parseInt(transactionSpent?.count || "0") || 0;
 
     return {
-      project: {
-        id: project.id,
-        title: project.title,
-        description: project.description || '',
-        budget,
-        consumedAmount: totalSpent,
-        revenue,
-        status: project.status,
-        startDate: project.startDate ? project.startDate.toISOString() : '',
-        endDate: project.endDate ? project.endDate.toISOString() : '',
-      },
+      projectId: project.id,
+      budget,
       totalSpent,
+      revenue,
       netProfit,
-      budgetUtilization: Math.round(budgetUtilization * 100) / 100,
-      costBreakdown: {
-        labour: Math.round(labourCost * 100) / 100,
-        materials: Math.round(materialsCost * 100) / 100,
-        other: Math.round(otherCost * 100) / 100,
-      },
+      budgetUtilizationPercentage: Math.round(budgetUtilization * 100) / 100,
       remainingBudget,
+      transactionCount,
     };
   }
 
