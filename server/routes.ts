@@ -2395,11 +2395,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Update approval workflow status
-      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'approved', userId, tenantId, comments);
+      // Get the approval workflow for this cost allocation
+      const workflow = await storage.getApprovalWorkflowByAllocationId(recordId, tenantId);
+      if (!workflow) {
+        return res.status(404).json({ message: "No approval workflow found for this cost allocation" });
+      }
+      
+      // Update approval workflow status using the workflow's actual ID
+      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(workflow.id, 'approved', userId, tenantId, comments);
       
       if (!updatedWorkflow) {
-        return res.status(404).json({ message: "Approval workflow not found" });
+        return res.status(404).json({ message: "Failed to update approval workflow" });
       }
       
       // Update cost allocation status to approved
@@ -2472,11 +2478,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Update approval workflow status
-      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'rejected', userId, tenantId, comments);
+      // Get the approval workflow for this cost allocation
+      const workflow = await storage.getApprovalWorkflowByAllocationId(recordId, tenantId);
+      if (!workflow) {
+        return res.status(404).json({ message: "No approval workflow found for this cost allocation" });
+      }
+      
+      // Update approval workflow status using the workflow's actual ID
+      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(workflow.id, 'rejected', userId, tenantId, comments);
       
       if (!updatedWorkflow) {
-        return res.status(404).json({ message: "Approval workflow not found" });
+        return res.status(404).json({ message: "Failed to update approval workflow" });
       }
       
       // Update cost allocation status to rejected

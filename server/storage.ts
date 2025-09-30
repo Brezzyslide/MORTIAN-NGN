@@ -305,7 +305,8 @@ export interface IStorage {
     };
   }>>;
   createApprovalWorkflow(workflow: InsertApprovalWorkflow, requesterTenantId: string): Promise<ApprovalWorkflow>;
-  updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, tenantId: string, comments?: string): Promise<ApprovalWorkflow | undefined>;
+  getApprovalWorkflowByAllocationId(allocationId: string, tenantId: string): Promise<ApprovalWorkflow | undefined>;
+  updateApprovalWorkflowStatus(workflowId: string, status: 'approved' | 'rejected', approverId: string, tenantId: string, comments?: string): Promise<ApprovalWorkflow | undefined>;
   updateCostAllocationStatus(id: string, status: 'draft' | 'pending' | 'approved' | 'rejected', tenantId: string): Promise<CostAllocation | undefined>;
 
   // Budget alert operations
@@ -2007,10 +2008,23 @@ export class DatabaseStorage implements IStorage {
     return newWorkflow;
   }
 
-  async updateApprovalWorkflowStatus(recordId: string, status: 'approved' | 'rejected', approverId: string, tenantId: string, comments?: string): Promise<ApprovalWorkflow | undefined> {
+  async getApprovalWorkflowByAllocationId(allocationId: string, tenantId: string): Promise<ApprovalWorkflow | undefined> {
+    const [workflow] = await db
+      .select()
+      .from(approvalWorkflows)
+      .where(and(
+        eq(approvalWorkflows.recordId, allocationId),
+        eq(approvalWorkflows.relatedTable, 'cost_allocations'),
+        eq(approvalWorkflows.tenantId, tenantId)
+      ))
+      .limit(1);
+    return workflow;
+  }
+
+  async updateApprovalWorkflowStatus(workflowId: string, status: 'approved' | 'rejected', approverId: string, tenantId: string, comments?: string): Promise<ApprovalWorkflow | undefined> {
     // CRITICAL SECURITY FIX: Always require tenant validation
     const whereConditions = [
-      eq(approvalWorkflows.recordId, recordId),
+      eq(approvalWorkflows.id, workflowId),
       eq(approvalWorkflows.tenantId, tenantId)
     ];
 
