@@ -19,6 +19,7 @@ import UserManagement from "@/components/UserManagement";
 import { CompanyManagement } from "@/components/CompanyManagement";
 import CostEntryForm from "@/components/CostEntryForm";
 import ProjectCostingsView from "@/components/ProjectCostingsView";
+import RevenueEntryForm from "@/components/RevenueEntryForm";
 import { Button } from "@/components/ui/button";
 // Sprint 4 Analytics Components
 import BudgetProgressBar from "@/components/BudgetProgressBar";
@@ -136,6 +137,7 @@ export default function Dashboard() {
               {!projectId && location === '/projects' && 'Projects'}
               {location === '/allocations' && 'Fund Allocation'}
               {location === '/cost-entry' && 'Cost Entry'}
+              {location === '/revenue-entry' && 'Revenue Entry'}
               {location === '/transactions' && 'Transactions'}
               {location === '/analytics' && 'Analytics'}
               {location === '/audit' && 'Audit Log'}
@@ -153,6 +155,7 @@ export default function Dashboard() {
               {!projectId && location === '/projects' && 'Create and manage project budgets'}
               {location === '/allocations' && 'Allocate funds to projects and team members'}
               {location === '/cost-entry' && 'Enter construction costs with labour and material tracking'}
+              {location === '/revenue-entry' && 'Record building sales and revenue'}
               {location === '/transactions' && 'Track expenses and revenue'}
               {location === '/analytics' && 'View detailed analytics and reports'}
               {location === '/audit' && 'Review system activity and changes'}
@@ -249,6 +252,13 @@ export default function Dashboard() {
         {location === '/cost-entry' && (
           <div className="mb-8">
             <CostEntryForm />
+          </div>
+        )}
+
+        {/* Revenue Entry Page */}
+        {location === '/revenue-entry' && (
+          <div className="mb-8">
+            <RevenueEntryForm />
           </div>
         )}
 

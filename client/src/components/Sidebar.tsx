@@ -87,6 +87,18 @@ export default function Sidebar() {
               <span>Cost Entry</span>
             </Link>
           </ProtectedComponent>
+          <ProtectedComponent requiredPermission="canAccessCostEntry">
+            <Link 
+              href="/revenue-entry" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/revenue-entry') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
+              data-testid="link-revenue-entry"
+            >
+              <i className="fas fa-money-bill-wave w-5"></i>
+              <span>Revenue Entry</span>
+            </Link>
+          </ProtectedComponent>
           <Link 
             href="/project-costings" 
             className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
