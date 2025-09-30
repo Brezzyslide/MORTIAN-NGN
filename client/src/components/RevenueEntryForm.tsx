@@ -22,7 +22,7 @@ const revenueSchema = z.object({
     message: "Amount must be a positive number",
   }),
   description: z.string().min(3, "Description must be at least 3 characters"),
-  category: z.string().default("sales"),
+  category: z.string().default("miscellaneous"),
 });
 
 type RevenueFormData = z.infer<typeof revenueSchema>;
@@ -43,7 +43,7 @@ export default function RevenueEntryForm() {
       projectId: "",
       amount: "",
       description: "",
-      category: "sales",
+      category: "miscellaneous",
     },
   });
 
