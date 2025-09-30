@@ -2396,7 +2396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Update approval workflow status
-      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'approved', userId, comments, tenantId);
+      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'approved', userId, tenantId, comments);
       
       if (!updatedWorkflow) {
         return res.status(404).json({ message: "Approval workflow not found" });
@@ -2473,7 +2473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Update approval workflow status
-      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'rejected', userId, comments, tenantId);
+      const updatedWorkflow = await storage.updateApprovalWorkflowStatus(recordId, 'rejected', userId, tenantId, comments);
       
       if (!updatedWorkflow) {
         return res.status(404).json({ message: "Approval workflow not found" });
