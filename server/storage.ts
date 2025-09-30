@@ -1115,6 +1115,17 @@ export class DatabaseStorage implements IStorage {
         )
       ));
 
+    // Also get spending from cost allocations table
+    const [costAllocationsResult] = await db
+      .select({
+        totalCost: sum(costAllocations.totalCost),
+      })
+      .from(costAllocations)
+      .where(and(
+        eq(costAllocations.tenantId, tenantId),
+        eq(costAllocations.status, "approved")
+      ));
+
     const [revenueResult] = await db
       .select({
         totalRevenue: sum(transactions.amount),
@@ -1126,7 +1137,9 @@ export class DatabaseStorage implements IStorage {
       ));
 
     const totalBudget = parseFloat(budgetResult?.totalBudget || "0") || 0;
-    const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
+    const transactionSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
+    const costAllocationsSpent = parseFloat(costAllocationsResult?.totalCost || "0") || 0;
+    const totalSpent = transactionSpent + costAllocationsSpent;
     const totalRevenue = parseFloat(revenueResult?.totalRevenue || "0") || 0;
     const netProfit = totalRevenue - totalSpent;
     const activeProjects = budgetResult?.activeProjects || 0;
