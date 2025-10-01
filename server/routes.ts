@@ -2424,6 +2424,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             consumedAmount: newConsumedAmount.toString()
           }, tenantId);
         }
+        
+        // Create transaction record for approved cost allocation
+        try {
+          const lineItems = await storage.getLineItems(tenantId);
+          const lineItem = lineItems.find(li => li.id === updatedCostAllocation.lineItemId);
+          
+          await storage.createTransaction({
+            projectId: updatedCostAllocation.projectId,
+            userId: updatedCostAllocation.enteredBy,
+            type: "expense",
+            amount: updatedCostAllocation.totalCost,
+            category: lineItem?.category || "miscellaneous",
+            description: `Cost Allocation: ${lineItem?.name || 'Unknown'} - Labour: ₦${parseFloat(updatedCostAllocation.labourCost).toLocaleString()}, Materials: ₦${parseFloat(updatedCostAllocation.materialCost).toLocaleString()}`,
+            tenantId,
+          }, tenantId);
+        } catch (transactionError) {
+          console.error("Error creating transaction for approved cost allocation:", transactionError);
+          // Don't fail the approval if transaction creation fails
+        }
       }
       
       // Create audit log
