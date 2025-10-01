@@ -138,6 +138,7 @@ export default function CostEntryForm() {
   const watchedLabourCost = form.watch("labourCost");
   const watchedMaterialAllocations = form.watch("materialAllocations");
   const watchedProjectId = form.watch("projectId");
+  const watchedLineItemId = form.watch("lineItemId");
 
   // Fetch projects
   const { data: projects, isLoading: projectsLoading } = useQuery({
@@ -166,6 +167,19 @@ export default function CostEntryForm() {
     enabled: Boolean(tenantId) && !!watchedProjectId,
     retry: false,
   });
+
+  // Fetch draft cost allocations for selected project and line item
+  const watchedProjectIdParam = watchedProjectId || "";
+  const { data: draftAllocationsData, refetch: refetchDrafts } = useQuery<any>({
+    queryKey: ["/api/cost-allocations-filtered", { tenantId, projectId: watchedProjectIdParam, status: 'draft' }],
+    enabled: Boolean(tenantId) && !!watchedProjectId,
+    retry: false,
+  });
+  
+  // Extract draft allocations from response and filter by line item
+  const draftAllocations = (draftAllocationsData?.allocations || []).filter((alloc: any) => 
+    alloc.lineItem.id === watchedLineItemId
+  );
 
   // Budget impact validation mutation
   const validateBudgetImpact = useMutation({
@@ -207,9 +221,11 @@ export default function CostEntryForm() {
         description: "Material saved successfully",
       });
       
-      // Invalidate relevant queries
+      // Invalidate relevant queries and refetch drafts for updated totals
       queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
+      refetchDrafts();
     },
     onError: (error: any) => {
       toast({
@@ -232,9 +248,11 @@ export default function CostEntryForm() {
         description: `Material "${data.deletedMaterialAllocation?.materialName}" deleted successfully`,
       });
       
-      // Invalidate relevant queries  
+      // Invalidate relevant queries and refetch drafts for updated totals
       queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
+      refetchDrafts();
     },
     onError: (error: any) => {
       toast({
@@ -313,15 +331,23 @@ export default function CostEntryForm() {
     setLabourTotal(labour);
   }, [watchedLabourCost]);
 
-  // Calculate material total
+  // Calculate material total (including both form materials and saved draft materials)
   useEffect(() => {
-    const total = watchedMaterialAllocations?.reduce((sum, material) => {
+    // Calculate total from form materials
+    const formMaterialTotal = watchedMaterialAllocations?.reduce((sum, material) => {
       const quantity = Number(material.quantity) || 0;
       const unitPrice = Number(material.unitPrice) || 0;
       return sum + (quantity * unitPrice);
     }, 0) || 0;
-    setMaterialTotal(total);
-  }, [watchedMaterialAllocations]);
+    
+    // Calculate total from saved draft materials
+    const savedMaterialTotal = draftAllocations?.reduce((sum: number, allocation: any) => {
+      const materialCost = Number(allocation.materialCost) || 0;
+      return sum + materialCost;
+    }, 0) || 0;
+    
+    setMaterialTotal(formMaterialTotal + savedMaterialTotal);
+  }, [watchedMaterialAllocations, draftAllocations]);
 
   // Calculate grand total
   useEffect(() => {
