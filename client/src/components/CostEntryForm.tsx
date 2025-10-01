@@ -168,10 +168,19 @@ export default function CostEntryForm() {
     retry: false,
   });
 
-  // Fetch draft cost allocations for selected project and line item
+  // Fetch draft cost allocations for selected project and line item (request all drafts, not paginated)
   const watchedProjectIdParam = watchedProjectId || "";
   const { data: draftAllocationsData, refetch: refetchDrafts } = useQuery<any>({
-    queryKey: ["/api/cost-allocations-filtered", { tenantId, projectId: watchedProjectIdParam, status: 'draft' }],
+    queryKey: ["/api/cost-allocations-filtered", tenantId, watchedProjectIdParam, "draft"],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("projectId", watchedProjectIdParam);
+      params.set("status", "draft");
+      params.set("limit", "1000"); // Request all drafts (high limit)
+      const response = await fetch(`/api/cost-allocations-filtered?${params.toString()}`);
+      if (!response.ok) throw new Error("Failed to fetch draft allocations");
+      return response.json();
+    },
     enabled: Boolean(tenantId) && !!watchedProjectId,
     retry: false,
   });
@@ -222,8 +231,12 @@ export default function CostEntryForm() {
       });
       
       // Invalidate relevant queries and refetch drafts for updated totals
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations"] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          query.queryKey[0] === "/api/cost-allocations-filtered"
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
       refetchDrafts();
     },
@@ -249,8 +262,12 @@ export default function CostEntryForm() {
       });
       
       // Invalidate relevant queries and refetch drafts for updated totals
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations"] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          query.queryKey[0] === "/api/cost-allocations-filtered"
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
       refetchDrafts();
     },
@@ -280,11 +297,16 @@ export default function CostEntryForm() {
       setBudgetValidation(null);
       
       // Invalidate all analytics-related queries for real-time updates
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations"] });
+      // Use predicate to match all cost-allocations-filtered queries regardless of params
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          query.queryKey[0] === "/api/cost-allocations-filtered"
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/budget-summary", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/labour-material-split", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/category-spending", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cost-allocations-filtered", tenantId, "all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/budget-alerts", tenantId] });
       
       // Also invalidate broader analytics queries that may contain cost allocation data
@@ -303,23 +325,43 @@ export default function CostEntryForm() {
   });
 
   // Helper function to proceed with actual submission
-  const proceedWithSubmission = () => {
+  const proceedWithSubmission = async () => {
     if (!pendingSubmission) return;
     
     const formData = form.getValues();
     const { projectId, lineItemId, changeOrderId, labourCost, materialAllocations } = formData;
 
-    // Prepare submission data (removed redundant quantity/unitCost)
+    // Collect all materials: form materials + saved draft materials
+    const allMaterials = [...materialAllocations];
+    
+    // Add saved draft materials by extracting them from draft allocations
+    if (draftAllocations && draftAllocations.length > 0) {
+      for (const draftAlloc of draftAllocations) {
+        if (draftAlloc.materialAllocations && draftAlloc.materialAllocations.length > 0) {
+          for (const matAlloc of draftAlloc.materialAllocations) {
+            allMaterials.push({
+              materialId: matAlloc.material.id,
+              quantity: matAlloc.quantity.toString(),
+              unitPrice: matAlloc.unitPrice.toString(),
+            });
+          }
+        }
+      }
+    }
+
+    // Prepare submission data with all materials combined
     const submissionData = {
       projectId,
       lineItemId,
       changeOrderId: changeOrderId && changeOrderId !== "none" ? changeOrderId : undefined,
       labourCost: Number(labourCost),
-      materialAllocations: materialAllocations.map((allocation) => ({
+      materialAllocations: allMaterials.map((allocation) => ({
         materialId: allocation.materialId,
         quantity: Number(allocation.quantity),
         unitPrice: Number(allocation.unitPrice),
       })),
+      // Include draft allocation IDs to delete after successful submission
+      draftAllocationIds: draftAllocations?.map(d => d.id) || [],
     };
 
     createCostAllocation.mutate(submissionData);

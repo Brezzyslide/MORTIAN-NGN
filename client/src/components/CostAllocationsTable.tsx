@@ -80,6 +80,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [rejectComments, setRejectComments] = useState("");
   const [changeOrderFilter, setChangeOrderFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("active"); // "active" excludes drafts by default
 
   // Build query parameters
   const queryParams = useMemo(() => {
@@ -121,11 +122,22 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       });
     }
     
+    // Status filter: if specific status selected, use it
+    if (statusFilter && statusFilter !== "all" && statusFilter !== "active") {
+      params.set("status", statusFilter);
+    }
+    // Note: "active" status filter will be handled on frontend to exclude drafts
+    
     return params.toString();
-  }, [currentPage, pageSize, searchQuery, filters, changeOrderFilter]);
+  }, [currentPage, pageSize, searchQuery, filters, changeOrderFilter, statusFilter]);
 
   const { data: costAllocationsData, isLoading, error } = useQuery<CostAllocationsResponse>({
-    queryKey: [`/api/cost-allocations-filtered?${queryParams}`],
+    queryKey: ["/api/cost-allocations-filtered", queryParams],
+    queryFn: async () => {
+      const response = await fetch(`/api/cost-allocations-filtered?${queryParams}`);
+      if (!response.ok) throw new Error("Failed to fetch cost allocations");
+      return response.json();
+    },
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
@@ -200,11 +212,17 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
     );
   };
 
-  // Client-side sorting for better UX (could be moved to server-side for large datasets)
+  // Client-side sorting and filtering for better UX (could be moved to server-side for large datasets)
   const sortedAllocations = useMemo(() => {
     if (!costAllocationsData?.allocations) return [];
     
-    return [...costAllocationsData.allocations].sort((a, b) => {
+    // Filter out drafts if statusFilter is "active"
+    let filteredAllocations = costAllocationsData.allocations;
+    if (statusFilter === "active") {
+      filteredAllocations = filteredAllocations.filter(alloc => alloc.status !== "draft");
+    }
+    
+    return [...filteredAllocations].sort((a, b) => {
       let aValue: any, bValue: any;
       
       switch (sortField) {
@@ -240,7 +258,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
       if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [costAllocationsData?.allocations, sortField, sortDirection]);
+  }, [costAllocationsData?.allocations, sortField, sortDirection, statusFilter]);
 
   const exportToCSV = () => {
     if (!sortedAllocations || sortedAllocations.length === 0) {

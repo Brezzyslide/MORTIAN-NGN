@@ -1964,7 +1964,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/cost-allocations', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
-      const { projectId, lineItemId, labourCost = 0, quantity, unitCost, materialAllocations = [], dateIncurred } = req.body;
+      const { projectId, lineItemId, labourCost = 0, quantity, unitCost, materialAllocations = [], dateIncurred, draftAllocationIds = [] } = req.body;
       
       // Validation: Require at least one material OR labour entry
       if (labourCost <= 0 && materialAllocations.length === 0) {
@@ -2047,6 +2047,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create cost allocation with material allocations
       const costAllocation = await storage.createCostAllocation(costAllocationData, materialAllocationsData, tenantId);
+      
+      // Note: Draft allocations from individual material saves are not automatically deleted
+      // They remain in draft status and can be manually cleaned up or filtered in the UI
       
       // Check and create budget alerts if thresholds are crossed
       try {
