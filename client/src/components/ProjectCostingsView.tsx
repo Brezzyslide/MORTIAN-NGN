@@ -112,7 +112,7 @@ export default function ProjectCostingsView() {
 
   // Request more funds mutation
   const requestMoreFunds = useMutation({
-    mutationFn: async (data: { projectId: string; amount: number; reason: string }) => {
+    mutationFn: async (data: { projectId: string; amountAdded: number; reason: string }) => {
       const response = await apiRequest("POST", "/api/budget-amendments", data);
       return await response.json();
     },
@@ -508,10 +508,11 @@ export default function ProjectCostingsView() {
                                         size="sm"
                                         onClick={() => {
                                           const amount = parseFloat(allocation.totalCost);
-                                          const reason = `Additional funds required for cost allocation: ${allocation.lineItemName} - ${allocation.materialDescription}. Original allocation exceeds current budget.`;
+                                          const materialNames = allocation.materialAllocations?.map(m => m.material.name).join(", ") || "materials";
+                                          const reason = `Additional funds required for cost allocation: ${allocation.lineItemName} (${materialNames}). Original allocation exceeds current budget.`;
                                           requestMoreFunds.mutate({
                                             projectId: allocation.projectId,
-                                            amount,
+                                            amountAdded: amount,
                                             reason
                                           });
                                         }}
