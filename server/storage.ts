@@ -666,12 +666,10 @@ export class DatabaseStorage implements IStorage {
           .values(allocation)
           .returning();
 
-        // Step 2: CRITICAL FIX - Atomic budget update using SQL arithmetic (no parseFloat!)
-        // This prevents race conditions and maintains decimal precision
+        // Step 2: Update project timestamp only (NOT consumedAmount - that's for actual spending from cost allocations)
         const [updatedProject] = await tx
           .update(projects)
           .set({
-            consumedAmount: sql`consumed_amount + ${allocation.amount}`,
             updatedAt: new Date()
           })
           .where(and(
@@ -684,7 +682,8 @@ export class DatabaseStorage implements IStorage {
           throw new Error(`Project not found or access denied: ${allocation.projectId}`);
         }
 
-        // Step 3: Create the corresponding transaction record
+        // Step 3: Create the corresponding transaction record with type "allocation"
+        // Note: "allocation" transactions are NOT counted as spending (only approved cost allocations count)
         const [newTransaction] = await tx
           .insert(transactions)
           .values({
@@ -1065,10 +1064,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(transactions.projectId, projectId),
         eq(transactions.tenantId, tenantId),
-        or(
-          eq(transactions.type, "expense"),
-          eq(transactions.type, "allocation")
-        )
+        eq(transactions.type, "expense") // Only count expenses (NOT allocations - those are fund distributions)
       ));
 
     const [revenueResult] = await db
@@ -1122,10 +1118,7 @@ export class DatabaseStorage implements IStorage {
       .from(transactions)
       .where(and(
         eq(transactions.tenantId, tenantId),
-        or(
-          eq(transactions.type, "expense"),
-          eq(transactions.type, "allocation")
-        )
+        eq(transactions.type, "expense") // Only count expenses (NOT allocations - those are fund distributions)
       ));
 
     // Also get spending from cost allocations table

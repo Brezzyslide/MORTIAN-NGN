@@ -145,8 +145,8 @@ export const fundAllocations = pgTable("fund_allocations", {
 
 // Transaction types enum
 export const transactionTypeEnum = pgEnum("transaction_type", [
-  "allocation",
-  "expense", 
+  "allocation",  // Note: "allocation" is for fund allocations (NOT counted as spending)
+  "expense",      // Actual expenses (counted as spending)
   "transfer",
   "revenue"
 ]);

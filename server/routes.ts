@@ -1414,6 +1414,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tenantId,
       });
 
+      // BUDGET VALIDATION: Check if allocation exceeds project budget
+      const project = await storage.getProject(allocationData.projectId, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Get total fund allocations for this project
+      const existingAllocations = await storage.getFundAllocations(tenantId);
+      const projectAllocations = existingAllocations.filter(a => a.projectId === allocationData.projectId);
+      const totalAllocated = projectAllocations.reduce((sum, a) => sum + parseFloat(a.amount), 0);
+      const newTotal = totalAllocated + parseFloat(allocationData.amount);
+      const projectBudget = parseFloat(project.budget);
+
+      if (newTotal > projectBudget) {
+        const remaining = projectBudget - totalAllocated;
+        return res.status(400).json({ 
+          message: `Fund allocation exceeds project budget. Budget: ₦${projectBudget.toLocaleString()}, Already allocated: ₦${totalAllocated.toLocaleString()}, Remaining: ₦${remaining.toLocaleString()}, Requested: ₦${parseFloat(allocationData.amount).toLocaleString()}`
+        });
+      }
+
       // CRITICAL FIX: Use atomic transaction-wrapped method to prevent race conditions,
       // precision errors, and ensure data consistency. This replaces the problematic
       // read-modify-write pattern with atomic SQL operations.
