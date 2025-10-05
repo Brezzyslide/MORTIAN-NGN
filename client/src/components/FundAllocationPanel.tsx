@@ -298,22 +298,51 @@ export default function FundAllocationPanel() {
 
   const allocationMutation = useMutation({
     mutationFn: async (data: AllocationFormData) => {
+      // First, allocate funds
       const response = await apiRequest("POST", "/api/fund-allocations", {
         ...data,
         // Keep amount as string for backend validation
         amount: data.amount,
       });
-      return await response.json();
+      const allocationResult = await response.json();
+      
+      // Then, assign the team leader to the project (if not already assigned)
+      try {
+        await apiRequest("POST", "/api/project-assignments", {
+          projectId: data.projectId,
+          userId: data.toUserId,
+        });
+      } catch (assignmentError: any) {
+        // Ignore if already assigned - that's okay
+        if (!assignmentError.message?.includes("already assigned")) {
+          console.error("Project assignment error:", assignmentError);
+        }
+      }
+      
+      return allocationResult;
     },
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Fund allocation created successfully",
+        description: "Funds allocated and team leader assigned to project",
       });
       form.reset();
+      setSelectedTeamLeaderId("");
+      setIsTeamMembersExpanded(false);
       queryClient.invalidateQueries({ queryKey: ["/api/fund-allocations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/project-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/team-leaders-with-hierarchy"] });
+      // Invalidate team hierarchy for the project
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['/api/projects', selectedProjectId, 'team-hierarchy'] 
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: ["/api/projects", selectedProjectId, "team-leaders"] 
+        });
+      }
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -784,7 +813,7 @@ export default function FundAllocationPanel() {
               ) : (
                 <>
                   <i className="fas fa-paper-plane mr-2"></i>
-                  Allocate Funds
+                  Allocate Funds / to Project
                 </>
               )}
             </Button>
