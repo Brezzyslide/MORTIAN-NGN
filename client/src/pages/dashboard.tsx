@@ -42,6 +42,7 @@ export default function Dashboard() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [editingProject, setEditingProject] = useState<any>(null);
   
   // Extract project ID from location if we're on a project-specific route
   const projectIdMatch = location.match(/^\/projects\/([^/]+)$/);
@@ -199,7 +200,7 @@ export default function Dashboard() {
             <StatsCards />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               <div className="lg:col-span-2">
-                <ProjectsList />
+                <ProjectsList onEditProject={setEditingProject} />
               </div>
               <div>
                 <BudgetChart />
@@ -230,7 +231,7 @@ export default function Dashboard() {
           <>
             <StatsCards />
             <div className="mb-8">
-              <ProjectsList />
+              <ProjectsList onEditProject={setEditingProject} />
             </div>
             <BudgetChart />
           </>
@@ -418,8 +419,12 @@ export default function Dashboard() {
       </div>
       
       <NewProjectDialog 
-        open={showNewProjectDialog} 
-        onOpenChange={setShowNewProjectDialog} 
+        open={showNewProjectDialog || !!editingProject} 
+        onOpenChange={(open) => {
+          setShowNewProjectDialog(open);
+          if (!open) setEditingProject(null);
+        }}
+        project={editingProject}
       />
     </div>
   );

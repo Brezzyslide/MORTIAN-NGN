@@ -1095,6 +1095,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch('/api/projects/:projectId', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { projectId } = req.params;
+      const { userId, tenantId } = await getUserData(req);
+      
+      if (!isValidUUID(projectId)) {
+        return res.status(400).json({ message: "Invalid project ID format" });
+      }
+      
+      // Verify project exists and belongs to tenant
+      const existingProject = await storage.getProject(projectId, tenantId);
+      if (!existingProject) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+      
+      // Parse and validate update data (excluding managerId and tenantId)
+      const updateData = insertProjectSchema.omit({ managerId: true, tenantId: true }).parse(req.body);
+      
+      // Update project
+      const updatedProject = await storage.updateProject(projectId, updateData, tenantId);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "project_updated",
+        entityType: "project",
+        entityId: projectId,
+        projectId: projectId,
+        tenantId,
+        details: { 
+          title: updatedProject.title,
+          changes: Object.keys(updateData)
+        },
+      }, tenantId);
+
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error updating project:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid project data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update project" });
+    }
+  });
+
   // Project assignment routes
   app.get('/api/projects/:projectId/team-leaders', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {

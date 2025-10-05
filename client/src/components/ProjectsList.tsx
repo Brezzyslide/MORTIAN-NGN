@@ -5,8 +5,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useLocation } from "wouter";
+import { Edit } from "lucide-react";
 
-export default function ProjectsList() {
+interface ProjectsListProps {
+  onEditProject?: (project: any) => void;
+}
+
+export default function ProjectsList({ onEditProject }: ProjectsListProps = {}) {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { permissions, normalizedRole, isAdmin, isTeamLeader } = usePermissions();
@@ -198,15 +203,30 @@ export default function ProjectsList() {
             return (
               <div 
                 key={project.id} 
-                className="p-6 hover:bg-accent/50 transition-colors cursor-pointer" 
-                onClick={() => handleProjectClick(project.id)}
+                className="p-6 hover:bg-accent/50 transition-colors" 
                 data-testid={`project-card-${project.id}`}
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-foreground" data-testid={`text-project-title-${project.id}`}>
-                      {project.title}
-                    </h4>
+                  <div className="flex-1 cursor-pointer" onClick={() => handleProjectClick(project.id)}>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-foreground" data-testid={`text-project-title-${project.id}`}>
+                        {project.title}
+                      </h4>
+                      {isAdmin && onEditProject && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditProject(project);
+                          }}
+                          data-testid={`button-edit-project-${project.id}`}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground mt-1" data-testid={`text-project-description-${project.id}`}>
                       {project.description || "No description available"}
                     </p>

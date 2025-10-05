@@ -36,11 +36,13 @@ import { cn } from "@/lib/utils";
 interface NewProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  project?: any;
 }
 
-export default function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) {
+export default function NewProjectDialog({ open, onOpenChange, project }: NewProjectDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isEditing = !!project;
 
   // Create form validation schema, excluding backend-managed fields
   const formSchema = insertProjectSchema.omit({
@@ -51,24 +53,28 @@ export default function NewProjectDialog({ open, onOpenChange }: NewProjectDialo
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: "",
-      description: "",
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      budget: "",
-      revenue: "0",
-      status: "active",
+      title: project?.title || "",
+      description: project?.description || "",
+      startDate: project?.startDate ? new Date(project.startDate) : new Date(),
+      endDate: project?.endDate ? new Date(project.endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      budget: project?.budget || "",
+      revenue: project?.revenue || "0",
+      status: project?.status || "active",
     },
   });
 
-  const createProjectMutation = useMutation({
+  const saveProjectMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/projects", data);
+      if (isEditing) {
+        return apiRequest("PATCH", `/api/projects/${project.id}`, data);
+      } else {
+        return apiRequest("POST", "/api/projects", data);
+      }
     },
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Project created successfully",
+        description: isEditing ? "Project updated successfully" : "Project created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analytics/tenant"] });
@@ -78,7 +84,7 @@ export default function NewProjectDialog({ open, onOpenChange }: NewProjectDialo
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to create project",
+        description: error.message || (isEditing ? "Failed to update project" : "Failed to create project"),
         variant: "destructive",
       });
     },
@@ -95,7 +101,7 @@ export default function NewProjectDialog({ open, onOpenChange }: NewProjectDialo
         revenue: data.revenue ? String(data.revenue) : "0", // Ensure revenue is a string
       };
       
-      await createProjectMutation.mutateAsync(projectData);
+      await saveProjectMutation.mutateAsync(projectData);
     } catch (error) {
       console.error("Error submitting form:", error);
     }
@@ -105,9 +111,9 @@ export default function NewProjectDialog({ open, onOpenChange }: NewProjectDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Create New Project</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Project" : "Create New Project"}</DialogTitle>
           <DialogDescription>
-            Add a new project to your portfolio. Fill in the details below.
+            {isEditing ? "Update the project details below." : "Add a new project to your portfolio. Fill in the details below."}
           </DialogDescription>
         </DialogHeader>
         
@@ -295,10 +301,12 @@ export default function NewProjectDialog({ open, onOpenChange }: NewProjectDialo
               </Button>
               <Button
                 type="submit"
-                disabled={createProjectMutation.isPending}
+                disabled={saveProjectMutation.isPending}
                 data-testid="button-submit-project"
               >
-                {createProjectMutation.isPending ? "Creating..." : "Create Project"}
+                {saveProjectMutation.isPending 
+                  ? (isEditing ? "Updating..." : "Creating...") 
+                  : (isEditing ? "Update Project" : "Create Project")}
               </Button>
             </div>
           </form>
