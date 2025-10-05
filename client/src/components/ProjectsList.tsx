@@ -16,6 +16,7 @@ export default function ProjectsList() {
   const [projects, setProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [projectAssignments, setProjectAssignments] = useState<Record<string, any[]>>({});
 
   // Direct fetch to bypass React Query issues
   useEffect(() => {
@@ -60,6 +61,30 @@ export default function ProjectsList() {
         });
     }
   }, [tenantId, isAuthenticated, authLoading, toast]);
+
+  // Fetch team leaders for each project
+  useEffect(() => {
+    if (projects.length > 0) {
+      projects.forEach((project) => {
+        fetch(`/api/projects/${project.id}/team-leaders`, { credentials: 'include' })
+          .then(async (res) => {
+            if (res.ok) {
+              return res.json();
+            }
+            return [];
+          })
+          .then((teamLeaders) => {
+            setProjectAssignments((prev) => ({
+              ...prev,
+              [project.id]: teamLeaders || [],
+            }));
+          })
+          .catch((err) => {
+            console.error(`Error fetching team leaders for project ${project.id}:`, err);
+          });
+      });
+    }
+  }, [projects]);
 
   const formatCurrency = (amount: string | number) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -185,6 +210,14 @@ export default function ProjectsList() {
                     <p className="text-sm text-muted-foreground mt-1" data-testid={`text-project-description-${project.id}`}>
                       {project.description || "No description available"}
                     </p>
+                    {projectAssignments[project.id] && projectAssignments[project.id].length > 0 && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                        <span className="font-medium">Team Leaders:</span>
+                        <span data-testid={`text-team-leaders-${project.id}`}>
+                          {projectAssignments[project.id].map((tl: any) => `${tl.firstName} ${tl.lastName}`).join(', ')}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center space-x-4 mt-3 text-sm text-muted-foreground">
                       <span data-testid={`text-project-start-${project.id}`}>
                         Start: {formatDate(project.startDate)}
