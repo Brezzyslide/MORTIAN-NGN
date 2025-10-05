@@ -341,7 +341,8 @@ export default function FundAllocationPanel() {
 
   // Helper to check if assignment interface should be shown
   const shouldShowAssignmentInterface = () => {
-    return isAdmin && selectedProjectId && teamLeaders && teamLeaders.length === 0 && availableForAssignment.length > 0;
+    // Show assignment interface when admin, project selected, and there are team leaders available to assign
+    return isAdmin && selectedProjectId && availableForAssignment.length > 0;
   };
 
   return (
