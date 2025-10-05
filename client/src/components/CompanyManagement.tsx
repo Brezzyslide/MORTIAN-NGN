@@ -260,15 +260,16 @@ export function CompanyManagement() {
               Add New Company
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Add New Company</DialogTitle>
               <DialogDescription>
                 Create a new tenant company in the system
               </DialogDescription>
             </DialogHeader>
-            <Form {...addForm}>
-              <form onSubmit={addForm.handleSubmit(handleAddSubmit)} className="space-y-4">
+            <div className="overflow-y-auto flex-1 pr-2">
+              <Form {...addForm}>
+                <form onSubmit={addForm.handleSubmit(handleAddSubmit)} className="space-y-4">
                 <FormField
                   control={addForm.control}
                   name="name"
@@ -432,6 +433,7 @@ export function CompanyManagement() {
                 </div>
               </form>
             </Form>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

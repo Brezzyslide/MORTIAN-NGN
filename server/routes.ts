@@ -809,7 +809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: 'Company',
         lastName: 'Admin',
         role: 'admin',
-        tenantId: company.id,
+        companyId: company.id,
         passwordHash,
         profileImageUrl: null,
         managerId: null,
