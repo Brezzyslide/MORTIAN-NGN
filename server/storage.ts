@@ -1197,10 +1197,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(transactions.projectId, projectId),
         eq(transactions.tenantId, tenantId),
-        or(
-          eq(transactions.type, "expense"),
-          eq(transactions.type, "allocation")
-        )
+        eq(transactions.type, "expense") // Only count expenses (NOT allocations - those are fund distributions)
       ));
 
     const [costAllocationSpent] = await db
@@ -1210,7 +1207,8 @@ export class DatabaseStorage implements IStorage {
       .from(costAllocations)
       .where(and(
         eq(costAllocations.projectId, projectId),
-        eq(costAllocations.tenantId, tenantId)
+        eq(costAllocations.tenantId, tenantId),
+        eq(costAllocations.status, "approved") // Only count approved cost allocations
       ));
 
     // Get detailed cost breakdown - labour vs materials
