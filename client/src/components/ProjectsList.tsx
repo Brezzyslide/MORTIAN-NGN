@@ -208,22 +208,23 @@ export default function ProjectsList({ onEditProject }: ProjectsListProps = {}) 
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 cursor-pointer" onClick={() => handleProjectClick(project.id)}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3 justify-between">
                       <h4 className="font-semibold text-foreground" data-testid={`text-project-title-${project.id}`}>
                         {project.title}
                       </h4>
                       {isAdmin && onEditProject && (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="h-6 w-6 p-0"
+                          className="h-8 px-3"
                           onClick={(e) => {
                             e.stopPropagation();
                             onEditProject(project);
                           }}
                           data-testid={`button-edit-project-${project.id}`}
                         >
-                          <Edit className="h-3 w-3" />
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
                         </Button>
                       )}
                     </div>
