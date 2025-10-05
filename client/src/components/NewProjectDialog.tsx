@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -53,15 +53,44 @@ export default function NewProjectDialog({ open, onOpenChange, project }: NewPro
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      title: project?.title || "",
-      description: project?.description || "",
-      startDate: project?.startDate ? new Date(project.startDate) : new Date(),
-      endDate: project?.endDate ? new Date(project.endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      budget: project?.budget || "",
-      revenue: project?.revenue || "0",
-      status: project?.status || "active",
+      title: "",
+      description: "",
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      budget: "",
+      revenue: "0",
+      status: "active",
     },
   });
+
+  // Reset form when project changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      if (project) {
+        // Editing mode - populate with project data
+        form.reset({
+          title: project.title || "",
+          description: project.description || "",
+          startDate: project.startDate ? new Date(project.startDate) : new Date(),
+          endDate: project.endDate ? new Date(project.endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          budget: project.budget || "",
+          revenue: project.revenue || "0",
+          status: project.status || "active",
+        });
+      } else {
+        // Create mode - reset to defaults
+        form.reset({
+          title: "",
+          description: "",
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          budget: "",
+          revenue: "0",
+          status: "active",
+        });
+      }
+    }
+  }, [open, project, form]);
 
   const saveProjectMutation = useMutation({
     mutationFn: async (data: any) => {
