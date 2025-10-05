@@ -1140,6 +1140,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update project budget only
+  app.patch('/api/projects/:id/budget', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { userId, tenantId } = await getUserData(req);
+      const { budget } = req.body;
+      
+      if (!isValidUUID(id)) {
+        return res.status(400).json({ message: "Invalid project ID format" });
+      }
+      
+      // Validate budget
+      if (!budget || isNaN(parseFloat(budget)) || parseFloat(budget) <= 0) {
+        return res.status(400).json({ message: "Budget must be a positive number" });
+      }
+      
+      // Get existing project and allocations
+      const project = await storage.getProject(id, tenantId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found or access denied" });
+      }
+      
+      // Check if new budget is less than already allocated funds
+      const existingAllocations = await storage.getFundAllocations(tenantId);
+      const projectAllocations = existingAllocations.filter(a => a.projectId === id);
+      const totalAllocated = projectAllocations.reduce((sum, a) => sum + parseFloat(a.amount), 0);
+      
+      if (parseFloat(budget) < totalAllocated) {
+        return res.status(400).json({ 
+          message: `New budget (₦${parseFloat(budget).toLocaleString()}) cannot be less than already allocated funds (₦${totalAllocated.toLocaleString()})`
+        });
+      }
+      
+      // Update project budget
+      const updatedProject = await storage.updateProject(id, { budget }, tenantId);
+      
+      if (!updatedProject) {
+        return res.status(404).json({ message: "Project not found or update failed" });
+      }
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "project_budget_updated",
+        entityType: "project",
+        entityId: id,
+        projectId: id,
+        tenantId,
+        details: { 
+          oldBudget: project.budget,
+          newBudget: budget,
+          projectTitle: project.title
+        },
+      }, tenantId);
+      
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error updating project budget:", error);
+      res.status(500).json({ message: "Failed to update project budget" });
+    }
+  });
+
   // Project assignment routes
   app.get('/api/projects/:projectId/team-leaders', isAuthenticated, setTenantContext(), async (req: any, res) => {
     try {

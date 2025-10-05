@@ -5,7 +5,16 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useLocation } from "wouter";
-import { Edit } from "lucide-react";
+import { Edit, DollarSign } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface ProjectsListProps {
   onEditProject?: (project: any) => void;
@@ -22,6 +31,9 @@ export default function ProjectsList({ onEditProject }: ProjectsListProps = {}) 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [projectAssignments, setProjectAssignments] = useState<Record<string, any[]>>({});
+  const [editBudgetProject, setEditBudgetProject] = useState<any | null>(null);
+  const [newBudget, setNewBudget] = useState<string>("");
+  const [isUpdatingBudget, setIsUpdatingBudget] = useState(false);
 
   // Direct fetch to bypass React Query issues
   useEffect(() => {
@@ -138,6 +150,55 @@ export default function ProjectsList({ onEditProject }: ProjectsListProps = {}) 
     setLocation(`/projects/${projectId}`);
   };
 
+  const handleEditBudgetClick = (project: any) => {
+    setEditBudgetProject(project);
+    setNewBudget(project.budget);
+  };
+
+  const handleUpdateBudget = async () => {
+    if (!editBudgetProject || !newBudget) return;
+    
+    setIsUpdatingBudget(true);
+    try {
+      const response = await fetch(`/api/projects/${editBudgetProject.id}/budget`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ budget: newBudget }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update budget');
+      }
+
+      const updatedProject = await response.json();
+      
+      // Update local state
+      setProjects(prev => prev.map(p => 
+        p.id === updatedProject.id ? updatedProject : p
+      ));
+
+      toast({
+        title: "Success",
+        description: "Project budget updated successfully",
+      });
+
+      setEditBudgetProject(null);
+      setNewBudget("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update budget",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingBudget(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card className="card-shadow border border-border">
@@ -212,20 +273,37 @@ export default function ProjectsList({ onEditProject }: ProjectsListProps = {}) 
                       <h4 className="font-semibold text-foreground" data-testid={`text-project-title-${project.id}`}>
                         {project.title}
                       </h4>
-                      {isAdmin && onEditProject && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-3"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditProject(project);
-                          }}
-                          data-testid={`button-edit-project-${project.id}`}
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
+                      {isAdmin && (
+                        <div className="flex gap-2">
+                          {onEditProject && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-3"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditProject(project);
+                              }}
+                              data-testid={`button-edit-project-${project.id}`}
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditBudgetClick(project);
+                            }}
+                            data-testid={`button-edit-budget-${project.id}`}
+                          >
+                            <DollarSign className="h-4 w-4 mr-1" />
+                            Budget
+                          </Button>
+                        </div>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-1" data-testid={`text-project-description-${project.id}`}>
@@ -289,6 +367,48 @@ export default function ProjectsList({ onEditProject }: ProjectsListProps = {}) 
           })
         )}
       </div>
+      
+      {/* Budget Edit Dialog */}
+      <Dialog open={!!editBudgetProject} onOpenChange={(open) => !open && setEditBudgetProject(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Project Budget</DialogTitle>
+            <DialogDescription>
+              Update the budget for {editBudgetProject?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="budget">New Budget (₦)</Label>
+              <Input
+                id="budget"
+                type="number"
+                value={newBudget}
+                onChange={(e) => setNewBudget(e.target.value)}
+                placeholder="Enter new budget amount"
+                data-testid="input-new-budget"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditBudgetProject(null)}
+                disabled={isUpdatingBudget}
+                data-testid="button-cancel-budget"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateBudget}
+                disabled={isUpdatingBudget || !newBudget}
+                data-testid="button-save-budget"
+              >
+                {isUpdatingBudget ? "Updating..." : "Update Budget"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
