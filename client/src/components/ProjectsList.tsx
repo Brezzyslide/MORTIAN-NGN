@@ -300,7 +300,7 @@ export default function ProjectsList({ onEditProject }: ProjectsListProps = {}) 
                             }}
                             data-testid={`button-edit-budget-${project.id}`}
                           >
-                            <DollarSign className="h-4 w-4 mr-1" />
+                            <span className="mr-1 font-semibold">₦</span>
                             Budget
                           </Button>
                         </div>
