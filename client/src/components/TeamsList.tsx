@@ -548,7 +548,6 @@ export default function TeamsList() {
                         <SelectContent>
                           <SelectItem value="member" data-testid="option-role-member">Member</SelectItem>
                           <SelectItem value="lead" data-testid="option-role-lead">Lead</SelectItem>
-                          <SelectItem value="coordinator" data-testid="option-role-coordinator">Coordinator</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
