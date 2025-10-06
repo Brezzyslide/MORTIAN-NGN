@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useLocation } from "wouter";
@@ -40,6 +41,7 @@ import ChangeOrdersSummaryWidget from "@/components/ChangeOrdersSummaryWidget";
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const { isTeamLeader } = usePermissions();
   const [location, setLocation] = useLocation();
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
@@ -206,14 +208,16 @@ export default function Dashboard() {
                 <BudgetChart />
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              <div className="lg:col-span-2">
-                <FundAllocationPanel />
+            {isTeamLeader && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div className="lg:col-span-2">
+                  <FundAllocationPanel />
+                </div>
+                <div>
+                  <PendingApprovalsWidget />
+                </div>
               </div>
-              <div>
-                <PendingApprovalsWidget />
-              </div>
-            </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <PendingAmendmentsWidget onViewAll={() => setLocation("/budget-amendments")} />
               <ChangeOrdersSummaryWidget onViewAll={() => setLocation("/change-orders")} />
@@ -237,8 +241,8 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* Fund Allocation Page */}
-        {location === '/allocations' && (
+        {/* Fund Allocation Page - Team Leaders Only */}
+        {location === '/allocations' && isTeamLeader && (
           <>
             <div className="mb-8">
               <FundAllocationPanel />

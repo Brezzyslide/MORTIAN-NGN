@@ -77,7 +77,7 @@ const formatTeamLeaderHierarchy = (leader: UserWithManager): string => {
 export default function FundAllocationPanel() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isTeamLeader } = usePermissions();
+  const { isAdmin, isTeamLeader } = usePermissions();
   const tenantId = user?.tenantId;
   const [selectedTeamLeaderId, setSelectedTeamLeaderId] = useState<string>("");
   const [isTeamMembersExpanded, setIsTeamMembersExpanded] = useState(false);
