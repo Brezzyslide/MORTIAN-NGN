@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, Home } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -125,10 +126,18 @@ export default function MaterialsPage() {
             Manage materials inventory and pricing
           </p>
         </div>
-        <Button onClick={handleAddNew} data-testid="button-add-material">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Material
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/">
+            <Button variant="outline" data-testid="button-home">
+              <Home className="h-4 w-4 mr-2" />
+              Dashboard
+            </Button>
+          </Link>
+          <Button onClick={handleAddNew} data-testid="button-add-material">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Material
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
