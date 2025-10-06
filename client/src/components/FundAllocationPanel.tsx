@@ -130,12 +130,12 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
-  // Fetch team members when team leader is selected
+  // Fetch team members when team leader is selected (includes both direct reports and team members)
   const { data: teamMembers, isLoading: teamMembersLoading, error: teamMembersError } = useQuery<User[]>({
-    queryKey: ["/api/users/subordinates", selectedTeamLeaderId],
+    queryKey: ["/api/users/team-leader-members", selectedTeamLeaderId],
     queryFn: async () => {
       if (!selectedTeamLeaderId) return [];
-      const response = await fetch(`/api/users/subordinates/${selectedTeamLeaderId}`, {
+      const response = await fetch(`/api/users/team-leader-members/${selectedTeamLeaderId}`, {
         headers: {
           'Content-Type': 'application/json',
         },
