@@ -173,6 +173,7 @@ export interface IStorage {
   getAllUsers(tenantId: string): Promise<User[]>;
   updateUserRole(userId: string, role: string, tenantId: string): Promise<User | undefined>;
   updateUserStatus(userId: string, status: string, tenantId: string): Promise<User | undefined>;
+  getTeamLeaderMembers(teamLeaderId: string, tenantId: string): Promise<User[]>;
 
   // Authentication operations
   getUserByEmail(email: string, tenantId: string, systemContext?: boolean): Promise<User | undefined>;
@@ -945,6 +946,44 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(users.id, userId), eq(users.companyId, tenantId)))
       .returning();
     return updatedUser;
+  }
+
+  async getTeamLeaderMembers(teamLeaderId: string, tenantId: string): Promise<User[]> {
+    // Get both direct subordinates (managerId) and team members (from teams table)
+    
+    // 1. Get direct subordinates
+    const subordinates = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.managerId, teamLeaderId), eq(users.companyId, tenantId)))
+      .orderBy(users.firstName);
+
+    // 2. Get team members from teams where this user is a leader
+    const teamMembersList = await db
+      .select({
+        user: users,
+      })
+      .from(teams)
+      .innerJoin(teamMembers, eq(teams.id, teamMembers.teamId))
+      .innerJoin(users, eq(teamMembers.userId, users.id))
+      .where(and(
+        eq(teams.leaderId, teamLeaderId),
+        eq(teams.tenantId, tenantId),
+        eq(users.companyId, tenantId)
+      ))
+      .orderBy(users.firstName);
+
+    // 3. Combine both lists and remove duplicates
+    const allMembers = [...subordinates];
+    const subordinateIds = new Set(subordinates.map(u => u.id));
+    
+    for (const { user } of teamMembersList) {
+      if (!subordinateIds.has(user.id)) {
+        allMembers.push(user);
+      }
+    }
+
+    return allMembers;
   }
 
   // Authentication operations
