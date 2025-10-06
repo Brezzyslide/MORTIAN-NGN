@@ -1877,6 +1877,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all members for a team leader (both direct subordinates and team members)
+  app.get('/api/users/team-leader-members/:teamLeaderId', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const { teamLeaderId } = req.params;
+      
+      if (!teamLeaderId || !isValidUUID(teamLeaderId)) {
+        return res.status(400).json({ message: "Valid team leader ID is required" });
+      }
+      
+      const members = await storage.getTeamLeaderMembers(teamLeaderId, tenantId);
+      res.json(members);
+    } catch (error) {
+      console.error("Error fetching team leader members:", error);
+      res.status(500).json({ message: "Failed to fetch team leader members" });
+    }
+  });
+
   app.get('/api/users/team-leaders', isAuthenticated, async (req: any, res) => {
     try {
       const { tenantId } = await getUserData(req);
