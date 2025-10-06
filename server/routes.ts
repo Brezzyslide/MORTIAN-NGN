@@ -3024,6 +3024,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error(`Project not found or not accessible in your tenant: ${record.projectId}`);
           }
 
+          // BUDGET VALIDATION: Check if allocation exceeds project budget
+          const existingAllocations = await storage.getFundAllocations(tenantId);
+          const projectAllocations = existingAllocations.filter(a => a.projectId === record.projectId);
+          const totalAllocated = projectAllocations.reduce((sum, a) => sum + parseFloat(a.amount), 0);
+          const newTotal = totalAllocated + amount;
+          const projectBudget = parseFloat(project.budget);
+
+          if (newTotal > projectBudget) {
+            const remaining = projectBudget - totalAllocated;
+            throw new Error(`Fund allocation exceeds project budget. Budget: ₦${projectBudget.toLocaleString()}, Already allocated: ₦${totalAllocated.toLocaleString()}, Remaining: ₦${remaining.toLocaleString()}, Requested: ₦${amount.toLocaleString()}`);
+          }
+
           // Validate toUserId exists within tenant (if specified)
           if (record.toUserId && record.toUserId !== userId) {
             // CRITICAL SECURITY FIX: Use tenantId to prevent cross-tenant user access
