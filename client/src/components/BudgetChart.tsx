@@ -13,6 +13,14 @@ interface TenantStats {
   completedProjects: number;
 }
 
+interface LineItemBreakdown {
+  lineItemId: string;
+  lineItemName: string;
+  category: string;
+  totalAllocated: number;
+  color: string;
+}
+
 export default function BudgetChart() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -20,6 +28,12 @@ export default function BudgetChart() {
 
   const { data: stats, isLoading, error } = useQuery<TenantStats>({
     queryKey: ["/api/analytics/tenant"],
+    enabled: Boolean(tenantId),
+    retry: false,
+  });
+
+  const { data: lineItemBreakdown, isLoading: isBreakdownLoading } = useQuery<LineItemBreakdown[]>({
+    queryKey: ["/api/analytics/line-item-breakdown"],
     enabled: Boolean(tenantId),
     retry: false,
   });
@@ -47,7 +61,7 @@ export default function BudgetChart() {
     return `₦${amount.toFixed(0)}`;
   };
 
-  if (isLoading) {
+  if (isLoading || isBreakdownLoading) {
     return (
       <Card className="card-shadow border border-border">
         <div className="p-6 border-b border-border">
@@ -74,48 +88,61 @@ export default function BudgetChart() {
     );
   }
 
-  // Mock department breakdown for visualization
-  const departmentBreakdown = [
-    { name: "Development", color: "bg-primary", amount: (stats?.totalBudget || 0) * 0.49 },
-    { name: "Design", color: "bg-green-500", amount: (stats?.totalBudget || 0) * 0.196 },
-    { name: "Marketing", color: "bg-orange-500", amount: (stats?.totalBudget || 0) * 0.212 },
-    { name: "Operations", color: "bg-purple-500", amount: (stats?.totalBudget || 0) * 0.102 },
-  ];
+  // Use real line item breakdown data
+  const breakdownData = lineItemBreakdown?.map(item => ({
+    name: item.lineItemName,
+    color: item.color,
+    amount: item.totalAllocated,
+  })) || [];
+
+  // Calculate total from breakdown data
+  const totalAllocated = breakdownData.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <Card className="card-shadow border border-border">
       <div className="p-6 border-b border-border">
         <h3 className="text-lg font-semibold">Budget Allocation</h3>
-        <p className="text-sm text-muted-foreground mt-1">By department</p>
+        <p className="text-sm text-muted-foreground mt-1">By line item</p>
       </div>
       <CardContent className="p-6">
-        <div className="chart-container rounded-lg p-4 mb-4">
-          <div className="w-32 h-32 mx-auto relative" data-testid="budget-chart-circle">
-            <div className="w-full h-full rounded-full border-8 border-primary"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-xl font-semibold" data-testid="text-total-budget-chart">
-                  {formatCurrency(stats?.totalBudget || 0)}
-                </div>
-                <div className="text-xs text-muted-foreground">Total</div>
-              </div>
-            </div>
+        {breakdownData.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-sm text-muted-foreground">No cost allocations yet</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Create cost allocations to see budget breakdown by line items
+            </p>
           </div>
-        </div>
-        
-        <div className="space-y-3">
-          {departmentBreakdown.map((dept, index) => (
-            <div key={dept.name} className="flex items-center justify-between" data-testid={`budget-item-${dept.name.toLowerCase()}`}>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 ${dept.color} rounded-full`}></div>
-                <span className="text-sm">{dept.name}</span>
+        ) : (
+          <>
+            <div className="chart-container rounded-lg p-4 mb-4">
+              <div className="w-32 h-32 mx-auto relative" data-testid="budget-chart-circle">
+                <div className="w-full h-full rounded-full border-8 border-primary"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-xl font-semibold" data-testid="text-total-budget-chart">
+                      {formatCurrency(totalAllocated)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Total</div>
+                  </div>
+                </div>
               </div>
-              <span className="text-sm font-medium" data-testid={`text-budget-${dept.name.toLowerCase()}`}>
-                {formatCurrency(dept.amount)}
-              </span>
             </div>
-          ))}
-        </div>
+            
+            <div className="space-y-3">
+              {breakdownData.map((item) => (
+                <div key={item.name} className="flex items-center justify-between" data-testid={`budget-item-${item.name.toLowerCase().replace(/\s+/g, '-')}`}>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-3 h-3 ${item.color} rounded-full`}></div>
+                    <span className="text-sm">{item.name}</span>
+                  </div>
+                  <span className="text-sm font-medium" data-testid={`text-budget-${item.name.toLowerCase().replace(/\s+/g, '-')}`}>
+                    {formatCurrency(item.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
