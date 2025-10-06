@@ -868,7 +868,10 @@ export class DatabaseStorage implements IStorage {
         eq(managers.companyId, tenantId) // Ensure managers are also from the same tenant
       ))
       .where(and(
-        eq(teamLeaders.role, 'team_leader'),
+        or(
+          eq(teamLeaders.role, 'team_leader'),
+          eq(teamLeaders.role, 'admin')
+        ),
         eq(teamLeaders.companyId, tenantId)
       ))
       .orderBy(teamLeaders.firstName);
