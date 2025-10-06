@@ -1693,6 +1693,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/analytics/line-item-breakdown', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const breakdown = await storage.getLineItemAllocationBreakdown(tenantId);
+      res.json(breakdown);
+    } catch (error) {
+      console.error("Error fetching line item breakdown:", error);
+      res.status(500).json({ message: "Failed to fetch line item allocation breakdown" });
+    }
+  });
+
   app.get('/api/analytics/project/:id', isAuthenticated, async (req: any, res) => {
     try {
       const projectId = req.params.id;
