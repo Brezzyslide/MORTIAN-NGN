@@ -247,6 +247,14 @@ export interface IStorage {
     activeProjects: number;
   }>;
 
+  getLineItemAllocationBreakdown(tenantId: string): Promise<Array<{
+    lineItemId: string;
+    lineItemName: string;
+    category: string;
+    totalAllocated: number;
+    color: string;
+  }>>;
+
   // New analytics operations for Sprint 4 & 5 (with enhanced security)
   getBudgetSummary(tenantId: string, userRole?: string, userId?: string, projectId?: string): Promise<Array<{
     projectId: string;
@@ -1160,6 +1168,53 @@ export class DatabaseStorage implements IStorage {
       netProfit,
       activeProjects,
     };
+  }
+
+  async getLineItemAllocationBreakdown(tenantId: string): Promise<Array<{
+    lineItemId: string;
+    lineItemName: string;
+    category: string;
+    totalAllocated: number;
+    color: string;
+  }>> {
+    // Get cost allocations grouped by line item
+    const results = await db
+      .select({
+        lineItemId: costAllocations.lineItemId,
+        lineItemName: lineItems.name,
+        category: lineItems.category,
+        totalAllocated: sum(costAllocations.totalCost),
+      })
+      .from(costAllocations)
+      .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
+      .where(and(
+        eq(costAllocations.tenantId, tenantId),
+        eq(costAllocations.status, "approved")
+      ))
+      .groupBy(costAllocations.lineItemId, lineItems.name, lineItems.category);
+
+    // Define color palette for chart
+    const colors = [
+      "bg-primary",
+      "bg-green-500",
+      "bg-orange-500",
+      "bg-purple-500",
+      "bg-blue-500",
+      "bg-pink-500",
+      "bg-yellow-500",
+      "bg-red-500",
+      "bg-indigo-500",
+      "bg-teal-500",
+    ];
+
+    // Map results with colors
+    return results.map((result, index) => ({
+      lineItemId: result.lineItemId,
+      lineItemName: result.lineItemName,
+      category: result.category,
+      totalAllocated: parseFloat(result.totalAllocated || "0"),
+      color: colors[index % colors.length], // Cycle through colors
+    }));
   }
 
   // New project-specific analytics with budget utilization and cost breakdown
