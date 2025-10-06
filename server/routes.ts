@@ -1519,7 +1519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/fund-allocations', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+  app.post('/api/fund-allocations', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
       
@@ -4056,6 +4056,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching teams:", error);
       res.status(500).json({ message: "Failed to fetch teams" });
+    }
+  });
+
+  // GET /api/teams/my-teams - List teams led by current user (must be before /:id route)
+  app.get('/api/teams/my-teams', isAuthenticated, setTenantContext(), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = req.tenant;
+      const teams = await storage.getTeamsByLeader(userId, tenantId);
+      res.json(teams);
+    } catch (error) {
+      console.error("Error fetching my teams:", error);
+      res.status(500).json({ message: "Failed to fetch your teams" });
     }
   });
 

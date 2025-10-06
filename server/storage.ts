@@ -3258,6 +3258,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(teams.name);
   }
 
+  async getTeamsByLeader(leaderId: string, tenantId: string): Promise<Team[]> {
+    return await db
+      .select()
+      .from(teams)
+      .where(and(
+        eq(teams.leaderId, leaderId),
+        eq(teams.tenantId, tenantId)
+      ))
+      .orderBy(teams.name);
+  }
+
   async getTeam(id: string, tenantId: string): Promise<Team | undefined> {
     const [team] = await db
       .select()
