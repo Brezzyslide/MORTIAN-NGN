@@ -551,7 +551,7 @@ export function CompanyManagement() {
                           variant="secondary"
                           size="sm"
                           onClick={() => {
-                            if (!selectedCompany) return;
+                            if (!selectedCompany || !field.value) return;
                             populateIndustryMutation.mutate({ 
                               companyId: selectedCompany.id, 
                               industry: field.value 
