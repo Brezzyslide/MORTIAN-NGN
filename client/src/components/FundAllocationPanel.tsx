@@ -77,7 +77,7 @@ const formatTeamLeaderHierarchy = (leader: UserWithManager): string => {
 export default function FundAllocationPanel() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isAdmin, isTeamLeader } = usePermissions();
+  const { isTeamLeader } = usePermissions();
   const tenantId = user?.tenantId;
   const [selectedTeamLeaderId, setSelectedTeamLeaderId] = useState<string>("");
   const [isTeamMembersExpanded, setIsTeamMembersExpanded] = useState(false);
@@ -101,41 +101,25 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
-  // Get allocation targets based on user role
+  // Fetch team members for the current team leader
   const selectedProjectId = form.watch("projectId");
   
-  // For admins: fetch team leaders; For team leaders: fetch their team members
   const { data: teamLeaders, isLoading: teamLeadersLoading, error: teamLeadersError } = useQuery<UserWithManager[]>({
-    queryKey: isAdmin ? ["/api/users/team-leaders-with-hierarchy"] : ["/api/users/team-leader-members", user?.id],
+    queryKey: ["/api/users/team-leader-members", user?.id],
     queryFn: async () => {
-      if (isAdmin) {
-        // Admins fetch ALL team leaders with hierarchy information
-        const response = await fetch(`/api/users/team-leaders-with-hierarchy`, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch team leaders with hierarchy');
-        }
-        return response.json();
-      } else if (isTeamLeader && user?.id) {
-        // Team leaders fetch their own team members
-        const response = await fetch(`/api/users/team-leader-members/${user.id}`, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch team members');
-        }
-        return response.json();
+      if (!user?.id) return [];
+      const response = await fetch(`/api/users/team-leader-members/${user.id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch team members');
       }
-      return [];
+      return response.json();
     },
-    enabled: Boolean(tenantId) && (isAdmin || (isTeamLeader && Boolean(user?.id))),
+    enabled: Boolean(tenantId) && Boolean(user?.id),
     retry: false,
   });
 
