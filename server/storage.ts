@@ -595,11 +595,40 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
-    return await db
+    const allProjects = await db
       .select()
       .from(projects)
       .where(and(...whereConditions))
       .orderBy(desc(projects.createdAt));
+
+    // For non-admin users, replace budget with allocated amount
+    if (userRole && userRole !== 'console_manager' && userRole !== 'admin' && userId) {
+      // Get all allocations for this user
+      const userAllocations = await db
+        .select({
+          projectId: fundAllocations.projectId,
+          totalAllocated: sum(fundAllocations.amount),
+        })
+        .from(fundAllocations)
+        .where(and(
+          eq(fundAllocations.toUserId, userId),
+          eq(fundAllocations.status, 'approved')
+        ))
+        .groupBy(fundAllocations.projectId);
+
+      // Create a map of projectId to allocated amount
+      const allocationMap = new Map(
+        userAllocations.map(a => [a.projectId, parseFloat(a.totalAllocated || "0")])
+      );
+
+      // Replace budget with allocated amount for each project
+      return allProjects.map(project => ({
+        ...project,
+        budget: allocationMap.get(project.id)?.toString() || "0"
+      }));
+    }
+
+    return allProjects;
   }
 
   async getProject(id: string, tenantId: string): Promise<Project | undefined> {
