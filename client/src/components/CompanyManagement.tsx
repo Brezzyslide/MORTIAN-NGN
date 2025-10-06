@@ -151,28 +151,6 @@ export function CompanyManagement() {
     },
   });
 
-  // Populate industry templates mutation
-  const populateIndustryMutation = useMutation({
-    mutationFn: ({ companyId, industry }: { companyId: string; industry: string }) => 
-      apiRequest("POST", `/api/companies/${companyId}/populate-industry`, { industry }),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/line-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
-      toast({
-        title: "Success",
-        description: `Industry templates populated: ${data.lineItemsCreated} line items and ${data.materialsCreated} materials created`,
-      });
-    },
-    onError: (error: any) => {
-      console.error("Error populating industry templates:", error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to populate industry templates",
-        variant: "destructive",
-      });
-    },
-  });
-
   const addForm = useForm<AddCompanyFormData>({
     resolver: zodResolver(addCompanyFormSchema),
     defaultValues: {
