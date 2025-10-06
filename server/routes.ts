@@ -1519,7 +1519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/fund-allocations', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
+  app.post('/api/fund-allocations', isAuthenticated, authorize(['team_leader']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
       
@@ -1528,6 +1528,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fromUserId: userId,
         tenantId,
       });
+
+      // TEAM LEADER VALIDATION: Verify member belongs to leader's team
+      if (req.tenant?.role === 'team_leader' && req.body.teamId) {
+        // Verify the team belongs to the current user
+        const team = await storage.getTeam(req.body.teamId, tenantId);
+        if (!team) {
+          return res.status(404).json({ message: "Team not found" });
+        }
+        if (team.leaderId !== userId) {
+          return res.status(403).json({ message: "You can only allocate funds to members of teams you lead" });
+        }
+        
+        // Verify the recipient is a member of this team
+        const teamMembers = await storage.getTeamMembers(req.body.teamId, tenantId);
+        const isMember = teamMembers.some(member => member.userId === allocationData.toUserId);
+        if (!isMember) {
+          return res.status(400).json({ message: "Selected user is not a member of this team" });
+        }
+      }
 
       // BUDGET VALIDATION: Check if allocation exceeds project budget
       const project = await storage.getProject(allocationData.projectId, tenantId);
