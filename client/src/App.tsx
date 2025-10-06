@@ -11,6 +11,8 @@ import NotFound from "@/pages/not-found";
 import AdminUsers from "@/pages/admin-users";
 import ChangePassword from "@/pages/change-password";
 import TeamsList from "@/components/TeamsList";
+import LineItemsPage from "@/pages/LineItemsPage";
+import MaterialsPage from "@/pages/MaterialsPage";
 
 function ProtectedRoute({ component: Component }: { component: any }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -73,6 +75,8 @@ function Router() {
       <Route path="/change-orders" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/budget-history" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/project-costings" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/line-items" component={() => <ProtectedRoute component={LineItemsPage} />} />
+      <Route path="/materials" component={() => <ProtectedRoute component={MaterialsPage} />} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -141,6 +141,33 @@ export default function Sidebar() {
           </Link>
         </nav>
         
+        {/* Configuration */}
+        <div className="mt-8 pt-6 border-t border-white/20">
+          <h3 className="text-sm font-medium opacity-75 mb-3">Configuration</h3>
+          <nav className="space-y-2">
+            <Link 
+              href="/line-items" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/line-items') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
+              data-testid="link-line-items"
+            >
+              <i className="fas fa-list w-5"></i>
+              <span>Line Items</span>
+            </Link>
+            <Link 
+              href="/materials" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/materials') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
+              data-testid="link-materials"
+            >
+              <i className="fas fa-boxes w-5"></i>
+              <span>Materials</span>
+            </Link>
+          </nav>
+        </div>
+        
         {/* User Management (Admin Only) */}
         <ProtectedComponent requiredPermission="canAccessUserManagement">
           <div className="mt-8 pt-6 border-t border-white/20">

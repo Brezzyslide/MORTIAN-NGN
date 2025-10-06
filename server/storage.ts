@@ -187,12 +187,14 @@ export interface IStorage {
   getLineItem(id: string, tenantId: string): Promise<LineItem | undefined>;
   createLineItem(lineItem: InsertLineItem, requesterTenantId: string): Promise<LineItem>;
   updateLineItem(id: string, lineItem: Partial<InsertLineItem>, tenantId: string): Promise<LineItem | undefined>;
+  deleteLineItem(id: string, tenantId: string): Promise<void>;
 
   // Materials operations
   getMaterials(tenantId: string): Promise<Material[]>;
   getMaterial(id: string, tenantId: string): Promise<Material | undefined>;
   createMaterial(material: InsertMaterial, requesterTenantId: string): Promise<Material>;
   updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined>;
+  deleteMaterial(id: string, tenantId: string): Promise<void>;
 
   // Cost allocation operations
   getCostAllocations(tenantId: string): Promise<CostAllocation[]>;
@@ -1748,6 +1750,12 @@ export class DatabaseStorage implements IStorage {
     return updatedLineItem;
   }
 
+  async deleteLineItem(id: string, tenantId: string): Promise<void> {
+    await db
+      .delete(lineItems)
+      .where(and(eq(lineItems.id, id), eq(lineItems.tenantId, tenantId)));
+  }
+
   // Materials operations
   async getMaterials(tenantId: string): Promise<Material[]> {
     return await db
@@ -1783,6 +1791,12 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(materials.id, id), eq(materials.tenantId, tenantId)))
       .returning();
     return updatedMaterial;
+  }
+
+  async deleteMaterial(id: string, tenantId: string): Promise<void> {
+    await db
+      .delete(materials)
+      .where(and(eq(materials.id, id), eq(materials.tenantId, tenantId)));
   }
 
   // Cost allocation operations

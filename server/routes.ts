@@ -3230,6 +3230,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete('/api/line-items/:id', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      
+      const lineItem = await storage.getLineItem(req.params.id, tenantId);
+      if (!lineItem) {
+        return res.status(404).json({ message: "Line item not found" });
+      }
+
+      await storage.deleteLineItem(req.params.id, tenantId);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "line_item_deleted",
+        entityType: "line_item",
+        entityId: req.params.id,
+        tenantId,
+        details: { name: lineItem.name, category: lineItem.category },
+      }, tenantId);
+
+      res.json({ message: "Line item deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting line item:", error);
+      res.status(500).json({ message: "Failed to delete line item" });
+    }
+  });
+
   // Materials routes
   app.get('/api/materials', isAuthenticated, async (req: any, res) => {
     try {
@@ -3315,6 +3343,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid material data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update material" });
+    }
+  });
+
+  app.delete('/api/materials/:id', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      
+      const material = await storage.getMaterial(req.params.id, tenantId);
+      if (!material) {
+        return res.status(404).json({ message: "Material not found" });
+      }
+
+      await storage.deleteMaterial(req.params.id, tenantId);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "material_deleted",
+        entityType: "material",
+        entityId: req.params.id,
+        tenantId,
+        details: { name: material.name, unit: material.unit, supplier: material.supplier },
+      }, tenantId);
+
+      res.json({ message: "Material deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting material:", error);
+      res.status(500).json({ message: "Failed to delete material" });
     }
   });
 
