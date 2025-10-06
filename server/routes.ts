@@ -799,6 +799,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdBy: userId,
       }, req.tenant.tenantId, req.tenant.role);
 
+      // Populate industry templates if industry is selected
+      if (company.industry) {
+        try {
+          await storage.populateIndustryTemplates(company.id, company.industry);
+        } catch (templateError) {
+          console.error("Failed to populate industry templates:", templateError);
+          // Continue even if template population fails
+        }
+      }
+
       // Hash the admin password
       const saltRounds = 12;
       const passwordHash = await bcrypt.hash(adminPassword, saltRounds);

@@ -23,7 +23,9 @@ const addCompanyFormSchema = insertCompanySchema.extend({
   email: z.string().email("Please enter a valid email address"),
   phone: z.string().optional(),
   address: z.string().optional(),
-  industry: z.string().optional(),
+  industry: z.enum(["construction", "real_estate", "manufacturing", "software_development", "other"], {
+    required_error: "Please select an industry",
+  }),
   subscriptionPlan: z.enum(["basic", "professional", "enterprise"]).default("basic"),
   adminPassword: z.string().min(8, "Password must be at least 8 characters long")
     .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Password must contain at least one uppercase letter, one lowercase letter, and one number"),
@@ -178,7 +180,7 @@ export function CompanyManagement() {
       email: "",
       phone: "",
       address: "",
-      industry: "",
+      industry: undefined,
       subscriptionPlan: "basic",
       adminPassword: "",
       confirmPassword: "",
@@ -386,13 +388,20 @@ export function CompanyManagement() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Industry</FormLabel>
-                      <FormControl>
-                        <Input 
-                          data-testid="input-company-industry"
-                          placeholder="e.g., Construction, Real Estate" 
-                          {...field} 
-                        />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-company-industry">
+                            <SelectValue placeholder="Select industry" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="construction">Construction</SelectItem>
+                          <SelectItem value="real_estate">Real Estate</SelectItem>
+                          <SelectItem value="manufacturing">Manufacturing</SelectItem>
+                          <SelectItem value="software_development">Software Development</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -544,29 +553,6 @@ export function CompanyManagement() {
                       </SelectContent>
                     </Select>
                     <FormMessage />
-                    {field.value && (
-                      <div className="mt-2">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            if (!selectedCompany || !field.value) return;
-                            populateIndustryMutation.mutate({ 
-                              companyId: selectedCompany.id, 
-                              industry: field.value 
-                            });
-                          }}
-                          disabled={populateIndustryMutation.isPending}
-                          data-testid="button-populate-industry"
-                        >
-                          {populateIndustryMutation.isPending ? "Populating..." : "Load Industry Templates"}
-                        </Button>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Click to populate line items and materials for this industry
-                        </p>
-                      </div>
-                    )}
                   </FormItem>
                 )}
               />
