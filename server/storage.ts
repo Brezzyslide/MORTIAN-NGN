@@ -195,6 +195,7 @@ export interface IStorage {
   createMaterial(material: InsertMaterial, requesterTenantId: string): Promise<Material>;
   updateMaterial(id: string, material: Partial<InsertMaterial>, tenantId: string): Promise<Material | undefined>;
   deleteMaterial(id: string, tenantId: string): Promise<void>;
+  populateIndustryTemplates(tenantId: string, industry: string): Promise<{ lineItemsCount: number; materialsCount: number }>;
 
   // Cost allocation operations
   getCostAllocations(tenantId: string): Promise<CostAllocation[]>;
@@ -1797,6 +1798,49 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(materials)
       .where(and(eq(materials.id, id), eq(materials.tenantId, tenantId)));
+  }
+
+  async populateIndustryTemplates(tenantId: string, industry: string): Promise<{ lineItemsCount: number; materialsCount: number }> {
+    const { industryTemplates } = await import('../shared/industryTemplates');
+    
+    const template = industryTemplates[industry as keyof typeof industryTemplates];
+    if (!template) {
+      throw new Error(`No template found for industry: ${industry}`);
+    }
+
+    // Delete existing line items and materials for this tenant
+    await db.delete(lineItems).where(eq(lineItems.tenantId, tenantId));
+    await db.delete(materials).where(eq(materials.tenantId, tenantId));
+
+    // Insert line items
+    const lineItemsToInsert = template.lineItems.map(item => ({
+      name: item.name,
+      category: item.category as any, // Cast to match the line item category enum type
+      description: item.description,
+      tenantId,
+    }));
+    
+    if (lineItemsToInsert.length > 0) {
+      await db.insert(lineItems).values(lineItemsToInsert);
+    }
+
+    // Insert materials
+    const materialsToInsert = template.materials.map(material => ({
+      name: material.name,
+      unit: material.unit,
+      currentUnitPrice: material.currentUnitPrice,
+      supplier: material.supplier,
+      tenantId,
+    }));
+    
+    if (materialsToInsert.length > 0) {
+      await db.insert(materials).values(materialsToInsert);
+    }
+
+    return {
+      lineItemsCount: lineItemsToInsert.length,
+      materialsCount: materialsToInsert.length,
+    };
   }
 
   // Cost allocation operations

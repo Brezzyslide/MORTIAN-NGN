@@ -29,6 +29,15 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// Industry enum for tenant companies
+export const industryEnum = pgEnum("industry", [
+  "construction",
+  "real_estate",
+  "manufacturing",
+  "software_development",
+  "other"
+]);
+
 // Companies/Tenants table
 export const companies = pgTable("companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -36,7 +45,7 @@ export const companies = pgTable("companies", {
   email: varchar("email", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }),
   address: text("address"),
-  industry: varchar("industry", { length: 100 }),
+  industry: industryEnum("industry"),
   subscriptionPlan: varchar("subscription_plan", { length: 50 }).default("basic"),
   status: varchar("status", { length: 50 }).default("active"),
   createdBy: varchar("created_by"), // Console manager who created this company
