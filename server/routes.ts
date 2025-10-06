@@ -968,6 +968,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Populate industry templates for a company
+  app.post('/api/companies/:id/populate-industry', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId, role } = req.tenant;
+      const companyId = req.params.id;
+      const { industry } = req.body;
+
+      if (!industry) {
+        return res.status(400).json({ message: "Industry is required" });
+      }
+
+      // Verify the company exists and user has access
+      let company;
+      if (role === 'console_manager') {
+        company = await storage.getCompany(companyId, tenantId);
+      } else {
+        // For company admins, verify they're accessing their own company
+        if (tenantId !== companyId) {
+          return res.status(403).json({ message: "Not authorized to populate industry templates for this company" });
+        }
+        company = await storage.getCompanyForTenant(companyId, tenantId);
+      }
+
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      // Populate industry templates
+      const result = await storage.populateIndustryTemplates(companyId, industry);
+      
+      res.json({
+        message: "Industry templates populated successfully",
+        lineItemsCreated: result.lineItemsCount,
+        materialsCreated: result.materialsCount,
+      });
+    } catch (error) {
+      console.error("Error populating industry templates:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to populate industry templates" 
+      });
+    }
+  });
+
   // Keep PUT for backward compatibility
   app.put('/api/companies/:id', isAuthenticated, authorize(['console_manager']), async (req: any, res) => {
     try {
