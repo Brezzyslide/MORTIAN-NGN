@@ -3225,16 +3225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Line Items routes (read access for all, create/update for admin and team_leader)
-  app.get('/api/line-items', isAuthenticated, async (req: any, res) => {
-    try {
-      const { tenantId } = await getUserData(req);
-      const lineItems = await storage.getLineItems(tenantId);
-      res.json(lineItems);
-    } catch (error) {
-      console.error("Error fetching line items:", error);
-      res.status(500).json({ message: "Failed to fetch line items" });
-    }
-  });
+  // Note: GET /api/line-items is defined earlier with grouping logic
 
   app.get('/api/line-items/:id', isAuthenticated, async (req: any, res) => {
     try {
