@@ -240,7 +240,7 @@ export interface IStorage {
   // Check if user can access a specific project based on role and assignments
   canUserAccessProject(userId: string, projectId: string, tenantId: string, userRole: string): Promise<boolean>;
   
-  getTenantStats(tenantId: string): Promise<{
+  getTenantStats(tenantId: string, userId?: string, userRole?: string): Promise<{
     totalBudget: number;
     totalSpent: number;
     totalRevenue: number;
@@ -1146,62 +1146,106 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getTenantStats(tenantId: string): Promise<{
+  async getTenantStats(tenantId: string, userId?: string, userRole?: string): Promise<{
     totalBudget: number;
     totalSpent: number;
     totalRevenue: number;
     netProfit: number;
     activeProjects: number;
   }> {
-    const [budgetResult] = await db
-      .select({
-        totalBudget: sum(projects.budget),
-        activeProjects: count(projects.id),
-      })
-      .from(projects)
-      .where(and(
-        eq(projects.tenantId, tenantId),
-        eq(projects.status, "active")
-      ));
+    let totalBudget = 0;
+    let activeProjects = 0;
+
+    // Budget visibility based on role and fund allocations
+    if (userRole === 'admin') {
+      // Admins see all project budgets
+      const [budgetResult] = await db
+        .select({
+          totalBudget: sum(projects.budget),
+          activeProjects: count(projects.id),
+        })
+        .from(projects)
+        .where(and(
+          eq(projects.tenantId, tenantId),
+          eq(projects.status, "active")
+        ));
+      
+      totalBudget = parseFloat(budgetResult?.totalBudget || "0") || 0;
+      activeProjects = budgetResult?.activeProjects || 0;
+    } else if (userId) {
+      // Team leaders and users only see funds allocated to them
+      const [allocationsResult] = await db
+        .select({
+          totalAllocated: sum(fundAllocations.amount),
+          uniqueProjects: count(sql`DISTINCT ${fundAllocations.projectId}`),
+        })
+        .from(fundAllocations)
+        .where(and(
+          eq(fundAllocations.toUserId, userId),
+          eq(fundAllocations.status, "approved")
+        ));
+      
+      totalBudget = parseFloat(allocationsResult?.totalAllocated || "0") || 0;
+      activeProjects = allocationsResult?.uniqueProjects || 0;
+    }
+
+    // Spending calculations (filtered by user role)
+    let spentConditions = [
+      eq(transactions.tenantId, tenantId),
+      eq(transactions.type, "expense")
+    ];
+    
+    if (userRole !== 'admin' && userId) {
+      // Non-admins only see their own spending
+      spentConditions.push(eq(transactions.userId, userId));
+    }
 
     const [spentResult] = await db
       .select({
         totalSpent: sum(transactions.amount),
       })
       .from(transactions)
-      .where(and(
-        eq(transactions.tenantId, tenantId),
-        eq(transactions.type, "expense") // Only count expenses (NOT allocations - those are fund distributions)
-      ));
+      .where(and(...spentConditions));
 
-    // Also get spending from cost allocations table
+    // Cost allocations spending (filtered by user role)
+    let costConditions = [
+      eq(costAllocations.tenantId, tenantId),
+      eq(costAllocations.status, "approved")
+    ];
+    
+    if (userRole !== 'admin' && userId) {
+      costConditions.push(eq(costAllocations.enteredBy, userId));
+    }
+
     const [costAllocationsResult] = await db
       .select({
         totalCost: sum(costAllocations.totalCost),
       })
       .from(costAllocations)
-      .where(and(
-        eq(costAllocations.tenantId, tenantId),
-        eq(costAllocations.status, "approved")
-      ));
+      .where(and(...costConditions));
+
+    // Revenue calculations (filtered by user role)
+    let revenueConditions = [
+      eq(transactions.tenantId, tenantId),
+      eq(transactions.type, "revenue")
+    ];
+    
+    if (userRole !== 'admin' && userId) {
+      revenueConditions.push(eq(transactions.userId, userId));
+    }
 
     const [revenueResult] = await db
       .select({
         totalRevenue: sum(transactions.amount),
       })
       .from(transactions)
-      .where(and(
-        eq(transactions.tenantId, tenantId),
-        eq(transactions.type, "revenue")
-      ));
+      .where(and(...revenueConditions));
 
-    const totalBudget = parseFloat(budgetResult?.totalBudget || "0") || 0;
     const transactionSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
     const costAllocationsSpent = parseFloat(costAllocationsResult?.totalCost || "0") || 0;
     const totalSpent = transactionSpent + costAllocationsSpent;
     const totalRevenue = parseFloat(revenueResult?.totalRevenue || "0") || 0;
     const netProfit = totalRevenue - totalSpent;
-    const activeProjects = budgetResult?.activeProjects || 0;
 
     return {
       totalBudget,
