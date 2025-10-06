@@ -21,7 +21,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 const allocationSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
-  toUserId: z.string().min(1, "Team leader is required"),
+  toUserId: z.string().min(1, "Recipient is required"),
   amount: z.string().min(1, "Amount is required").refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Amount must be a positive number",
   }),
@@ -77,7 +77,7 @@ const formatTeamLeaderHierarchy = (leader: UserWithManager): string => {
 export default function FundAllocationPanel() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isAdmin } = usePermissions();
+  const { isAdmin, isTeamLeader } = usePermissions();
   const tenantId = user?.tenantId;
   const [selectedTeamLeaderId, setSelectedTeamLeaderId] = useState<string>("");
   const [isTeamMembersExpanded, setIsTeamMembersExpanded] = useState(false);
@@ -101,25 +101,41 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
-  // Always get ALL team leaders for fund allocation (regardless of project assignment)
+  // Get allocation targets based on user role
   const selectedProjectId = form.watch("projectId");
   
+  // For admins: fetch team leaders; For team leaders: fetch their team members
   const { data: teamLeaders, isLoading: teamLeadersLoading, error: teamLeadersError } = useQuery<UserWithManager[]>({
-    queryKey: ["/api/users/team-leaders-with-hierarchy"],
+    queryKey: isAdmin ? ["/api/users/team-leaders-with-hierarchy"] : ["/api/users/team-leader-members", user?.id],
     queryFn: async () => {
-      // Always fetch ALL team leaders with hierarchy information for fund allocation
-      const response = await fetch(`/api/users/team-leaders-with-hierarchy`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch team leaders with hierarchy');
+      if (isAdmin) {
+        // Admins fetch ALL team leaders with hierarchy information
+        const response = await fetch(`/api/users/team-leaders-with-hierarchy`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch team leaders with hierarchy');
+        }
+        return response.json();
+      } else if (isTeamLeader && user?.id) {
+        // Team leaders fetch their own team members
+        const response = await fetch(`/api/users/team-leader-members/${user.id}`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch team members');
+        }
+        return response.json();
       }
-      return response.json();
+      return [];
     },
-    enabled: Boolean(tenantId),
+    enabled: Boolean(tenantId) && (isAdmin || (isTeamLeader && Boolean(user?.id))),
     retry: false,
   });
 
@@ -324,7 +340,9 @@ export default function FundAllocationPanel() {
     onSuccess: () => {
       toast({
         title: "Success",
-        description: "Funds allocated and team leader assigned to project",
+        description: isAdmin 
+          ? "Funds allocated and team leader assigned to project"
+          : "Funds allocated and team member assigned to project",
       });
       form.reset();
       setSelectedTeamLeaderId("");
@@ -378,7 +396,9 @@ export default function FundAllocationPanel() {
     <Card className="card-shadow border border-border">
       <div className="p-6 border-b border-border">
         <h3 className="text-lg font-semibold">Fund Allocation</h3>
-        <p className="text-sm text-muted-foreground mt-1">Distribute funds to team leaders</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {isAdmin ? "Distribute funds to team leaders" : "Distribute funds to your team members"}
+        </p>
       </div>
       <CardContent className="p-6">
         <Form {...form}>
@@ -420,7 +440,7 @@ export default function FundAllocationPanel() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center gap-2">
-                    Team Leader
+                    {isAdmin ? "Team Leader" : "Team Member"}
                     {selectedProjectId && (
                       <Badge variant="secondary" className="text-xs">
                         Project-specific
@@ -430,31 +450,33 @@ export default function FundAllocationPanel() {
                   <Select onValueChange={handleTeamLeaderChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-team-leader">
-                        <SelectValue placeholder="Select a team leader" />
+                        <SelectValue placeholder={isAdmin ? "Select a team leader" : "Select a team member"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {teamLeadersLoading ? (
-                        <div className="p-2 text-center text-muted-foreground">Loading team leaders...</div>
+                        <div className="p-2 text-center text-muted-foreground">
+                          {isAdmin ? "Loading team leaders..." : "Loading team members..."}
+                        </div>
                       ) : !teamLeaders || teamLeaders.length === 0 ? (
                         <div className="p-2 text-center text-muted-foreground">
-                          No team leaders available
+                          {isAdmin ? "No team leaders available" : "No team members available"}
                         </div>
                       ) : (
                         teamLeaders.map((leader: UserWithManager) => (
                           <SelectItem key={leader.id} value={leader.id}>
                             <div className="flex items-center gap-2 py-1">
                               <div className="flex items-center gap-1">
-                                {leader.manager ? (
+                                {isAdmin && (leader.manager ? (
                                   <ArrowRight className="h-3 w-3 text-muted-foreground" />
                                 ) : (
                                   <Crown className="h-3 w-3 text-amber-500" />
-                                )}
+                                ))}
                                 <span className="font-medium">
-                                  {formatUserDisplayName(leader)} - {leader.role?.replace('_', ' ') || 'Team Leader'}
+                                  {formatUserDisplayName(leader)} - {leader.role?.replace('_', ' ') || (isAdmin ? 'Team Leader' : 'User')}
                                 </span>
                               </div>
-                              {leader.manager && (
+                              {isAdmin && leader.manager && (
                                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                   <ArrowRight className="h-2 w-2" />
                                   <span>{formatUserDisplayName(leader.manager)}</span>
