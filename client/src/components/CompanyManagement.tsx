@@ -149,6 +149,28 @@ export function CompanyManagement() {
     },
   });
 
+  // Populate industry templates mutation
+  const populateIndustryMutation = useMutation({
+    mutationFn: ({ companyId, industry }: { companyId: string; industry: string }) => 
+      apiRequest("POST", `/api/companies/${companyId}/populate-industry`, { industry }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/line-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
+      toast({
+        title: "Success",
+        description: `Industry templates populated: ${data.lineItemsCreated} line items and ${data.materialsCreated} materials created`,
+      });
+    },
+    onError: (error: any) => {
+      console.error("Error populating industry templates:", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to populate industry templates",
+        variant: "destructive",
+      });
+    },
+  });
+
   const addForm = useForm<AddCompanyFormData>({
     resolver: zodResolver(addCompanyFormSchema),
     defaultValues: {
@@ -507,14 +529,44 @@ export function CompanyManagement() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Industry</FormLabel>
-                    <FormControl>
-                      <Input 
-                        data-testid="input-edit-company-industry"
-                        placeholder="e.g., Construction, Real Estate" 
-                        {...field} 
-                      />
-                    </FormControl>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-company-industry">
+                          <SelectValue placeholder="Select industry" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="construction">Construction</SelectItem>
+                        <SelectItem value="real_estate">Real Estate</SelectItem>
+                        <SelectItem value="manufacturing">Manufacturing</SelectItem>
+                        <SelectItem value="software_development">Software Development</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
+                    {field.value && (
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            if (!selectedCompany) return;
+                            populateIndustryMutation.mutate({ 
+                              companyId: selectedCompany.id, 
+                              industry: field.value 
+                            });
+                          }}
+                          disabled={populateIndustryMutation.isPending}
+                          data-testid="button-populate-industry"
+                        >
+                          {populateIndustryMutation.isPending ? "Populating..." : "Load Industry Templates"}
+                        </Button>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Click to populate line items and materials for this industry
+                        </p>
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />
