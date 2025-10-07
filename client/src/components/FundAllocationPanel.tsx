@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Project, User } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Schema for team
 interface Team {
@@ -34,8 +35,8 @@ interface TeamMember {
 
 const allocationSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
-  teamId: z.string().min(1, "Team is required"),
-  toUserId: z.string().min(1, "Team member is required"),
+  teamId: z.string().optional(), // Optional for admins
+  toUserId: z.string().min(1, "User is required"),
   amount: z.string().min(1, "Amount is required").refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Amount must be a positive number",
   }),
@@ -73,6 +74,7 @@ const formatUserDisplayName = (user: User): string => {
 export default function FundAllocationPanel() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { isAdmin } = usePermissions();
   const tenantId = user?.tenantId;
 
   const form = useForm<AllocationFormData>({
@@ -96,14 +98,21 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
-  // Fetch teams led by current user
-  const { data: teams, isLoading: teamsLoading, error: teamsError } = useQuery<Team[]>({
-    queryKey: ["/api/teams/my-teams"],
-    enabled: Boolean(tenantId),
+  // Fetch all users (for admins only)
+  const { data: allUsers, isLoading: usersLoading, error: usersError } = useQuery<User[]>({
+    queryKey: ["/api/admin/users"],
+    enabled: Boolean(tenantId) && isAdmin,
     retry: false,
   });
 
-  // Fetch members of selected team
+  // Fetch teams led by current user (for team leaders only)
+  const { data: teams, isLoading: teamsLoading, error: teamsError } = useQuery<Team[]>({
+    queryKey: ["/api/teams/my-teams"],
+    enabled: Boolean(tenantId) && !isAdmin,
+    retry: false,
+  });
+
+  // Fetch members of selected team (for team leaders only)
   const { data: teamMembers, isLoading: membersLoading } = useQuery<TeamMember[]>({
     queryKey: ["/api/teams", selectedTeamId, "members"],
     queryFn: async () => {
@@ -116,13 +125,13 @@ export default function FundAllocationPanel() {
       }
       return response.json();
     },
-    enabled: Boolean(selectedTeamId),
+    enabled: Boolean(selectedTeamId) && !isAdmin,
     retry: false,
   });
 
   // Handle authentication errors
   useEffect(() => {
-    const errors = [projectsError, teamsError];
+    const errors = [projectsError, isAdmin ? usersError : teamsError];
     const unauthorizedError = errors.find(err => err && isUnauthorizedError(err));
     
     if (unauthorizedError) {
@@ -209,7 +218,7 @@ export default function FundAllocationPanel() {
       <div className="p-6 border-b border-border">
         <h3 className="text-lg font-semibold">Fund Allocation</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Distribute funds to your team members
+          {isAdmin ? "Allocate project funds to users" : "Distribute funds to your team members"}
         </p>
       </div>
       <CardContent className="p-6">
@@ -246,78 +255,122 @@ export default function FundAllocationPanel() {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="teamId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Team</FormLabel>
-                  <Select onValueChange={handleTeamChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-team">
-                        <SelectValue placeholder="Select your team" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {teamsLoading ? (
-                        <div className="p-2 text-center text-muted-foreground">Loading teams...</div>
-                      ) : !teams || teams.length === 0 ? (
-                        <div className="p-2 text-center text-muted-foreground">
-                          No teams found. Create a team first.
-                        </div>
-                      ) : (
-                        teams.map((team) => (
-                          <SelectItem key={team.id} value={team.id}>
-                            {team.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="toUserId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Team Member</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedTeamId}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-team-member">
-                        <SelectValue placeholder={selectedTeamId ? "Select a team member" : "Select a team first"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {membersLoading ? (
-                        <div className="p-2 text-center text-muted-foreground">Loading members...</div>
-                      ) : !teamMembers || teamMembers.length === 0 ? (
-                        <div className="p-2 text-center text-muted-foreground">
-                          No members in this team
-                        </div>
-                      ) : (
-                        teamMembers.map((member) => (
-                          <SelectItem key={member.userId} value={member.userId}>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">
-                                {formatUserDisplayName(member.user)}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                ({member.roleInTeam})
-                              </span>
+            {/* Admin Flow: Select user directly */}
+            {isAdmin ? (
+              <FormField
+                control={form.control}
+                name="toUserId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Allocate to User</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-user">
+                          <SelectValue placeholder="Select a user" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {usersLoading ? (
+                          <div className="p-2 text-center text-muted-foreground">Loading users...</div>
+                        ) : !allUsers || allUsers.length === 0 ? (
+                          <div className="p-2 text-center text-muted-foreground">No users available</div>
+                        ) : (
+                          allUsers.map((usr) => (
+                            <SelectItem key={usr.id} value={usr.id}>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">
+                                  {formatUserDisplayName(usr)}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({usr.role})
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              /* Team Leader Flow: Select team then team member */
+              <>
+                <FormField
+                  control={form.control}
+                  name="teamId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Team</FormLabel>
+                      <Select onValueChange={handleTeamChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-team">
+                            <SelectValue placeholder="Select your team" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {teamsLoading ? (
+                            <div className="p-2 text-center text-muted-foreground">Loading teams...</div>
+                          ) : !teams || teams.length === 0 ? (
+                            <div className="p-2 text-center text-muted-foreground">
+                              No teams found. Create a team first.
                             </div>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                          ) : (
+                            teams.map((team) => (
+                              <SelectItem key={team.id} value={team.id}>
+                                {team.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="toUserId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Team Member</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={!selectedTeamId}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-team-member">
+                            <SelectValue placeholder={selectedTeamId ? "Select a team member" : "Select a team first"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {membersLoading ? (
+                            <div className="p-2 text-center text-muted-foreground">Loading members...</div>
+                          ) : !teamMembers || teamMembers.length === 0 ? (
+                            <div className="p-2 text-center text-muted-foreground">
+                              No members in this team
+                            </div>
+                          ) : (
+                            teamMembers.map((member) => (
+                              <SelectItem key={member.userId} value={member.userId}>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">
+                                    {formatUserDisplayName(member.user)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    ({member.roleInTeam})
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
 
             <FormField
               control={form.control}

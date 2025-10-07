@@ -1519,9 +1519,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/fund-allocations', isAuthenticated, authorize(['team_leader']), async (req: any, res) => {
+  app.post('/api/fund-allocations', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {
       const { userId, tenantId } = await getUserData(req);
+      const userRole = req.tenant?.role;
       
       const allocationData = insertFundAllocationSchema.parse({
         ...req.body,
@@ -1530,7 +1531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // TEAM LEADER VALIDATION: Verify member belongs to leader's team
-      if (req.tenant?.role === 'team_leader' && req.body.teamId) {
+      if (userRole === 'team_leader' && req.body.teamId) {
         // Verify the team belongs to the current user
         const team = await storage.getTeam(req.body.teamId, tenantId);
         if (!team) {
@@ -1548,24 +1549,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // BUDGET VALIDATION: Check if allocation exceeds project budget
+      // BUDGET VALIDATION: Different logic for admins vs team leaders
       const project = await storage.getProject(allocationData.projectId, tenantId);
       if (!project) {
         return res.status(404).json({ message: "Project not found" });
       }
 
-      // Get total fund allocations for this project
+      // Get all fund allocations for this project
       const existingAllocations = await storage.getFundAllocations(tenantId);
       const projectAllocations = existingAllocations.filter(a => a.projectId === allocationData.projectId);
-      const totalAllocated = projectAllocations.reduce((sum, a) => sum + parseFloat(a.amount), 0);
-      const newTotal = totalAllocated + parseFloat(allocationData.amount);
-      const projectBudget = parseFloat(project.budget);
+      const requestedAmount = parseFloat(allocationData.amount);
 
-      if (newTotal > projectBudget) {
-        const remaining = projectBudget - totalAllocated;
-        return res.status(400).json({ 
-          message: `Fund allocation exceeds project budget. Budget: ₦${projectBudget.toLocaleString()}, Already allocated: ₦${totalAllocated.toLocaleString()}, Remaining: ₦${remaining.toLocaleString()}, Requested: ₦${parseFloat(allocationData.amount).toLocaleString()}`
-        });
+      if (userRole === 'admin') {
+        // ADMIN VALIDATION: Check against project budget
+        // Only count top-level allocations (from admins), not team leader reallocations
+        // Get all users (including inactive) to check roles of fromUserId for historical allocations
+        const allUsers = await storage.getAllUsers(tenantId);
+        const userRoleMap = new Map(allUsers.map(u => [u.id, u.role]));
+        
+        // Only count allocations FROM admins to avoid double-counting team leader reallocations
+        const adminAllocations = projectAllocations.filter(a => userRoleMap.get(a.fromUserId) === 'admin');
+        const totalAllocated = adminAllocations.reduce((sum, a) => sum + parseFloat(a.amount), 0);
+        const newTotal = totalAllocated + requestedAmount;
+        const projectBudget = parseFloat(project.budget);
+
+        if (newTotal > projectBudget) {
+          const remaining = projectBudget - totalAllocated;
+          return res.status(400).json({ 
+            message: `Fund allocation exceeds project budget. Budget: ₦${projectBudget.toLocaleString()}, Already allocated: ₦${totalAllocated.toLocaleString()}, Remaining: ₦${remaining.toLocaleString()}, Requested: ₦${requestedAmount.toLocaleString()}`
+          });
+        }
+      } else if (userRole === 'team_leader') {
+        // TEAM LEADER VALIDATION: Check against their allocated budget
+        // Step 1: Get total budget allocated TO this team leader for this project
+        const allocatedToLeader = projectAllocations
+          .filter(a => a.toUserId === userId)
+          .reduce((sum, a) => sum + parseFloat(a.amount), 0);
+        
+        // Step 2: Get total already allocated FROM this team leader for this project
+        const allocatedByLeader = projectAllocations
+          .filter(a => a.fromUserId === userId)
+          .reduce((sum, a) => sum + parseFloat(a.amount), 0);
+        
+        // Step 3: Check if new allocation exceeds their remaining budget
+        const remainingBudget = allocatedToLeader - allocatedByLeader;
+        
+        if (requestedAmount > remainingBudget) {
+          return res.status(400).json({ 
+            message: `Allocation exceeds your available budget. Your allocated budget: ₦${allocatedToLeader.toLocaleString()}, Already allocated: ₦${allocatedByLeader.toLocaleString()}, Remaining: ₦${remainingBudget.toLocaleString()}, Requested: ₦${requestedAmount.toLocaleString()}`
+          });
+        }
+        
+        // Additional check: Team leader must have been allocated funds first
+        if (allocatedToLeader === 0) {
+          return res.status(400).json({ 
+            message: "You have not been allocated any budget for this project. Please contact your admin."
+          });
+        }
       }
 
       // CRITICAL FIX: Use atomic transaction-wrapped method to prevent race conditions,
