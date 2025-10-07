@@ -1666,7 +1666,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/transactions', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = await getUserData(req);
+      const { userId, tenantId, user } = await getUserData(req);
+      
+      // Revenue entry is restricted to admin and team_leader only
+      if (req.body.type === 'revenue' && user.role === 'user') {
+        return res.status(403).json({ 
+          message: "Access denied. Only team leaders and admins can record revenue." 
+        });
+      }
       
       const transactionData = insertTransactionSchema.parse({
         ...req.body,

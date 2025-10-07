@@ -13,8 +13,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { DollarSign } from "lucide-react";
+import { DollarSign, ShieldAlert } from "lucide-react";
 import type { Project } from "@shared/schema";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const revenueSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -82,6 +83,9 @@ export default function RevenueEntryForm() {
     createRevenue.mutate(data);
   };
 
+  // Check if user has permission to enter revenue (admin or team_leader only)
+  const canEnterRevenue = user?.role === 'admin' || user?.role === 'team_leader';
+
   return (
     <Card className="border border-border">
       <CardHeader>
@@ -96,82 +100,92 @@ export default function RevenueEntryForm() {
         </div>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="projectId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Project</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+        {!canEnterRevenue ? (
+          <Alert variant="destructive" data-testid="alert-access-denied">
+            <ShieldAlert className="h-4 w-4" />
+            <AlertTitle>Access Denied</AlertTitle>
+            <AlertDescription>
+              Only team leaders and admins can record revenue. Please contact your manager if you need to record revenue.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="projectId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-project">
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {projects?.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount (₦)</FormLabel>
                     <FormControl>
-                      <SelectTrigger data-testid="select-project">
-                        <SelectValue placeholder="Select a project" />
-                      </SelectTrigger>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Enter revenue amount"
+                        {...field}
+                        data-testid="input-amount"
+                      />
                     </FormControl>
-                    <SelectContent>
-                      {projects?.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Amount (₦)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="Enter revenue amount"
-                      {...field}
-                      data-testid="input-amount"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="E.g., Sale of Building Unit A5, Floor 2"
+                        {...field}
+                        data-testid="textarea-description"
+                        className="min-h-[80px]"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="E.g., Sale of Building Unit A5, Floor 2"
-                      {...field}
-                      data-testid="textarea-description"
-                      className="min-h-[80px]"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={createRevenue.isPending}
-              data-testid="button-submit-revenue"
-            >
-              {createRevenue.isPending ? "Recording..." : "Record Revenue"}
-            </Button>
-          </form>
-        </Form>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={createRevenue.isPending}
+                data-testid="button-submit-revenue"
+              >
+                {createRevenue.isPending ? "Recording..." : "Record Revenue"}
+              </Button>
+            </form>
+          </Form>
+        )}
       </CardContent>
     </Card>
   );
