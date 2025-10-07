@@ -80,7 +80,7 @@ export default function CostAllocationsTable({ filters }: CostAllocationsTablePr
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [rejectComments, setRejectComments] = useState("");
   const [changeOrderFilter, setChangeOrderFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("active"); // "active" excludes drafts by default
+  const [statusFilter, setStatusFilter] = useState<string>("all"); // Show all allocations by default including drafts
 
   // Build query parameters
   const queryParams = useMemo(() => {
