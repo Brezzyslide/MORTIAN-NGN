@@ -2103,6 +2103,91 @@ export class DatabaseStorage implements IStorage {
     return newCostAllocation;
   }
 
+  async createCostAllocationWithAutoApproval(
+    costAllocation: InsertCostAllocation,
+    materialAllocationsData: InsertMaterialAllocation[],
+    transaction: InsertTransaction,
+    requesterTenantId: string
+  ): Promise<{ costAllocation: CostAllocation; transaction?: Transaction; updatedProject?: Project }> {
+    // CRITICAL SECURITY FIX: Validate tenant ownership for all data
+    validateTenantOwnership(requesterTenantId, costAllocation, 'Create cost allocation with auto approval');
+    validateTenantOwnership(requesterTenantId, transaction, 'Create transaction');
+    materialAllocationsData.forEach(matAlloc => {
+      validateTenantOwnership(requesterTenantId, matAlloc, 'Create material allocation');
+    });
+
+    // CRITICAL FIX: Use database transaction to ensure atomicity and prevent partial failures
+    return await db.transaction(async (tx) => {
+      try {
+        // Step 1: Create the cost allocation
+        const [newCostAllocation] = await tx
+          .insert(costAllocations)
+          .values(costAllocation)
+          .returning();
+
+        // Step 2: Create material allocations if provided
+        if (materialAllocationsData.length > 0) {
+          const materialAllocationsWithCostId = materialAllocationsData.map(allocation => ({
+            ...allocation,
+            costAllocationId: newCostAllocation.id,
+          }));
+
+          await tx
+            .insert(materialAllocations)
+            .values(materialAllocationsWithCostId);
+        }
+
+        // Step 3: If auto-approved, update project consumed amount and create transaction
+        if (newCostAllocation.status === 'approved') {
+          // Update project consumed amount atomically using SQL
+          const [updatedProject] = await tx
+            .update(projects)
+            .set({
+              consumedAmount: sql`${projects.consumedAmount}::numeric + ${newCostAllocation.totalCost}::numeric`,
+              updatedAt: new Date()
+            })
+            .where(and(
+              eq(projects.id, newCostAllocation.projectId),
+              eq(projects.tenantId, newCostAllocation.tenantId)
+            ))
+            .returning();
+
+          if (!updatedProject) {
+            throw new Error(`Project not found or access denied: ${newCostAllocation.projectId}`);
+          }
+
+          // Create expense transaction
+          const [newTransaction] = await tx
+            .insert(transactions)
+            .values({
+              ...transaction,
+              projectId: newCostAllocation.projectId,
+              userId: newCostAllocation.enteredBy,
+              type: "expense",
+              amount: newCostAllocation.totalCost,
+              tenantId: newCostAllocation.tenantId
+            })
+            .returning();
+
+          return {
+            costAllocation: newCostAllocation,
+            transaction: newTransaction,
+            updatedProject
+          };
+        }
+
+        // If pending approval, just return the cost allocation
+        return {
+          costAllocation: newCostAllocation
+        };
+      } catch (error) {
+        // Transaction will automatically rollback on any error
+        console.error('Atomic cost allocation failed:', error);
+        throw error;
+      }
+    });
+  }
+
   async updateCostAllocation(id: string, costAllocation: Partial<InsertCostAllocation>, tenantId: string): Promise<CostAllocation | undefined> {
     const [updatedCostAllocation] = await db
       .update(costAllocations)

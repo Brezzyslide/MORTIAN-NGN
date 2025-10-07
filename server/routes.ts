@@ -2328,39 +2328,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
       
-      // Create cost allocation with material allocations
-      const costAllocation = await storage.createCostAllocation(costAllocationData, materialAllocationsData, tenantId);
+      // Get line item info for transaction description
+      const lineItems = await storage.getLineItems(tenantId);
+      const lineItem = lineItems.find(li => li.id === costAllocationData.lineItemId);
+      
+      // CRITICAL FIX: Use atomic storage method to ensure transactional consistency
+      // This wraps allocation creation, transaction creation, and project update in a single database transaction
+      const result = await storage.createCostAllocationWithAutoApproval(
+        costAllocationData,
+        materialAllocationsData,
+        {
+          projectId: costAllocationData.projectId,
+          userId: costAllocationData.enteredBy,
+          type: "expense",
+          amount: costAllocationData.totalCost,
+          category: (lineItem?.category as any) || "miscellaneous",
+          description: `Cost Allocation: ${lineItem?.name || 'Unknown'} - Labour: ₦${parseFloat(costAllocationData.labourCost).toLocaleString()}, Materials: ₦${parseFloat(costAllocationData.materialCost).toLocaleString()}`,
+          tenantId,
+        },
+        tenantId
+      );
+      
+      const costAllocation = result.costAllocation;
       
       // Note: Draft allocations from individual material saves are not automatically deleted
       // They remain in draft status and can be manually cleaned up or filtered in the UI
-      
-      // If auto-approved, update project consumed amount and create transaction
-      if (costAllocation.status === 'approved') {
-        try {
-          // Update project consumed amount
-          const newConsumedAmount = parseFloat(project.consumedAmount) + parseFloat(costAllocation.totalCost);
-          await storage.updateProject(costAllocation.projectId, {
-            consumedAmount: newConsumedAmount.toString()
-          }, tenantId);
-          
-          // Create transaction record
-          const lineItems = await storage.getLineItems(tenantId);
-          const lineItem = lineItems.find(li => li.id === costAllocation.lineItemId);
-          
-          await storage.createTransaction({
-            projectId: costAllocation.projectId,
-            userId: costAllocation.enteredBy,
-            type: "expense",
-            amount: costAllocation.totalCost,
-            category: lineItem?.category || "miscellaneous",
-            description: `Cost Allocation: ${lineItem?.name || 'Unknown'} - Labour: ₦${parseFloat(costAllocation.labourCost).toLocaleString()}, Materials: ₦${parseFloat(costAllocation.materialCost).toLocaleString()}`,
-            tenantId,
-          }, tenantId);
-        } catch (autoApprovalError) {
-          console.error("Error handling auto-approved cost allocation:", autoApprovalError);
-          // Don't fail the cost allocation creation if transaction/update fails
-        }
-      }
       
       // Check and create budget alerts if thresholds are crossed
       try {
@@ -2551,49 +2543,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         requiresApproval = true;
       }
       
-      // Create the cost allocation
-      const costAllocation = await storage.createCostAllocation({
-        projectId,
-        lineItemId,
-        labourCost: "0", // No labour for individual material save
-        quantity: "1", // Default quantity for allocation record
-        unitCost: "0", // No unit cost for labour
-        materialCost: materialTotal.toString(),
-        totalCost: materialTotal.toString(),
-        dateIncurred: new Date(),
-        status: initialStatus,
-        tenantId,
-        changeOrderId: null,
-        enteredBy: userId, // Add the required enteredBy field
-      }, materialAllocationsData, tenantId);
+      // Get line item info for transaction description
+      const lineItems = await storage.getLineItems(tenantId);
+      const lineItem = lineItems.find(li => li.id === lineItemId);
       
-      // If auto-approved, update project consumed amount and create transaction
-      if (costAllocation.status === 'approved') {
-        try {
-          // Update project consumed amount
-          const newConsumedAmount = parseFloat(project.consumedAmount) + parseFloat(costAllocation.totalCost);
-          await storage.updateProject(costAllocation.projectId, {
-            consumedAmount: newConsumedAmount.toString()
-          }, tenantId);
-          
-          // Create transaction record
-          const lineItems = await storage.getLineItems(tenantId);
-          const lineItem = lineItems.find(li => li.id === costAllocation.lineItemId);
-          
-          await storage.createTransaction({
-            projectId: costAllocation.projectId,
-            userId: costAllocation.enteredBy,
-            type: "expense",
-            amount: costAllocation.totalCost,
-            category: lineItem?.category || "miscellaneous",
-            description: `Cost Allocation: ${lineItem?.name || 'Unknown'} - Materials: ₦${parseFloat(costAllocation.materialCost).toLocaleString()}`,
-            tenantId,
-          }, tenantId);
-        } catch (autoApprovalError) {
-          console.error("Error handling auto-approved cost allocation:", autoApprovalError);
-          // Don't fail the cost allocation creation if transaction/update fails
-        }
-      }
+      // CRITICAL FIX: Use atomic storage method to ensure transactional consistency
+      // This wraps allocation creation, transaction creation, and project update in a single database transaction
+      const result = await storage.createCostAllocationWithAutoApproval(
+        {
+          projectId,
+          lineItemId,
+          labourCost: "0", // No labour for individual material save
+          quantity: "1", // Default quantity for allocation record
+          unitCost: "0", // No unit cost for labour
+          materialCost: materialTotal.toString(),
+          totalCost: materialTotal.toString(),
+          dateIncurred: new Date(),
+          status: initialStatus,
+          tenantId,
+          changeOrderId: null,
+          enteredBy: userId,
+        },
+        materialAllocationsData,
+        {
+          projectId,
+          userId,
+          type: "expense",
+          amount: materialTotal.toString(),
+          category: (lineItem?.category as any) || "miscellaneous",
+          description: `Cost Allocation: ${lineItem?.name || 'Unknown'} - Materials: ₦${materialTotal.toLocaleString()}`,
+          tenantId,
+        },
+        tenantId
+      );
+      
+      const costAllocation = result.costAllocation;
       
       // Create audit log
       try {

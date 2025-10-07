@@ -65,16 +65,18 @@ export default function Sidebar() {
             <i className="fas fa-folder w-5"></i>
             <span>Projects</span>
           </Link>
-          <Link 
-            href="/allocations" 
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-              isActive('/allocations') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
-            }`}
-            data-testid="link-allocations"
-          >
-            <i className="fas fa-coins w-5"></i>
-            <span>Fund Allocation</span>
-          </Link>
+          <ProtectedComponent requiredRoles={['admin', 'team_leader']}>
+            <Link 
+              href="/allocations" 
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                isActive('/allocations') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+              }`}
+              data-testid="link-allocations"
+            >
+              <i className="fas fa-coins w-5"></i>
+              <span>Fund Allocation</span>
+            </Link>
+          </ProtectedComponent>
           <ProtectedComponent requiredPermission="canAccessCostEntry">
             <Link 
               href="/cost-entry" 
