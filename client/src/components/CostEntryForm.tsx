@@ -187,7 +187,7 @@ export default function CostEntryForm() {
   
   // Extract draft allocations from response and filter by line item
   const draftAllocations = (draftAllocationsData?.allocations || []).filter((alloc: any) => 
-    alloc.lineItem.id === watchedLineItemId
+    alloc.lineItem?.id === watchedLineItemId
   );
 
   // Budget impact validation mutation
