@@ -2276,29 +2276,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const budgetImpact = calcBudgetImpact(currentSpent, totalCost, totalBudget);
       
       // Determine initial status based on budget thresholds
-      // Non-admin users: auto-approve if within budget, pending if exceeds thresholds
-      // Admins: always auto-approve (they have authority to approve their own allocations)
-      const isAdminUser = user.role === 'admin';
-      
-      let initialStatus: 'approved' | 'pending' = isAdminUser ? 'approved' : 'pending';
-      let requiresApproval = !isAdminUser;
+      // Auto-approve if within budget, require approval only when exceeding thresholds
+      let initialStatus: 'approved' | 'pending' = 'approved';
+      let requiresApproval = false;
       let budgetValidationMessage = `Budget impact: ${budgetImpact.newSpentPercentage.toFixed(1)}% of total budget`;
       
       if (budgetImpact.willExceedCritical) {
         initialStatus = 'pending';
         requiresApproval = true;
-        budgetValidationMessage = `CRITICAL: This allocation would bring spending to ${budgetImpact.newSpentPercentage.toFixed(1)}% (>${BUDGET_THRESHOLDS.CRITICAL_THRESHOLD}%). Manager approval required.`;
+        budgetValidationMessage = `CRITICAL: This allocation would bring spending to ${budgetImpact.newSpentPercentage.toFixed(1)}% (>${BUDGET_THRESHOLDS.CRITICAL_THRESHOLD}%). Manager approval required for additional funds.`;
       } else if (budgetImpact.willExceedWarning) {
         initialStatus = 'pending';
         requiresApproval = true;
-        budgetValidationMessage = `WARNING: This allocation would bring spending to ${budgetImpact.newSpentPercentage.toFixed(1)}% (>${BUDGET_THRESHOLDS.WARNING_THRESHOLD}%). Manager approval required.`;
-      } else if (!isAdminUser) {
-        // Non-admin allocations within budget still need approval
-        initialStatus = 'pending';
-        requiresApproval = true;
-        budgetValidationMessage = `This allocation is within budget but requires manager approval.`;
+        budgetValidationMessage = `WARNING: This allocation would bring spending to ${budgetImpact.newSpentPercentage.toFixed(1)}% (>${BUDGET_THRESHOLDS.WARNING_THRESHOLD}%). Manager approval required for additional funds.`;
       } else {
-        // Admin allocations within budget are auto-approved
+        // Within budget - auto-approve
         budgetValidationMessage = `Approved: Budget impact ${budgetImpact.newSpentPercentage.toFixed(1)}% is within acceptable limits.`;
       }
       
@@ -2522,11 +2514,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const budgetImpact = calcBudgetImpact(currentSpent, materialTotal, totalBudget);
       
       // Determine initial status based on budget thresholds
-      // Admins can auto-approve their own allocations, non-admins need approval
-      const isAdminUser = user.role === 'admin';
-      
-      let initialStatus: 'approved' | 'pending' = isAdminUser ? 'approved' : 'pending';
-      let requiresApproval = !isAdminUser;
+      // Auto-approve if within budget, require approval only when exceeding thresholds
+      let initialStatus: 'approved' | 'pending' = 'approved';
+      let requiresApproval = false;
       
       if (budgetImpact.willExceedCritical) {
         initialStatus = 'pending';
