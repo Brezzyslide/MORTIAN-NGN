@@ -277,14 +277,7 @@ export default function FundAllocationPanel() {
                         ) : (
                           allUsers.map((usr) => (
                             <SelectItem key={usr.id} value={usr.id}>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">
-                                  {formatUserDisplayName(usr)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  ({usr.role})
-                                </span>
-                              </div>
+                              {formatUserDisplayName(usr)} ({usr.role})
                             </SelectItem>
                           ))
                         )}
@@ -352,14 +345,7 @@ export default function FundAllocationPanel() {
                           ) : (
                             teamMembers.map((member) => (
                               <SelectItem key={member.userId} value={member.userId}>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">
-                                    {formatUserDisplayName(member.user)}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    ({member.roleInTeam})
-                                  </span>
-                                </div>
+                                {formatUserDisplayName(member.user)} ({member.roleInTeam})
                               </SelectItem>
                             ))
                           )}
