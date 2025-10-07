@@ -2235,7 +2235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Cost allocations routes
   app.post('/api/cost-allocations', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = await getUserData(req);
+      const { userId, tenantId, user } = await getUserData(req);
       const { projectId, lineItemId, labourCost = 0, quantity, unitCost, materialAllocations = [], dateIncurred, draftAllocationIds = [] } = req.body;
       
       // Validation: Require at least one material OR labour entry
@@ -2269,8 +2269,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const budgetImpact = calcBudgetImpact(currentSpent, totalCost, totalBudget);
       
       // Determine initial status based on budget thresholds
-      let initialStatus: 'draft' | 'pending' = 'draft';
-      let requiresApproval = false;
+      // Non-admin users: auto-approve if within budget, pending if exceeds thresholds
+      // Admins: always auto-approve (they have authority to approve their own allocations)
+      const isAdminUser = user.role === 'admin';
+      
+      let initialStatus: 'approved' | 'pending' = isAdminUser ? 'approved' : 'pending';
+      let requiresApproval = !isAdminUser;
       let budgetValidationMessage = `Budget impact: ${budgetImpact.newSpentPercentage.toFixed(1)}% of total budget`;
       
       if (budgetImpact.willExceedCritical) {
@@ -2281,6 +2285,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         initialStatus = 'pending';
         requiresApproval = true;
         budgetValidationMessage = `WARNING: This allocation would bring spending to ${budgetImpact.newSpentPercentage.toFixed(1)}% (>${BUDGET_THRESHOLDS.WARNING_THRESHOLD}%). Manager approval required.`;
+      } else if (!isAdminUser) {
+        // Non-admin allocations within budget still need approval
+        initialStatus = 'pending';
+        requiresApproval = true;
+        budgetValidationMessage = `This allocation is within budget but requires manager approval.`;
+      } else {
+        // Admin allocations within budget are auto-approved
+        budgetValidationMessage = `Approved: Budget impact ${budgetImpact.newSpentPercentage.toFixed(1)}% is within acceptable limits.`;
       }
       
       // Legacy support for existing budget validation logic
@@ -2443,7 +2455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Individual material save endpoint
   app.post('/api/cost-allocations/material', isAuthenticated, authorize(['admin', 'team_leader', 'user']), async (req: any, res) => {
     try {
-      const { userId, tenantId } = await getUserData(req);
+      const { userId, tenantId, user } = await getUserData(req);
       const { projectId, lineItemId, materialId, quantity, unitPrice } = req.body;
       
       // Validation
@@ -2503,8 +2515,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const budgetImpact = calcBudgetImpact(currentSpent, materialTotal, totalBudget);
       
       // Determine initial status based on budget thresholds
-      let initialStatus: 'draft' | 'pending' = 'draft';
-      let requiresApproval = false;
+      // Admins can auto-approve their own allocations, non-admins need approval
+      const isAdminUser = user.role === 'admin';
+      
+      let initialStatus: 'approved' | 'pending' = isAdminUser ? 'approved' : 'pending';
+      let requiresApproval = !isAdminUser;
       
       if (budgetImpact.willExceedCritical) {
         initialStatus = 'pending';
