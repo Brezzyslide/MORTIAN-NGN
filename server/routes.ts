@@ -1169,6 +1169,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update project
       const updatedProject = await storage.updateProject(projectId, updateData, tenantId);
       
+      if (!updatedProject) {
+        return res.status(404).json({ message: "Project not found or update failed" });
+      }
+      
       // Create audit log
       await storage.createAuditLog({
         userId,
@@ -1236,7 +1240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create audit log
       await storage.createAuditLog({
         userId,
-        action: "project_budget_updated",
+        action: "project_updated",
         entityType: "project",
         entityId: id,
         projectId: id,

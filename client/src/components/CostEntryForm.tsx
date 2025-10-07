@@ -361,7 +361,7 @@ export default function CostEntryForm() {
         unitPrice: Number(allocation.unitPrice),
       })),
       // Include draft allocation IDs to delete after successful submission
-      draftAllocationIds: draftAllocations?.map(d => d.id) || [],
+      draftAllocationIds: draftAllocations?.map((d: any) => d.id) || [],
     };
 
     createCostAllocation.mutate(submissionData);
