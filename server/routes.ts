@@ -2334,6 +2334,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Note: Draft allocations from individual material saves are not automatically deleted
       // They remain in draft status and can be manually cleaned up or filtered in the UI
       
+      // If auto-approved, update project consumed amount and create transaction
+      if (costAllocation.status === 'approved') {
+        try {
+          // Update project consumed amount
+          const newConsumedAmount = parseFloat(project.consumedAmount) + parseFloat(costAllocation.totalCost);
+          await storage.updateProject(costAllocation.projectId, {
+            consumedAmount: newConsumedAmount.toString()
+          }, tenantId);
+          
+          // Create transaction record
+          const lineItems = await storage.getLineItems(tenantId);
+          const lineItem = lineItems.find(li => li.id === costAllocation.lineItemId);
+          
+          await storage.createTransaction({
+            projectId: costAllocation.projectId,
+            userId: costAllocation.enteredBy,
+            type: "expense",
+            amount: costAllocation.totalCost,
+            category: lineItem?.category || "miscellaneous",
+            description: `Cost Allocation: ${lineItem?.name || 'Unknown'} - Labour: ₦${parseFloat(costAllocation.labourCost).toLocaleString()}, Materials: ₦${parseFloat(costAllocation.materialCost).toLocaleString()}`,
+            tenantId,
+          }, tenantId);
+        } catch (autoApprovalError) {
+          console.error("Error handling auto-approved cost allocation:", autoApprovalError);
+          // Don't fail the cost allocation creation if transaction/update fails
+        }
+      }
+      
       // Check and create budget alerts if thresholds are crossed
       try {
         const createdAlerts = await storage.checkAndCreateBudgetAlerts(projectId, tenantId);
@@ -2344,9 +2372,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Error creating budget alerts:', alertError);
         // Don't fail the cost allocation creation if alert creation fails
       }
-      
-      // Note: Project consumed amount is only updated when cost allocation is approved through workflow
-      // This ensures proper approval controls for budget management
       
       // Create audit log
       await storage.createAuditLog({
@@ -2541,6 +2566,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         changeOrderId: null,
         enteredBy: userId, // Add the required enteredBy field
       }, materialAllocationsData, tenantId);
+      
+      // If auto-approved, update project consumed amount and create transaction
+      if (costAllocation.status === 'approved') {
+        try {
+          // Update project consumed amount
+          const newConsumedAmount = parseFloat(project.consumedAmount) + parseFloat(costAllocation.totalCost);
+          await storage.updateProject(costAllocation.projectId, {
+            consumedAmount: newConsumedAmount.toString()
+          }, tenantId);
+          
+          // Create transaction record
+          const lineItems = await storage.getLineItems(tenantId);
+          const lineItem = lineItems.find(li => li.id === costAllocation.lineItemId);
+          
+          await storage.createTransaction({
+            projectId: costAllocation.projectId,
+            userId: costAllocation.enteredBy,
+            type: "expense",
+            amount: costAllocation.totalCost,
+            category: lineItem?.category || "miscellaneous",
+            description: `Cost Allocation: ${lineItem?.name || 'Unknown'} - Materials: ₦${parseFloat(costAllocation.materialCost).toLocaleString()}`,
+            tenantId,
+          }, tenantId);
+        } catch (autoApprovalError) {
+          console.error("Error handling auto-approved cost allocation:", autoApprovalError);
+          // Don't fail the cost allocation creation if transaction/update fails
+        }
+      }
       
       // Create audit log
       try {
