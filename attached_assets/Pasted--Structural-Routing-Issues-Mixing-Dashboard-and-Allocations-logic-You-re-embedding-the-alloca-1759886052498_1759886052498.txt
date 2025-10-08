@@ -1,0 +1,69 @@
+🔎 Structural / Routing Issues
+
+Mixing Dashboard and Allocations logic
+
+You’re embedding the /allocations logic inside the Dashboard page with a location check.
+
+This makes the Dashboard overloaded with conditional page logic. As you add more modules, the file will become a mess and harder to debug.
+
+Better: break FundAllocationsPage into its own component and route to it directly.
+
+React Router v6 incompatibility
+
+You’re using component={() => <ProtectedRoute … />} in the Route definition. That syntax is React Router v5.
+
+In v6, you must use element={<ProtectedRoute component={…} />}. If you’ve upgraded, this route won’t even load.
+
+Location check brittle
+
+location === '/allocations' will fail if:
+
+The path has a trailing slash (/allocations/)
+
+The path has query params (/allocations?id=1)
+
+Safer to use useLocation().pathname.startsWith('/allocations').
+
+🎨 UI / UX Issues
+
+Non-responsive sidebar width
+
+<div className="w-64 fixed h-full"> locks the sidebar at 256px on all devices. On mobile/tablet this can break the layout.
+
+Unless you’ve got a collapse/hamburger mechanism elsewhere, this isn’t responsive.
+
+Icons inconsistency
+
+You’re using fas fa-coins. Most of your system uses Lucide React icons (lucide-react). Inconsistent icon systems lead to styling issues, font load bloat, and visual mismatch.
+
+Accessibility
+
+The <i className="fas fa-coins"> has no aria-label or screen reader text.
+
+Screen readers won’t announce it properly. Adding aria-hidden="true" with a text span helps.
+
+🔐 Security / Permissions Issues
+
+Double role checks (but inconsistent)
+
+Sidebar is protected by <ProtectedComponent requiredRoles={['admin','team_leader']}>.
+
+Inside Dashboard, you’re checking (isAdmin || isTeamLeader).
+
+If those two checks ever drift apart (e.g., one gets updated to include super_admin but not the other), you could expose a UI button without content, or vice versa.
+
+ProtectedRoute design
+
+You’re wrapping Dashboard in ProtectedRoute but also protecting components individually. This is overlapping responsibility and can create edge cases (e.g., user sees the route but content never loads).
+
+⚙️ Code Quality Issues
+
+Hardcoding roles in multiple places
+
+You’ve got ['admin','team_leader'] in the Sidebar and then (isAdmin || isTeamLeader) in the Dashboard.
+
+This is not DRY (don’t repeat yourself). Better: centralize role checks in a permissions utility (e.g., canAccess('fundAllocation', userRole)).
+
+Dashboard bloat
+
+If you continue embedding modules (CSV, Allocation Panel, etc.) into Dashboard based on path checks, your Dashboard file will quickly become thousands of lines long and brittle.
