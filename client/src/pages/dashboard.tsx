@@ -138,7 +138,6 @@ export default function Dashboard() {
               {projectId && 'Project Analytics'}
               {!projectId && location === '/' && 'Dashboard Overview'}
               {!projectId && location === '/projects' && 'Projects'}
-              {location === '/allocations' && 'Fund Allocation'}
               {location === '/cost-entry' && 'Cost Entry'}
               {location === '/revenue-entry' && 'Revenue Entry'}
               {location === '/transactions' && 'Transactions'}
@@ -156,7 +155,6 @@ export default function Dashboard() {
               {projectId && 'Detailed project metrics, budget utilization, and financial performance'}
               {!projectId && location === '/' && 'Manage your projects and fund allocations'}
               {!projectId && location === '/projects' && 'Create and manage project budgets'}
-              {location === '/allocations' && 'Allocate funds to projects and team members'}
               {location === '/cost-entry' && 'Enter construction costs with labour and material tracking'}
               {location === '/revenue-entry' && 'Record building sales and revenue'}
               {location === '/transactions' && 'Track expenses and revenue'}
@@ -238,18 +236,6 @@ export default function Dashboard() {
               <ProjectsList onEditProject={setEditingProject} />
             </div>
             <BudgetChart />
-          </>
-        )}
-
-        {/* Fund Allocation Page - Admins and Team Leaders */}
-        {location === '/allocations' && (isAdmin || isTeamLeader) && (
-          <>
-            <div className="mb-8">
-              <FundAllocationPanel />
-            </div>
-            <div className="mb-8">
-              <CsvImportExport />
-            </div>
           </>
         )}
 

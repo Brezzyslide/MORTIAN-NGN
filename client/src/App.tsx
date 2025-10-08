@@ -13,6 +13,7 @@ import ChangePassword from "@/pages/change-password";
 import TeamsList from "@/components/TeamsList";
 import LineItemsPage from "@/pages/LineItemsPage";
 import MaterialsPage from "@/pages/MaterialsPage";
+import AllocationsPage from "@/pages/allocations-page";
 
 function ProtectedRoute({ component: Component }: { component: any }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -59,8 +60,8 @@ function Router() {
       <Route path="/change-password" component={ChangePassword} />
       <Route path="/projects" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/projects/:id" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/allocations" component={() => <ProtectedRoute component={Dashboard} />} />
-      <Route path="/fund-allocation" component={() => <ProtectedRoute component={Dashboard} />} />
+      <Route path="/allocations" component={() => <ProtectedRoute component={AllocationsPage} />} />
+      <Route path="/fund-allocation" component={() => <ProtectedRoute component={AllocationsPage} />} />
       <Route path="/cost-entry" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/revenue-entry" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/transactions" component={() => <ProtectedRoute component={Dashboard} />} />
