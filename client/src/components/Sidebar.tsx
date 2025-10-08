@@ -65,18 +65,21 @@ export default function Sidebar() {
             <i className="fas fa-folder w-5"></i>
             <span>Projects</span>
           </Link>
-          <ProtectedComponent requiredRoles={['admin', 'team_leader']}>
+          {(normalizedRole === 'admin' || normalizedRole === 'team_leader') && (
             <Link 
               href="/allocations" 
               className={`flex items-center space-x-3 p-3 rounded-lg transition-colors pointer-events-auto cursor-pointer ${
                 isActive('/allocations') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
               }`}
               data-testid="link-allocations"
+              onClick={(e) => {
+                console.log('Fund Allocation link clicked!', e);
+              }}
             >
               <i className="fas fa-coins w-5"></i>
               <span>Fund Allocation</span>
             </Link>
-          </ProtectedComponent>
+          )}
           <ProtectedComponent requiredPermission="canAccessCostEntry">
             <Link 
               href="/cost-entry" 
