@@ -34,7 +34,11 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-64 sidebar-gradient text-white fixed h-full z-[9999] flex flex-col pointer-events-auto">
+    <aside 
+      className="w-64 sidebar-gradient text-white fixed h-full z-[9999] flex flex-col pointer-events-auto"
+      role="navigation"
+      aria-label="Main navigation sidebar"
+    >
       <div className="p-6 flex-shrink-0">
         <div className="flex items-center space-x-3 mb-8">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
@@ -62,7 +66,7 @@ export default function Sidebar() {
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto px-6 pb-6">
         {/* Navigation Menu */}
-        <nav className="space-y-2">
+        <nav className="space-y-2" aria-label="Primary navigation">
           <Link 
             href="/" 
             className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
@@ -70,7 +74,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-dashboard"
           >
-            <TrendingUp size={20} />
+            <TrendingUp size={20} aria-hidden="true" />
             <span>Dashboard</span>
           </Link>
           <Link 
@@ -80,7 +84,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-projects"
           >
-            <Folder size={20} />
+            <Folder size={20} aria-hidden="true" />
             <span>Projects</span>
           </Link>
           {canAccessFundAllocation() && (
@@ -91,7 +95,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-allocations"
             >
-              <Coins size={20} />
+              <Coins size={20} aria-hidden="true" />
               <span>Fund Allocation</span>
             </Link>
           )}
@@ -103,7 +107,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-cost-entry"
             >
-              <Calculator size={20} />
+              <Calculator size={20} aria-hidden="true" />
               <span>Cost Entry</span>
             </Link>
           </ProtectedComponent>
@@ -115,7 +119,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-revenue-entry"
             >
-              <Banknote size={20} />
+              <Banknote size={20} aria-hidden="true" />
               <span>Revenue Entry</span>
             </Link>
           </ProtectedComponent>
@@ -126,7 +130,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-project-costings"
           >
-            <ClipboardList size={20} />
+            <ClipboardList size={20} aria-hidden="true" />
             <span>Project Costings</span>
           </Link>
           <Link 
@@ -136,7 +140,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-transactions"
           >
-            <Receipt size={20} />
+            <Receipt size={20} aria-hidden="true" />
             <span>Transactions</span>
           </Link>
           <Link 
@@ -146,7 +150,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-analytics"
           >
-            <BarChart3 size={20} />
+            <BarChart3 size={20} aria-hidden="true" />
             <span>Analytics</span>
           </Link>
           <Link 
@@ -156,7 +160,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-audit"
           >
-            <ClipboardList size={20} />
+            <ClipboardList size={20} aria-hidden="true" />
             <span>Audit Log</span>
           </Link>
         </nav>
@@ -164,7 +168,7 @@ export default function Sidebar() {
         {/* Configuration */}
         <div className="mt-8 pt-6 border-t border-white/20">
           <h3 className="text-sm font-medium opacity-75 mb-3">Configuration</h3>
-          <nav className="space-y-2">
+          <nav className="space-y-2" aria-label="Configuration">
             <Link 
               href="/line-items" 
               className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
@@ -172,7 +176,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-line-items"
             >
-              <List size={20} />
+              <List size={20} aria-hidden="true" />
               <span>Line Items</span>
             </Link>
             <Link 
@@ -182,7 +186,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-materials"
             >
-              <Package size={20} />
+              <Package size={20} aria-hidden="true" />
               <span>Materials</span>
             </Link>
           </nav>
@@ -192,40 +196,42 @@ export default function Sidebar() {
         <ProtectedComponent requiredPermission="canAccessUserManagement">
           <div className="mt-8 pt-6 border-t border-white/20">
             <h3 className="text-sm font-medium opacity-75 mb-3">Management</h3>
-            <ProtectedComponent requiredPermission="canViewTeams">
+            <nav className="space-y-2" aria-label="Management">
+              <ProtectedComponent requiredPermission="canViewTeams">
+                <Link 
+                  href="/teams" 
+                  className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                    isActive('/teams') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+                  }`}
+                  data-testid="link-teams"
+                >
+                  <Network size={20} aria-hidden="true" />
+                  <span>Teams</span>
+                </Link>
+              </ProtectedComponent>
               <Link 
-                href="/teams" 
+                href="/users" 
                 className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                  isActive('/teams') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+                  isActive('/users') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
                 }`}
-                data-testid="link-teams"
+                data-testid="link-users"
               >
-                <Network size={20} />
-                <span>Teams</span>
+                <Users size={20} aria-hidden="true" />
+                <span>Team Members</span>
               </Link>
-            </ProtectedComponent>
-            <Link 
-              href="/users" 
-              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                isActive('/users') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
-              }`}
-              data-testid="link-users"
-            >
-              <Users size={20} />
-              <span>Team Members</span>
-            </Link>
-            <ProtectedComponent requiredPermission="canAccessPermissions">
-              <Link 
-                href="/permissions" 
-                className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                  isActive('/permissions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
-                }`}
-                data-testid="link-permissions"
-              >
-                <Shield size={20} />
-                <span>Permissions</span>
-              </Link>
-            </ProtectedComponent>
+              <ProtectedComponent requiredPermission="canAccessPermissions">
+                <Link 
+                  href="/permissions" 
+                  className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                    isActive('/permissions') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+                  }`}
+                  data-testid="link-permissions"
+                >
+                  <Shield size={20} aria-hidden="true" />
+                  <span>Permissions</span>
+                </Link>
+              </ProtectedComponent>
+            </nav>
           </div>
         </ProtectedComponent>
 
@@ -233,16 +239,18 @@ export default function Sidebar() {
         <ProtectedComponent requiredPermission="canAccessCompanyManagement">
           <div className="mt-8 pt-6 border-t border-white/20">
             <h3 className="text-sm font-medium opacity-75 mb-3">Console Management</h3>
-            <Link 
-              href="/companies" 
-              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                isActive('/companies') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
-              }`}
-              data-testid="link-companies"
-            >
-              <Building2 size={20} />
-              <span>Company Management</span>
-            </Link>
+            <nav className="space-y-2" aria-label="Console Management">
+              <Link 
+                href="/companies" 
+                className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+                  isActive('/companies') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
+                }`}
+                data-testid="link-companies"
+              >
+                <Building2 size={20} aria-hidden="true" />
+                <span>Company Management</span>
+              </Link>
+            </nav>
           </div>
         </ProtectedComponent>
 
@@ -253,11 +261,11 @@ export default function Sidebar() {
             className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors w-full"
             data-testid="button-logout"
           >
-            <LogOut size={20} />
+            <LogOut size={20} aria-hidden="true" />
             <span>Sign Out</span>
           </button>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }
