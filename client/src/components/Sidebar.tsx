@@ -16,7 +16,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-64 sidebar-gradient text-white fixed h-full z-10 flex flex-col">
+    <div className="w-64 sidebar-gradient text-white fixed h-full z-[100] flex flex-col">
       <div className="p-6 flex-shrink-0">
         <div className="flex items-center space-x-3 mb-8">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
