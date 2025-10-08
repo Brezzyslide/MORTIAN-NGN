@@ -41,7 +41,7 @@ import ChangeOrdersSummaryWidget from "@/components/ChangeOrdersSummaryWidget";
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
-  const { isTeamLeader, isAdmin } = usePermissions();
+  const { canAccessFundAllocation } = usePermissions();
   const [location, setLocation] = useLocation();
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
@@ -206,7 +206,7 @@ export default function Dashboard() {
                 <BudgetChart />
               </div>
             </div>
-            {(isAdmin || isTeamLeader) && (
+            {canAccessFundAllocation() && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 <div className="lg:col-span-2">
                   <FundAllocationPanel />

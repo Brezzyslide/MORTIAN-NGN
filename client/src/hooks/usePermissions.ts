@@ -1,6 +1,8 @@
 import { useAuth } from "./useAuth";
+import { ROLE_PERMISSIONS, hasPermission as checkPermission } from "@/config/permissions";
+import type { UserRole } from "@/types/permissions";
 
-export type UserRole = "console_manager" | "admin" | "team_leader" | "viewer" | "manager" | "user";
+export type { UserRole };
 
 // Sprint 5: Role-based permission system with legacy mapping
 export function usePermissions() {
@@ -106,6 +108,12 @@ export function usePermissions() {
     canWrite: () => ['admin', 'team_leader', 'user'].includes(normalizedRole),
     canRead: () => ['admin', 'team_leader', 'user', 'viewer'].includes(normalizedRole),
     canManage: () => ['admin'].includes(normalizedRole),
+    
+    // Centralized permission checking using config
+    hasPermission: (permission: keyof typeof ROLE_PERMISSIONS) => checkPermission(normalizedRole as UserRole, permission),
+    canAccessFundAllocation: () => checkPermission(normalizedRole as UserRole, 'FUND_ALLOCATION'),
+    canAccessBudgetAmendments: () => checkPermission(normalizedRole as UserRole, 'BUDGET_AMENDMENTS'),
+    canAccessChangeOrders: () => checkPermission(normalizedRole as UserRole, 'CHANGE_ORDERS'),
   };
 }
 

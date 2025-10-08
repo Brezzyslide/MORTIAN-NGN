@@ -6,9 +6,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
 export default function AllocationsPage() {
-  const { isAdmin, isTeamLeader } = usePermissions();
+  const { canAccessFundAllocation } = usePermissions();
 
-  if (!isAdmin && !isTeamLeader) {
+  if (!canAccessFundAllocation()) {
     return (
       <div className="min-h-screen flex bg-background">
         <Sidebar />
