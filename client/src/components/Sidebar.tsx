@@ -35,9 +35,10 @@ export default function Sidebar() {
 
   return (
     <aside 
-      className="w-64 sidebar-gradient text-white fixed h-full z-[9999] flex flex-col pointer-events-auto"
+      className="w-64 sidebar-gradient text-white fixed h-full z-[99999] flex flex-col pointer-events-auto"
       role="navigation"
       aria-label="Main navigation sidebar"
+      style={{ isolation: 'isolate' }}
     >
       <div className="p-6 flex-shrink-0">
         <div className="flex items-center space-x-3 mb-8">
