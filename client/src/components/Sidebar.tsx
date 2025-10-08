@@ -68,7 +68,7 @@ export default function Sidebar() {
           <ProtectedComponent requiredRoles={['admin', 'team_leader']}>
             <Link 
               href="/allocations" 
-              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
+              className={`flex items-center space-x-3 p-3 rounded-lg transition-colors pointer-events-auto cursor-pointer ${
                 isActive('/allocations') ? 'bg-white/20 text-white' : 'hover:bg-white/10'
               }`}
               data-testid="link-allocations"
