@@ -1,6 +1,24 @@
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions, ProtectedComponent } from "@/hooks/usePermissions";
 import { Link, useLocation } from "wouter";
+import { 
+  Network, 
+  Crown, 
+  TrendingUp, 
+  Folder, 
+  Coins, 
+  Calculator, 
+  Banknote, 
+  ClipboardList, 
+  Receipt, 
+  BarChart3, 
+  List, 
+  Package, 
+  Users, 
+  Shield, 
+  Building2, 
+  LogOut 
+} from "lucide-react";
 
 export default function Sidebar() {
   const { user } = useAuth();
@@ -20,7 +38,7 @@ export default function Sidebar() {
       <div className="p-6 flex-shrink-0">
         <div className="flex items-center space-x-3 mb-8">
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-            <i className="fas fa-project-diagram text-primary text-sm"></i>
+            <Network className="text-primary" size={16} />
           </div>
           <h1 className="text-xl font-semibold">ProjectFund</h1>
         </div>
@@ -28,7 +46,7 @@ export default function Sidebar() {
         {/* User Role Badge */}
         <div className="mb-6 p-3 bg-white/10 rounded-lg">
           <div className="flex items-center space-x-2">
-            <i className="fas fa-crown text-yellow-300"></i>
+            <Crown className="text-yellow-300" size={16} />
             <div>
               <p className="text-sm font-medium" data-testid="text-user-name">
                 {user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email || 'User'}
@@ -52,7 +70,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-dashboard"
           >
-            <i className="fas fa-chart-line w-5"></i>
+            <TrendingUp size={20} />
             <span>Dashboard</span>
           </Link>
           <Link 
@@ -62,7 +80,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-projects"
           >
-            <i className="fas fa-folder w-5"></i>
+            <Folder size={20} />
             <span>Projects</span>
           </Link>
           {canAccessFundAllocation() && (
@@ -73,7 +91,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-allocations"
             >
-              <i className="fas fa-coins w-5"></i>
+              <Coins size={20} />
               <span>Fund Allocation</span>
             </Link>
           )}
@@ -85,7 +103,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-cost-entry"
             >
-              <i className="fas fa-calculator w-5"></i>
+              <Calculator size={20} />
               <span>Cost Entry</span>
             </Link>
           </ProtectedComponent>
@@ -97,7 +115,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-revenue-entry"
             >
-              <i className="fas fa-money-bill-wave w-5"></i>
+              <Banknote size={20} />
               <span>Revenue Entry</span>
             </Link>
           </ProtectedComponent>
@@ -108,7 +126,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-project-costings"
           >
-            <i className="fas fa-list-alt w-5"></i>
+            <ClipboardList size={20} />
             <span>Project Costings</span>
           </Link>
           <Link 
@@ -118,7 +136,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-transactions"
           >
-            <i className="fas fa-receipt w-5"></i>
+            <Receipt size={20} />
             <span>Transactions</span>
           </Link>
           <Link 
@@ -128,7 +146,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-analytics"
           >
-            <i className="fas fa-analytics w-5"></i>
+            <BarChart3 size={20} />
             <span>Analytics</span>
           </Link>
           <Link 
@@ -138,7 +156,7 @@ export default function Sidebar() {
             }`}
             data-testid="link-audit"
           >
-            <i className="fas fa-clipboard-list w-5"></i>
+            <ClipboardList size={20} />
             <span>Audit Log</span>
           </Link>
         </nav>
@@ -154,7 +172,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-line-items"
             >
-              <i className="fas fa-list w-5"></i>
+              <List size={20} />
               <span>Line Items</span>
             </Link>
             <Link 
@@ -164,7 +182,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-materials"
             >
-              <i className="fas fa-boxes w-5"></i>
+              <Package size={20} />
               <span>Materials</span>
             </Link>
           </nav>
@@ -182,7 +200,7 @@ export default function Sidebar() {
                 }`}
                 data-testid="link-teams"
               >
-                <i className="fas fa-sitemap w-5"></i>
+                <Network size={20} />
                 <span>Teams</span>
               </Link>
             </ProtectedComponent>
@@ -193,7 +211,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-users"
             >
-              <i className="fas fa-users w-5"></i>
+              <Users size={20} />
               <span>Team Members</span>
             </Link>
             <ProtectedComponent requiredPermission="canAccessPermissions">
@@ -204,7 +222,7 @@ export default function Sidebar() {
                 }`}
                 data-testid="link-permissions"
               >
-                <i className="fas fa-shield-alt w-5"></i>
+                <Shield size={20} />
                 <span>Permissions</span>
               </Link>
             </ProtectedComponent>
@@ -222,7 +240,7 @@ export default function Sidebar() {
               }`}
               data-testid="link-companies"
             >
-              <i className="fas fa-building w-5"></i>
+              <Building2 size={20} />
               <span>Company Management</span>
             </Link>
           </div>
@@ -235,7 +253,7 @@ export default function Sidebar() {
             className="flex items-center space-x-3 p-3 rounded-lg hover:bg-white/10 transition-colors w-full"
             data-testid="button-logout"
           >
-            <i className="fas fa-sign-out-alt w-5"></i>
+            <LogOut size={20} />
             <span>Sign Out</span>
           </button>
         </div>
