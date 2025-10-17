@@ -14,6 +14,7 @@ import TeamsList from "@/components/TeamsList";
 import LineItemsPage from "@/pages/LineItemsPage";
 import MaterialsPage from "@/pages/MaterialsPage";
 import AllocationsPage from "@/pages/allocations-page";
+import UserCostingsReport from "@/pages/user-costings-report";
 
 function ProtectedRoute({ component: Component }: { component: any }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -78,6 +79,7 @@ function Router() {
       <Route path="/project-costings" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/line-items" component={() => <ProtectedRoute component={LineItemsPage} />} />
       <Route path="/materials" component={() => <ProtectedRoute component={MaterialsPage} />} />
+      <Route path="/reports/user-costings" component={() => <ProtectedRoute component={UserCostingsReport} />} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -206,6 +206,17 @@ export interface IStorage {
   createCostAllocation(costAllocation: InsertCostAllocation, materialAllocations: InsertMaterialAllocation[], requesterTenantId: string): Promise<CostAllocation>;
   updateCostAllocation(id: string, costAllocation: Partial<InsertCostAllocation>, tenantId: string): Promise<CostAllocation | undefined>;
 
+  // Reports
+  getUserCostingsReport(tenantId: string): Promise<Array<{
+    userId: string;
+    userName: string;
+    userEmail: string;
+    role: string;
+    transactionTotal: number;
+    costAllocationTotal: number;
+    totalSpending: number;
+  }>>;
+
   // Analytics operations
   getProjectStats(projectId: string, tenantId: string): Promise<{
     totalBudget: number;
@@ -1479,6 +1490,71 @@ export class DatabaseStorage implements IStorage {
       remainingBudget,
       activeProjects,
     };
+  }
+
+  async getUserCostingsReport(tenantId: string): Promise<Array<{
+    userId: string;
+    userName: string;
+    userEmail: string;
+    role: string;
+    transactionTotal: number;
+    costAllocationTotal: number;
+    totalSpending: number;
+  }>> {
+    // Get all users in the tenant
+    const allUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.tenantId, tenantId))
+      .orderBy(users.fullName);
+
+    const report = [];
+
+    for (const user of allUsers) {
+      // Get transaction spending (expenses only)
+      const [transactionResult] = await db
+        .select({
+          total: sum(transactions.amount),
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, user.id),
+            eq(transactions.tenantId, tenantId),
+            eq(transactions.type, "expense")
+          )
+        );
+
+      // Get cost allocation spending
+      const [costAllocationResult] = await db
+        .select({
+          total: sum(costAllocations.totalCost),
+        })
+        .from(costAllocations)
+        .where(
+          and(
+            eq(costAllocations.enteredBy, user.id),
+            eq(costAllocations.tenantId, tenantId),
+            eq(costAllocations.status, "approved")
+          )
+        );
+
+      const transactionTotal = parseFloat(transactionResult?.total || "0") || 0;
+      const costAllocationTotal = parseFloat(costAllocationResult?.total || "0") || 0;
+      const totalSpending = transactionTotal + costAllocationTotal;
+
+      report.push({
+        userId: user.id,
+        userName: user.fullName || "Unknown",
+        userEmail: user.email || "",
+        role: user.role || "user",
+        transactionTotal,
+        costAllocationTotal,
+        totalSpending,
+      });
+    }
+
+    return report;
   }
 
   async getLineItemAllocationBreakdown(tenantId: string): Promise<Array<{

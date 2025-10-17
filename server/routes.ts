@@ -1799,6 +1799,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User costings report endpoint
+  app.get('/api/reports/user-costings', isAuthenticated, async (req: any, res) => {
+    try {
+      const { tenantId } = await getUserData(req);
+      const report = await storage.getUserCostingsReport(tenantId);
+      
+      // Calculate grand total
+      const grandTotal = report.reduce((sum, user) => sum + user.totalSpending, 0);
+      
+      res.json({
+        users: report,
+        grandTotal,
+        userCount: report.length
+      });
+    } catch (error) {
+      console.error("Error fetching user costings report:", error);
+      res.status(500).json({ message: "Failed to fetch user costings report" });
+    }
+  });
+
   app.get('/api/analytics/project/:id', isAuthenticated, async (req: any, res) => {
     try {
       const projectId = req.params.id;
