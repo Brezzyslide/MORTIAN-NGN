@@ -158,6 +158,7 @@ export interface IStorage {
   getTransactionsForTeamLeader(leaderId: string, tenantId: string): Promise<Transaction[]>;
   getTransactionsByProject(projectId: string, tenantId: string): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction, requesterTenantId: string): Promise<Transaction>;
+  getUserFundsSummary(userId: string, tenantId: string): Promise<{ totalAllocated: number; totalSpent: number; remaining: number }>;
 
   // Fund transfer operations
   getFundTransfers(tenantId: string): Promise<FundTransfer[]>;
@@ -776,6 +777,51 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get transactions for team leaders: their team's transactions AND their own allocations
+  // Get user's allocated funds and spending summary
+  async getUserFundsSummary(userId: string, tenantId: string): Promise<{
+    totalAllocated: number;
+    totalSpent: number;
+    remaining: number;
+  }> {
+    // Get total allocated to this user
+    const [allocatedResult] = await db
+      .select({
+        totalAllocated: sum(fundAllocations.amount),
+      })
+      .from(fundAllocations)
+      .where(
+        and(
+          eq(fundAllocations.toUserId, userId),
+          eq(fundAllocations.tenantId, tenantId),
+          eq(fundAllocations.status, "approved")
+        )
+      );
+
+    // Get total spent by this user (expenses only, not allocations)
+    const [spentResult] = await db
+      .select({
+        totalSpent: sum(transactions.amount),
+      })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.tenantId, tenantId),
+          eq(transactions.type, "expense")
+        )
+      );
+
+    const totalAllocated = parseFloat(allocatedResult?.totalAllocated || "0") || 0;
+    const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
+    const remaining = totalAllocated - totalSpent;
+
+    return {
+      totalAllocated,
+      totalSpent,
+      remaining,
+    };
+  }
+
   async getTransactionsForTeamLeader(leaderId: string, tenantId: string): Promise<Transaction[]> {
     // Get team members for this team leader
     const teamMemberRecords = await db
@@ -794,6 +840,7 @@ export class DatabaseStorage implements IStorage {
     // Get transactions where:
     // 1. User is a team member (recipient)
     // 2. OR the allocation's fromUserId is the team leader (allocator)
+    // 3. OR the transaction's userId is the team leader (their own expenses/costings)
     const allTransactions = await db
       .select({
         id: transactions.id,
@@ -819,7 +866,9 @@ export class DatabaseStorage implements IStorage {
             // Team member transactions (where team members are recipients)
             memberIds.length > 0 ? inArray(transactions.userId, memberIds) : sql`false`,
             // Team leader's own allocations (where leader is the allocator)
-            eq(fundAllocations.fromUserId, leaderId)
+            eq(fundAllocations.fromUserId, leaderId),
+            // Team leader's own expenses/costings (where leader is the one creating the expense)
+            eq(transactions.userId, leaderId)
           )
         )
       )
