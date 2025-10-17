@@ -112,6 +112,14 @@ export default function FundAllocationPanel() {
     retry: false,
   });
 
+  // Auto-select team for team leaders when teams load
+  useEffect(() => {
+    if (!isAdmin && teams && teams.length > 0 && !selectedTeamId) {
+      // Auto-select the first team (team leaders typically manage one team)
+      form.setValue("teamId", teams[0].id);
+    }
+  }, [teams, isAdmin, selectedTeamId, form]);
+
   // Fetch members of selected team (for team leaders only)
   const { data: teamMembers, isLoading: membersLoading } = useQuery<TeamMember[]>({
     queryKey: ["/api/teams", selectedTeamId, "members"],
@@ -288,18 +296,19 @@ export default function FundAllocationPanel() {
                 )}
               />
             ) : (
-              /* Team Leader Flow: Select team then team member */
+              /* Team Leader Flow: Auto-select team, show team members */
               <>
+                {/* Team selector - shown as read-only with auto-selected team */}
                 <FormField
                   control={form.control}
                   name="teamId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Team</FormLabel>
-                      <Select onValueChange={handleTeamChange} value={field.value}>
+                      <Select onValueChange={handleTeamChange} value={field.value} disabled={teams && teams.length <= 1}>
                         <FormControl>
                           <SelectTrigger data-testid="select-team">
-                            <SelectValue placeholder="Select your team" />
+                            <SelectValue placeholder={teamsLoading ? "Loading your team..." : "Select your team"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -323,24 +332,35 @@ export default function FundAllocationPanel() {
                   )}
                 />
 
+                {/* Team member selector - populated from auto-selected team */}
                 <FormField
                   control={form.control}
                   name="toUserId"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Team Member</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} disabled={!selectedTeamId}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={!selectedTeamId || membersLoading}>
                         <FormControl>
                           <SelectTrigger data-testid="select-team-member">
-                            <SelectValue placeholder={selectedTeamId ? "Select a team member" : "Select a team first"} />
+                            <SelectValue 
+                              placeholder={
+                                !selectedTeamId 
+                                  ? "Loading team..." 
+                                  : membersLoading 
+                                  ? "Loading team members..." 
+                                  : teamMembers && teamMembers.length > 0
+                                  ? "Select a team member"
+                                  : "No members available"
+                              } 
+                            />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {membersLoading ? (
-                            <div className="p-2 text-center text-muted-foreground">Loading members...</div>
+                            <div className="p-2 text-center text-muted-foreground">Loading team members...</div>
                           ) : !teamMembers || teamMembers.length === 0 ? (
                             <div className="p-2 text-center text-muted-foreground">
-                              No members in this team
+                              No members in this team. Add members to your team first.
                             </div>
                           ) : (
                             teamMembers.map((member) => (
