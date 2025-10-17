@@ -11,6 +11,7 @@ interface TenantStats {
   activeProjects: number;
   completedProjects: number;
   netProfit: number;
+  remainingBudget: number;
 }
 
 interface ProjectStats {
@@ -184,16 +185,20 @@ export default function StatsCards({ projectId }: StatsCardsProps) {
               <p className={`text-2xl font-semibold mt-1 ${
                 projectId 
                   ? (projectStats?.remainingBudget || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                  : (tenantStats?.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                  : (tenantStats?.remainingBudget || 0) >= 0 ? 'text-green-600' : 'text-red-600'
               }`} data-testid="text-net-profit">
                 {projectId 
                   ? formatCurrency(projectStats?.remainingBudget || 0)
-                  : formatCurrency(tenantStats?.netProfit || 0)
+                  : formatCurrency(tenantStats?.remainingBudget || 0)
                 }
               </p>
             </div>
             <div className="p-3 bg-green-100 rounded-full">
-              <i className={`fas ${stats && stats.netProfit >= 0 ? 'fa-trending-up text-green-600' : 'fa-trending-down text-red-600'}`}></i>
+              <i className={`fas ${
+                projectId 
+                  ? (projectStats?.remainingBudget || 0) >= 0 ? 'fa-trending-up text-green-600' : 'fa-trending-down text-red-600'
+                  : (tenantStats?.remainingBudget || 0) >= 0 ? 'fa-trending-up text-green-600' : 'fa-trending-down text-red-600'
+              }`}></i>
             </div>
           </div>
           <div className="mt-4 flex items-center text-sm">

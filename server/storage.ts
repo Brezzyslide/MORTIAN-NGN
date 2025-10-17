@@ -1361,6 +1361,7 @@ export class DatabaseStorage implements IStorage {
     totalSpent: number;
     totalRevenue: number;
     netProfit: number;
+    remainingBudget: number;
     activeProjects: number;
   }> {
     let totalBudget = 0;
@@ -1468,12 +1469,14 @@ export class DatabaseStorage implements IStorage {
     const totalSpent = transactionSpent + costAllocationsSpent;
     const totalRevenue = parseFloat(revenueResult?.totalRevenue || "0") || 0;
     const netProfit = totalRevenue - totalSpent;
+    const remainingBudget = totalBudget - totalSpent;
 
     return {
       totalBudget,
       totalSpent,
       totalRevenue,
       netProfit,
+      remainingBudget,
       activeProjects,
     };
   }
