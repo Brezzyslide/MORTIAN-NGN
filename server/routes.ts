@@ -2364,7 +2364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         materialAllocationsData,
         {
           projectId: costAllocationData.projectId,
-          userId: costAllocationData.enteredBy,
+          userId: userId,
           type: "expense",
           amount: costAllocationData.totalCost,
           category: (lineItem?.category as any) || "miscellaneous",
