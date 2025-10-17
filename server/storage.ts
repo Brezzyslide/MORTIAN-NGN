@@ -155,6 +155,7 @@ export interface IStorage {
 
   // Transaction operations
   getTransactions(tenantId: string, filterUserId?: string): Promise<Transaction[]>;
+  getTransactionsForTeamLeader(leaderId: string, tenantId: string): Promise<Transaction[]>;
   getTransactionsByProject(projectId: string, tenantId: string): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction, requesterTenantId: string): Promise<Transaction>;
 
@@ -772,6 +773,59 @@ export class DatabaseStorage implements IStorage {
       .from(transactions)
       .where(and(...conditions))
       .orderBy(desc(transactions.createdAt));
+  }
+
+  // Get transactions for team leaders: their team's transactions AND their own allocations
+  async getTransactionsForTeamLeader(leaderId: string, tenantId: string): Promise<Transaction[]> {
+    // Get team members for this team leader
+    const teamMemberRecords = await db
+      .select({ userId: teamMembers.userId })
+      .from(teamMembers)
+      .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+      .where(
+        and(
+          eq(teams.leaderId, leaderId),
+          eq(teams.tenantId, tenantId)
+        )
+      );
+    
+    const memberIds = teamMemberRecords.map(m => m.userId);
+    
+    // Get transactions where:
+    // 1. User is a team member (recipient)
+    // 2. OR the allocation's fromUserId is the team leader (allocator)
+    const allTransactions = await db
+      .select({
+        id: transactions.id,
+        projectId: transactions.projectId,
+        userId: transactions.userId,
+        type: transactions.type,
+        amount: transactions.amount,
+        category: transactions.category,
+        description: transactions.description,
+        receiptUrl: transactions.receiptUrl,
+        allocationId: transactions.allocationId,
+        tenantId: transactions.tenantId,
+        status: transactions.status,
+        createdAt: transactions.createdAt,
+        updatedAt: transactions.updatedAt,
+      })
+      .from(transactions)
+      .leftJoin(fundAllocations, eq(transactions.allocationId, fundAllocations.id))
+      .where(
+        and(
+          eq(transactions.tenantId, tenantId),
+          or(
+            // Team member transactions (where team members are recipients)
+            memberIds.length > 0 ? inArray(transactions.userId, memberIds) : sql`false`,
+            // Team leader's own allocations (where leader is the allocator)
+            eq(fundAllocations.fromUserId, leaderId)
+          )
+        )
+      )
+      .orderBy(desc(transactions.createdAt));
+    
+    return allTransactions;
   }
 
   async getTransactionsByProject(projectId: string, tenantId: string): Promise<Transaction[]> {

@@ -1655,8 +1655,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Role-based filtering: 
       // - Admins see all tenant transactions
-      // - Team leaders see only transactions allocated to them
-      const transactions = await storage.getTransactions(tenantId, user.role === 'admin' ? undefined : userId);
+      // - Team leaders see transactions for their team members AND their own allocations
+      // - Users see only their own transactions
+      let transactions;
+      
+      if (user.role === 'admin') {
+        // Admins see all tenant transactions
+        transactions = await storage.getTransactions(tenantId);
+      } else if (user.role === 'team_leader') {
+        // Team leaders see their team's transactions AND their own allocations
+        transactions = await storage.getTransactionsForTeamLeader(userId, tenantId);
+      } else {
+        // Regular users see only their own transactions
+        transactions = await storage.getTransactions(tenantId, userId);
+      }
+      
       res.json(transactions);
     } catch (error) {
       console.error("Error fetching transactions:", error);
