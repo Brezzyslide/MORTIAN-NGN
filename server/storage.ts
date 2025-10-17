@@ -1506,7 +1506,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(users)
       .where(eq(users.tenantId, tenantId))
-      .orderBy(users.fullName);
+      .orderBy(users.firstName);
 
     const report = [];
 
@@ -1543,9 +1543,12 @@ export class DatabaseStorage implements IStorage {
       const costAllocationTotal = parseFloat(costAllocationResult?.total || "0") || 0;
       const totalSpending = transactionTotal + costAllocationTotal;
 
+      // Build full name from firstName and lastName
+      const userName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Unknown";
+
       report.push({
         userId: user.id,
-        userName: user.fullName || "Unknown",
+        userName,
         userEmail: user.email || "",
         role: user.role || "user",
         transactionTotal,

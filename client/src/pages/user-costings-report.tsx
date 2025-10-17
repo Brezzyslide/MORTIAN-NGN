@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -27,13 +28,15 @@ export default function UserCostingsReport() {
     queryKey: ["/api/reports/user-costings"],
   });
 
-  if (error) {
-    toast({
-      title: "Error",
-      description: "Failed to load user costings report",
-      variant: "destructive",
-    });
-  }
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load user costings report",
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
