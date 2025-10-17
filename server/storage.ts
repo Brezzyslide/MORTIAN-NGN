@@ -158,7 +158,7 @@ export interface IStorage {
   getTransactionsForTeamLeader(leaderId: string, tenantId: string): Promise<Transaction[]>;
   getTransactionsByProject(projectId: string, tenantId: string): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction, requesterTenantId: string): Promise<Transaction>;
-  getUserFundsSummary(userId: string, tenantId: string): Promise<{ totalAllocated: number; totalSpent: number; remaining: number }>;
+  getUserFundsSummary(userId: string, tenantId: string): Promise<{ totalAllocated: number; totalSpent: number; totalAllocatedToOthers: number; totalSpentBySubordinates: number; remaining: number }>;
 
   // Fund transfer operations
   getFundTransfers(tenantId: string): Promise<FundTransfer[]>;
@@ -777,13 +777,49 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get transactions for team leaders: their team's transactions AND their own allocations
-  // Get user's allocated funds and spending summary
+  // Recursive helper to get all descendant user IDs in allocation hierarchy
+  private async getAllSubordinateIds(
+    userId: string, 
+    tenantId: string, 
+    visited = new Set<string>(),
+    subordinates = new Set<string>()
+  ): Promise<Set<string>> {
+    if (visited.has(userId)) {
+      return subordinates; // Prevent infinite loops - already processed this node
+    }
+    visited.add(userId);
+
+    // Get direct subordinates
+    const directSubordinates = await db
+      .select({ userId: fundAllocations.toUserId })
+      .from(fundAllocations)
+      .where(
+        and(
+          eq(fundAllocations.fromUserId, userId),
+          eq(fundAllocations.tenantId, tenantId),
+          eq(fundAllocations.status, "approved")
+        )
+      );
+
+    // Add direct subordinates to the result set
+    for (const sub of directSubordinates) {
+      subordinates.add(sub.userId);
+      // Recursively get subordinates of subordinates
+      await this.getAllSubordinateIds(sub.userId, tenantId, visited, subordinates);
+    }
+
+    return subordinates;
+  }
+
+  // Get user's allocated funds and spending summary with full hierarchical calculation
   async getUserFundsSummary(userId: string, tenantId: string): Promise<{
     totalAllocated: number;
     totalSpent: number;
+    totalAllocatedToOthers: number;
+    totalSpentBySubordinates: number;
     remaining: number;
   }> {
-    // Get total allocated to this user
+    // Get total allocated TO this user (their budget)
     const [allocatedResult] = await db
       .select({
         totalAllocated: sum(fundAllocations.amount),
@@ -797,7 +833,21 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
-    // Get total spent by this user (expenses only, not allocations)
+    // Get total allocated FROM this user to others (distributed funds)
+    const [allocatedToOthersResult] = await db
+      .select({
+        totalAllocatedToOthers: sum(fundAllocations.amount),
+      })
+      .from(fundAllocations)
+      .where(
+        and(
+          eq(fundAllocations.fromUserId, userId),
+          eq(fundAllocations.tenantId, tenantId),
+          eq(fundAllocations.status, "approved")
+        )
+      );
+
+    // Get total spent BY this user (their own expenses)
     const [spentResult] = await db
       .select({
         totalSpent: sum(transactions.amount),
@@ -811,13 +861,41 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
+    // Get ALL subordinate IDs (recursive - entire tree)
+    const allSubordinateIds = await this.getAllSubordinateIds(userId, tenantId);
+    const subordinateIdArray = Array.from(allSubordinateIds);
+
+    // Get total spent BY ALL subordinates (full hierarchy)
+    let totalSpentBySubordinates = 0;
+    if (subordinateIdArray.length > 0) {
+      const [subordinateSpentResult] = await db
+        .select({
+          totalSpent: sum(transactions.amount),
+        })
+        .from(transactions)
+        .where(
+          and(
+            inArray(transactions.userId, subordinateIdArray),
+            eq(transactions.tenantId, tenantId),
+            eq(transactions.type, "expense")
+          )
+        );
+      totalSpentBySubordinates = parseFloat(subordinateSpentResult?.totalSpent || "0") || 0;
+    }
+
     const totalAllocated = parseFloat(allocatedResult?.totalAllocated || "0") || 0;
+    const totalAllocatedToOthers = parseFloat(allocatedToOthersResult?.totalAllocatedToOthers || "0") || 0;
     const totalSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
-    const remaining = totalAllocated - totalSpent;
+    
+    // Remaining = Allocated - (Own spending + ALL subordinate spending)
+    // Note: We don't subtract totalAllocatedToOthers because subordinate spending already accounts for it
+    const remaining = totalAllocated - totalSpent - totalSpentBySubordinates;
 
     return {
       totalAllocated,
       totalSpent,
+      totalAllocatedToOthers,
+      totalSpentBySubordinates,
       remaining,
     };
   }
@@ -1321,40 +1399,54 @@ export class DatabaseStorage implements IStorage {
       activeProjects = allocationsResult?.uniqueProjects || 0;
     }
 
-    // Spending calculations (filtered by user role)
-    let spentConditions = [
-      eq(transactions.tenantId, tenantId),
-      eq(transactions.type, "expense")
-    ];
-    
-    if (userRole !== 'admin' && userId) {
-      // Non-admins only see their own spending
-      spentConditions.push(eq(transactions.userId, userId));
+    // Spending calculations (filtered by user role with hierarchical support)
+    let transactionSpent = 0;
+    let costAllocationsSpent = 0;
+
+    if (userRole === 'admin') {
+      // Admins see all tenant spending
+      const [spentResult] = await db
+        .select({
+          totalSpent: sum(transactions.amount),
+        })
+        .from(transactions)
+        .where(and(
+          eq(transactions.tenantId, tenantId),
+          eq(transactions.type, "expense")
+        ));
+      
+      const [costResult] = await db
+        .select({
+          totalCost: sum(costAllocations.totalCost),
+        })
+        .from(costAllocations)
+        .where(and(
+          eq(costAllocations.tenantId, tenantId),
+          eq(costAllocations.status, "approved")
+        ));
+
+      transactionSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
+      costAllocationsSpent = parseFloat(costResult?.totalCost || "0") || 0;
+    } else if (userId && (userRole === 'team_leader' || userRole === 'user')) {
+      // Team leaders and users: use hierarchical calculation
+      const fundsSummary = await this.getUserFundsSummary(userId, tenantId);
+      // Total spent includes own spending + subordinate spending
+      transactionSpent = fundsSummary.totalSpent + fundsSummary.totalSpentBySubordinates;
+      
+      // Also get cost allocations for this user
+      const [costResult] = await db
+        .select({
+          totalCost: sum(costAllocations.totalCost),
+        })
+        .from(costAllocations)
+        .where(and(
+          eq(costAllocations.enteredBy, userId),
+          eq(costAllocations.tenantId, tenantId),
+          eq(costAllocations.status, "approved")
+        ));
+      
+      costAllocationsSpent = parseFloat(costResult?.totalCost || "0") || 0;
     }
-
-    const [spentResult] = await db
-      .select({
-        totalSpent: sum(transactions.amount),
-      })
-      .from(transactions)
-      .where(and(...spentConditions));
-
-    // Cost allocations spending (filtered by user role)
-    let costConditions = [
-      eq(costAllocations.tenantId, tenantId),
-      eq(costAllocations.status, "approved")
-    ];
-    
-    if (userRole !== 'admin' && userId) {
-      costConditions.push(eq(costAllocations.enteredBy, userId));
-    }
-
-    const [costAllocationsResult] = await db
-      .select({
-        totalCost: sum(costAllocations.totalCost),
-      })
-      .from(costAllocations)
-      .where(and(...costConditions));
 
     // Revenue calculations (filtered by user role)
     let revenueConditions = [
@@ -1373,8 +1465,6 @@ export class DatabaseStorage implements IStorage {
       .from(transactions)
       .where(and(...revenueConditions));
 
-    const transactionSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
-    const costAllocationsSpent = parseFloat(costAllocationsResult?.totalCost || "0") || 0;
     const totalSpent = transactionSpent + costAllocationsSpent;
     const totalRevenue = parseFloat(revenueResult?.totalRevenue || "0") || 0;
     const netProfit = totalRevenue - totalSpent;

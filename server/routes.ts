@@ -1776,6 +1776,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Hierarchical funds summary endpoint
+  app.get('/api/funds/summary', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId, tenantId } = await getUserData(req);
+      const summary = await storage.getUserFundsSummary(userId, tenantId);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching funds summary:", error);
+      res.status(500).json({ message: "Failed to fetch funds summary" });
+    }
+  });
+
   app.get('/api/analytics/line-item-breakdown', isAuthenticated, async (req: any, res) => {
     try {
       const { tenantId } = await getUserData(req);
