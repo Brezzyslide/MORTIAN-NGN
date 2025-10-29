@@ -112,7 +112,7 @@ export default function StatsCards({ projectId }: StatsCardsProps) {
               <p className="text-muted-foreground text-sm font-medium uppercase tracking-wide">
                 {projectId ? 'Project Budget' : 'Total Budget'}
               </p>
-              <p className="text-3xl font-bold mt-2 bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent" data-testid="text-total-budget">
+              <p className="text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent" data-testid="text-total-budget">
                 {stats 
                   ? formatCurrency(projectId ? (projectStats?.budget || 0) : (tenantStats?.totalBudget || 0))
                   : '₦0'
@@ -163,14 +163,14 @@ export default function StatsCards({ projectId }: StatsCardsProps) {
               <p className="text-muted-foreground text-sm font-medium uppercase tracking-wide">
                 {projectId ? 'Transaction Count' : 'Active Projects'}
               </p>
-              <p className="text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent" data-testid="text-active-projects">
+              <p className="text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent" data-testid="text-active-projects">
                 {projectId 
                   ? (projectStats?.transactionCount || 0)
                   : (tenantStats?.activeProjects || 0)
                 }
               </p>
             </div>
-            <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 glow-primary">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 glow-primary">
               <FolderKanban className="w-6 h-6 text-white" />
             </div>
           </div>

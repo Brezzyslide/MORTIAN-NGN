@@ -3,40 +3,40 @@
 @tailwind utilities;
 
 :root {
-  --background: hsl(240, 10%, 98%);
-  --foreground: hsl(240, 10%, 10%);
+  --background: hsl(210, 20%, 98%);
+  --foreground: hsl(210, 15%, 10%);
   --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(240, 10%, 10%);
+  --card-foreground: hsl(210, 15%, 10%);
   --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(240, 10%, 10%);
-  --primary: hsl(262, 83%, 58%);
+  --popover-foreground: hsl(210, 15%, 10%);
+  --primary: hsl(210, 100%, 50%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --secondary: hsl(240, 5%, 96%);
-  --secondary-foreground: hsl(240, 6%, 10%);
-  --muted: hsl(240, 5%, 96%);
-  --muted-foreground: hsl(240, 4%, 46%);
-  --accent: hsl(262, 83%, 58%);
+  --secondary: hsl(210, 10%, 96%);
+  --secondary-foreground: hsl(210, 15%, 10%);
+  --muted: hsl(210, 10%, 96%);
+  --muted-foreground: hsl(210, 8%, 46%);
+  --accent: hsl(210, 100%, 50%);
   --accent-foreground: hsl(0, 0%, 100%);
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 100%);
-  --border: hsl(240, 6%, 90%);
-  --input: hsl(240, 6%, 90%);
-  --ring: hsl(262, 83%, 58%);
-  --chart-1: hsl(262, 83%, 58%);
+  --border: hsl(210, 15%, 90%);
+  --input: hsl(210, 15%, 90%);
+  --ring: hsl(210, 100%, 50%);
+  --chart-1: hsl(210, 100%, 50%);
   --chart-2: hsl(173, 58%, 39%);
   --chart-3: hsl(43, 96%, 56%);
-  --chart-4: hsl(197, 71%, 52%);
-  --chart-5: hsl(340, 75%, 55%);
+  --chart-4: hsl(190, 90%, 50%);
+  --chart-5: hsl(200, 75%, 55%);
   --sidebar: hsl(0, 0%, 100%);
-  --sidebar-foreground: hsl(240, 10%, 10%);
-  --sidebar-primary: hsl(262, 83%, 58%);
+  --sidebar-foreground: hsl(210, 15%, 10%);
+  --sidebar-primary: hsl(210, 100%, 50%);
   --sidebar-primary-foreground: hsl(0, 0%, 100%);
-  --sidebar-accent: hsl(262, 90%, 97%);
-  --sidebar-accent-foreground: hsl(262, 83%, 58%);
-  --sidebar-border: hsl(240, 6%, 90%);
-  --sidebar-ring: hsl(262, 83%, 58%);
-  --gradient-start: hsl(262, 83%, 58%);
-  --gradient-end: hsl(217, 91%, 60%);
+  --sidebar-accent: hsl(210, 90%, 97%);
+  --sidebar-accent-foreground: hsl(210, 100%, 50%);
+  --sidebar-border: hsl(210, 15%, 90%);
+  --sidebar-ring: hsl(210, 100%, 50%);
+  --gradient-start: hsl(210, 100%, 50%);
+  --gradient-end: hsl(190, 100%, 50%);
   --success: hsl(142, 76%, 36%);
   --warning: hsl(43, 96%, 56%);
   --info: hsl(197, 71%, 52%);
@@ -44,40 +44,40 @@
 }
 
 .dark {
-  --background: hsl(240, 10%, 6%);
-  --foreground: hsl(240, 5%, 96%);
-  --card: hsl(240, 8%, 10%);
-  --card-foreground: hsl(240, 5%, 96%);
-  --popover: hsl(240, 8%, 10%);
-  --popover-foreground: hsl(240, 5%, 96%);
-  --primary: hsl(262, 83%, 58%);
+  --background: hsl(210, 20%, 6%);
+  --foreground: hsl(210, 10%, 96%);
+  --card: hsl(210, 15%, 10%);
+  --card-foreground: hsl(210, 10%, 96%);
+  --popover: hsl(210, 15%, 10%);
+  --popover-foreground: hsl(210, 10%, 96%);
+  --primary: hsl(210, 100%, 55%);
   --primary-foreground: hsl(0, 0%, 100%);
-  --secondary: hsl(240, 4%, 16%);
-  --secondary-foreground: hsl(240, 5%, 96%);
-  --muted: hsl(240, 4%, 16%);
-  --muted-foreground: hsl(240, 5%, 64%);
-  --accent: hsl(262, 83%, 58%);
+  --secondary: hsl(210, 10%, 16%);
+  --secondary-foreground: hsl(210, 10%, 96%);
+  --muted: hsl(210, 10%, 16%);
+  --muted-foreground: hsl(210, 8%, 64%);
+  --accent: hsl(210, 100%, 55%);
   --accent-foreground: hsl(0, 0%, 100%);
   --destructive: hsl(0, 84%, 60%);
   --destructive-foreground: hsl(0, 0%, 100%);
-  --border: hsl(240, 4%, 16%);
-  --input: hsl(240, 4%, 16%);
-  --ring: hsl(262, 83%, 58%);
-  --chart-1: hsl(262, 83%, 58%);
+  --border: hsl(210, 10%, 16%);
+  --input: hsl(210, 10%, 16%);
+  --ring: hsl(210, 100%, 55%);
+  --chart-1: hsl(210, 100%, 55%);
   --chart-2: hsl(173, 58%, 39%);
   --chart-3: hsl(43, 96%, 56%);
-  --chart-4: hsl(197, 71%, 52%);
-  --chart-5: hsl(340, 75%, 55%);
-  --sidebar: hsl(240, 8%, 10%);
-  --sidebar-foreground: hsl(240, 5%, 96%);
-  --sidebar-primary: hsl(262, 83%, 58%);
+  --chart-4: hsl(190, 90%, 50%);
+  --chart-5: hsl(200, 75%, 55%);
+  --sidebar: hsl(210, 15%, 10%);
+  --sidebar-foreground: hsl(210, 10%, 96%);
+  --sidebar-primary: hsl(210, 100%, 55%);
   --sidebar-primary-foreground: hsl(0, 0%, 100%);
-  --sidebar-accent: hsl(240, 4%, 16%);
-  --sidebar-accent-foreground: hsl(262, 83%, 58%);
-  --sidebar-border: hsl(240, 4%, 16%);
-  --sidebar-ring: hsl(262, 83%, 58%);
-  --gradient-start: hsl(262, 83%, 58%);
-  --gradient-end: hsl(217, 91%, 60%);
+  --sidebar-accent: hsl(210, 10%, 16%);
+  --sidebar-accent-foreground: hsl(210, 100%, 55%);
+  --sidebar-border: hsl(210, 10%, 16%);
+  --sidebar-ring: hsl(210, 100%, 55%);
+  --gradient-start: hsl(210, 100%, 50%);
+  --gradient-end: hsl(190, 100%, 50%);
   --success: hsl(142, 76%, 36%);
   --warning: hsl(43, 96%, 56%);
   --info: hsl(197, 71%, 52%);
@@ -119,8 +119,8 @@
 
   .gradient-card {
     background: linear-gradient(135deg, 
-      hsl(262, 83%, 58%) 0%, 
-      hsl(217, 91%, 60%) 100%);
+      hsl(210, 100%, 50%) 0%, 
+      hsl(190, 100%, 50%) 100%);
   }
 
   .gradient-text {
@@ -143,7 +143,7 @@
   }
 
   .glow-primary {
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+    box-shadow: 0 0 20px rgba(0, 119, 255, 0.4);
   }
 
   .glow-success {
@@ -212,13 +212,13 @@
   }
 
   .stat-card {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
-    border: 1px solid rgba(139, 92, 246, 0.2);
+    background: linear-gradient(135deg, rgba(0, 119, 255, 0.1) 0%, rgba(0, 191, 255, 0.1) 100%);
+    border: 1px solid rgba(0, 119, 255, 0.2);
   }
 
   .dark .stat-card {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: linear-gradient(135deg, rgba(0, 119, 255, 0.15) 0%, rgba(0, 191, 255, 0.15) 100%);
+    border: 1px solid rgba(0, 119, 255, 0.3);
   }
 
   .progress-gradient-success {
@@ -235,8 +235,8 @@
 
   .sidebar-gradient {
     background: linear-gradient(180deg, 
-      hsl(262, 83%, 58%) 0%, 
-      hsl(217, 91%, 60%) 100%);
+      hsl(210, 100%, 50%) 0%, 
+      hsl(190, 100%, 50%) 100%);
   }
 
   .shimmer {

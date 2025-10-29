@@ -8,7 +8,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Header with Login Button */}
       <header className="w-full p-6">
         <div className="max-w-7xl mx-auto flex justify-end">
@@ -27,9 +27,9 @@ export default function Home() {
       <main className="flex items-center justify-center min-h-[calc(100vh-120px)]">
         <div className="text-center">
           <h1 
-            className="text-8xl md:text-9xl lg:text-[12rem] font-black text-transparent bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text tracking-wider drop-shadow-2xl"
+            className="text-8xl md:text-9xl lg:text-[12rem] font-black text-transparent bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 bg-clip-text tracking-wider drop-shadow-2xl"
             style={{ 
-              textShadow: '0 0 40px rgba(59, 130, 246, 0.5)',
+              textShadow: '0 0 40px rgba(0, 119, 255, 0.5)',
               fontFamily: 'system-ui, -apple-system, sans-serif'
             }}
             data-testid="text-mortian"
@@ -44,9 +44,9 @@ export default function Home() {
           
           {/* Optional decorative elements */}
           <div className="mt-12 flex justify-center space-x-4">
-            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-            <div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse delay-100"></div>
-            <div className="w-3 h-3 bg-pink-500 rounded-full animate-pulse delay-200"></div>
+            <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse delay-100"></div>
+            <div className="w-3 h-3 bg-cyan-500 rounded-full animate-pulse delay-200"></div>
           </div>
         </div>
       </main>
