@@ -262,16 +262,16 @@ export default function ProjectAnalytics({ projectId }: ProjectAnalyticsProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Budget Remaining</p>
-                <p className={`text-2xl font-semibold mt-1 ${analytics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-project-profit">
-                  {formatCurrency(analytics.netProfit)}
+                <p className={`text-2xl font-semibold mt-1 ${analytics.remainingBudget >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-project-profit">
+                  {formatCurrency(analytics.remainingBudget)}
                 </p>
               </div>
-              <div className={`p-3 rounded-full ${analytics.netProfit >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                <Activity className={`w-5 h-5 ${analytics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+              <div className={`p-3 rounded-full ${analytics.remainingBudget >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                <Activity className={`w-5 h-5 ${analytics.remainingBudget >= 0 ? 'text-green-600' : 'text-red-600'}`} />
               </div>
             </div>
             <div className="mt-4 flex items-center text-sm">
-              <span className={`font-medium ${analytics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`font-medium ${analytics.remainingBudget >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 Available Funds
               </span>
             </div>
