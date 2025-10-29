@@ -235,8 +235,8 @@
 
   .sidebar-gradient {
     background: linear-gradient(180deg, 
-      hsl(210, 100%, 50%) 0%, 
-      hsl(190, 100%, 50%) 100%);
+      hsl(220, 13%, 18%) 0%, 
+      hsl(220, 13%, 13%) 100%);
   }
 
   .shimmer {
