@@ -1928,7 +1928,7 @@ export class DatabaseStorage implements IStorage {
     const results = await db
       .select({
         category: lineItems.category,
-        totalSpent: sum(costAllocations.totalCost),
+        totalSpent: sql<string>`SUM(${costAllocations.labourCost} + ${costAllocations.materialCost})`,
         labourCost: sum(costAllocations.labourCost),
         materialCost: sum(costAllocations.materialCost),
         allocationCount: count(costAllocations.id),
@@ -1937,7 +1937,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(lineItems, eq(costAllocations.lineItemId, lineItems.id))
       .where(and(...whereConditions))
       .groupBy(lineItems.category)
-      .orderBy(desc(sum(costAllocations.totalCost)));
+      .orderBy(desc(sql`SUM(${costAllocations.labourCost} + ${costAllocations.materialCost})`));
 
     return results.map(result => ({
       category: result.category,
