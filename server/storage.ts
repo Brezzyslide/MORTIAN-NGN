@@ -1713,7 +1713,7 @@ export class DatabaseStorage implements IStorage {
     remainingBudget: number;
     status: 'healthy' | 'warning' | 'critical';
   }>> {
-    // Simplified query to match working cost allocation access patterns
+    // Build where conditions for projects
     let whereConditions = [
       eq(projects.tenantId, tenantId),
       eq(projects.status, "active")
@@ -1724,10 +1724,17 @@ export class DatabaseStorage implements IStorage {
       whereConditions.push(eq(projects.id, projectId));
     }
 
-    // Simplified role filtering - focus on admin access and manager relationship
+    // Role-based filtering:
+    // - Admins see all projects
+    // - Team leaders and users see projects where they have fund allocations (received or given)
     if (userRole && !['console_manager', 'admin'].includes(userRole) && userId) {
       whereConditions.push(
-        sql`${projects.managerId} = ${userId}`
+        sql`EXISTS (
+          SELECT 1 FROM ${fundAllocations}
+          WHERE ${fundAllocations.projectId} = ${projects.id}
+          AND (${fundAllocations.toUserId} = ${userId} OR ${fundAllocations.fromUserId} = ${userId})
+          AND ${fundAllocations.tenantId} = ${tenantId}
+        )`
       );
     }
 
