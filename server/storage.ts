@@ -1744,7 +1744,8 @@ export class DatabaseStorage implements IStorage {
     // Get spending from both transactions and cost allocations for each project
     const budgetSummary = await Promise.all(
       projectsData.map(async (project) => {
-        // Get spending from transactions
+        // Get spending from transactions only (approved cost allocations create transactions automatically)
+        // NOTE: We don't add cost allocations separately because that would double count
         const [transactionSpent] = await db
           .select({
             amount: sum(transactions.amount),
@@ -1756,22 +1757,9 @@ export class DatabaseStorage implements IStorage {
             eq(transactions.type, "expense") // Only count expenses (NOT allocations - those are fund distributions)
           ));
 
-        // Get spending from cost allocations
-        const [costAllocationSpent] = await db
-          .select({
-            totalSpent: sum(costAllocations.totalCost),
-          })
-          .from(costAllocations)
-          .where(and(
-            eq(costAllocations.projectId, project.id),
-            eq(costAllocations.tenantId, tenantId),
-            eq(costAllocations.status, "approved") // Only count approved cost allocations
-          ));
-
         const totalBudget = parseFloat(project.budget) || 0;
         const transactionAmount = parseFloat(transactionSpent?.amount || "0") || 0;
-        const costAllocationAmount = parseFloat(costAllocationSpent?.totalSpent || "0") || 0;
-        const totalSpent = transactionAmount + costAllocationAmount;
+        const totalSpent = transactionAmount; // Only count transactions (cost allocations create transactions when approved)
         const spentPercentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
         const remainingBudget = totalBudget - totalSpent;
 
@@ -1805,16 +1793,37 @@ export class DatabaseStorage implements IStorage {
   }> {
     let whereConditions = [eq(costAllocations.tenantId, tenantId)];
     
-    // Simplified role filtering for broader access to cost data
+    // Role-based filtering with hierarchical support for team leaders and users
     if (userRole && !['console_manager', 'admin'].includes(userRole) && userId) {
-      whereConditions.push(
-        sql`(${costAllocations.enteredBy} = ${userId} OR EXISTS (
-          SELECT 1 FROM ${projects}
-          WHERE ${projects.id} = ${costAllocations.projectId}
-          AND ${projects.managerId} = ${userId}
-          AND ${projects.tenantId} = ${tenantId}
-        ))`
-      );
+      // Get all subordinate IDs (users who received fund allocations from this user)
+      const subordinateIds = await this.getAllSubordinateIds(userId, tenantId);
+      const subordinateIdArray = Array.from(subordinateIds);
+      
+      // Include cost allocations entered by:
+      // 1. The user themselves
+      // 2. Any of their subordinates in the allocation hierarchy
+      // 3. Projects they manage
+      if (subordinateIdArray.length > 0) {
+        whereConditions.push(
+          sql`(${costAllocations.enteredBy} = ${userId} 
+            OR ${costAllocations.enteredBy} IN (${sql.join(subordinateIdArray.map(id => sql`${id}`), sql`, `)})
+            OR EXISTS (
+              SELECT 1 FROM ${projects}
+              WHERE ${projects.id} = ${costAllocations.projectId}
+              AND ${projects.managerId} = ${userId}
+              AND ${projects.tenantId} = ${tenantId}
+            ))`
+        );
+      } else {
+        whereConditions.push(
+          sql`(${costAllocations.enteredBy} = ${userId} OR EXISTS (
+            SELECT 1 FROM ${projects}
+            WHERE ${projects.id} = ${costAllocations.projectId}
+            AND ${projects.managerId} = ${userId}
+            AND ${projects.tenantId} = ${tenantId}
+          ))`
+        );
+      }
     }
     
     if (filters?.startDate) {
@@ -1863,16 +1872,37 @@ export class DatabaseStorage implements IStorage {
   }>> {
     let whereConditions = [eq(costAllocations.tenantId, tenantId)];
     
-    // Simplified role filtering for broader access to cost data
+    // Role-based filtering with hierarchical support for team leaders and users
     if (userRole && !['console_manager', 'admin'].includes(userRole) && userId) {
-      whereConditions.push(
-        sql`(${costAllocations.enteredBy} = ${userId} OR EXISTS (
-          SELECT 1 FROM ${projects}
-          WHERE ${projects.id} = ${costAllocations.projectId}
-          AND ${projects.managerId} = ${userId}
-          AND ${projects.tenantId} = ${tenantId}
-        ))`
-      );
+      // Get all subordinate IDs (users who received fund allocations from this user)
+      const subordinateIds = await this.getAllSubordinateIds(userId, tenantId);
+      const subordinateIdArray = Array.from(subordinateIds);
+      
+      // Include cost allocations entered by:
+      // 1. The user themselves
+      // 2. Any of their subordinates in the allocation hierarchy
+      // 3. Projects they manage
+      if (subordinateIdArray.length > 0) {
+        whereConditions.push(
+          sql`(${costAllocations.enteredBy} = ${userId} 
+            OR ${costAllocations.enteredBy} IN (${sql.join(subordinateIdArray.map(id => sql`${id}`), sql`, `)})
+            OR EXISTS (
+              SELECT 1 FROM ${projects}
+              WHERE ${projects.id} = ${costAllocations.projectId}
+              AND ${projects.managerId} = ${userId}
+              AND ${projects.tenantId} = ${tenantId}
+            ))`
+        );
+      } else {
+        whereConditions.push(
+          sql`(${costAllocations.enteredBy} = ${userId} OR EXISTS (
+            SELECT 1 FROM ${projects}
+            WHERE ${projects.id} = ${costAllocations.projectId}
+            AND ${projects.managerId} = ${userId}
+            AND ${projects.tenantId} = ${tenantId}
+          ))`
+        );
+      }
     }
     
     if (filters?.startDate) {
