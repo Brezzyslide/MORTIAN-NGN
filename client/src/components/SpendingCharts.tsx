@@ -114,7 +114,13 @@ export default function SpendingCharts({ filters }: SpendingChartsProps) {
   const labourMaterialUrl = `/api/analytics/labour-material-split${queryParams ? `?${queryParams}` : ''}`;
   const { data: labourMaterialData, isLoading: isLoadingLabourMaterial, error: labourMaterialError } = useQuery<LabourMaterialSplit>({
     queryKey: ['labour-material-split', tenantId, queryParams],
-    queryFn: () => fetch(labourMaterialUrl).then(res => res.json()),
+    queryFn: async () => {
+      const res = await fetch(labourMaterialUrl);
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
@@ -124,7 +130,13 @@ export default function SpendingCharts({ filters }: SpendingChartsProps) {
   const categorySpendingUrl = `/api/analytics/category-spending${queryParams ? `?${queryParams}` : ''}`;
   const { data: categoryData, isLoading: isLoadingCategory, error: categoryError } = useQuery<CategorySpending[]>({
     queryKey: ['category-spending', tenantId, queryParams],
-    queryFn: () => fetch(categorySpendingUrl).then(res => res.json()),
+    queryFn: async () => {
+      const res = await fetch(categorySpendingUrl);
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
     enabled: Boolean(tenantId),
     retry: false,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates

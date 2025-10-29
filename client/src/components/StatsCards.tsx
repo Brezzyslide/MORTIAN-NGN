@@ -35,9 +35,15 @@ export default function StatsCards({ projectId }: StatsCardsProps) {
   
   const { data: projectStats, isLoading: isProjectLoading, error: projectError } = useQuery<ProjectStats>({
     queryKey: ['project-analytics', projectId],
-    queryFn: () => fetch(`/api/projects/${projectId}/analytics?_cb=${Date.now()}`, {
-      headers: { 'Cache-Control': 'no-cache' }
-    }).then(res => res.json()),
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/analytics?_cb=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    },
     enabled: Boolean(projectId),
     retry: false,
     staleTime: 0,
