@@ -1401,11 +1401,14 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Spending calculations (filtered by user role with hierarchical support)
+    // NOTE: We only count transactions, not cost allocations separately, because:
+    // 1. When a cost allocation is approved, it automatically creates a transaction
+    // 2. Counting both would result in double counting the same expense
+    // 3. Transactions table is the single source of truth for all expenses
     let transactionSpent = 0;
-    let costAllocationsSpent = 0;
 
     if (userRole === 'admin') {
-      // Admins see all tenant spending
+      // Admins see all tenant spending from transactions only
       const [spentResult] = await db
         .select({
           totalSpent: sum(transactions.amount),
@@ -1415,38 +1418,13 @@ export class DatabaseStorage implements IStorage {
           eq(transactions.tenantId, tenantId),
           eq(transactions.type, "expense")
         ));
-      
-      const [costResult] = await db
-        .select({
-          totalCost: sum(costAllocations.totalCost),
-        })
-        .from(costAllocations)
-        .where(and(
-          eq(costAllocations.tenantId, tenantId),
-          eq(costAllocations.status, "approved")
-        ));
 
       transactionSpent = parseFloat(spentResult?.totalSpent || "0") || 0;
-      costAllocationsSpent = parseFloat(costResult?.totalCost || "0") || 0;
     } else if (userId && (userRole === 'team_leader' || userRole === 'user')) {
       // Team leaders and users: use hierarchical calculation
       const fundsSummary = await this.getUserFundsSummary(userId, tenantId);
-      // Total spent includes own spending + subordinate spending
+      // Total spent includes own spending + subordinate spending (from transactions only)
       transactionSpent = fundsSummary.totalSpent + fundsSummary.totalSpentBySubordinates;
-      
-      // Also get cost allocations for this user
-      const [costResult] = await db
-        .select({
-          totalCost: sum(costAllocations.totalCost),
-        })
-        .from(costAllocations)
-        .where(and(
-          eq(costAllocations.enteredBy, userId),
-          eq(costAllocations.tenantId, tenantId),
-          eq(costAllocations.status, "approved")
-        ));
-      
-      costAllocationsSpent = parseFloat(costResult?.totalCost || "0") || 0;
     }
 
     // Revenue calculations (filtered by user role)
@@ -1466,7 +1444,7 @@ export class DatabaseStorage implements IStorage {
       .from(transactions)
       .where(and(...revenueConditions));
 
-    const totalSpent = transactionSpent + costAllocationsSpent;
+    const totalSpent = transactionSpent;
     const totalRevenue = parseFloat(revenueResult?.totalRevenue || "0") || 0;
     const netProfit = totalRevenue - totalSpent;
     const remainingBudget = totalBudget - totalSpent;
