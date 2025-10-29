@@ -36,20 +36,20 @@ export default function Sidebar() {
 
   return (
     <aside 
-      className="w-64 sidebar-gradient text-amber-400 fixed h-full z-[99999] flex flex-col pointer-events-auto shadow-2xl"
+      className="w-64 sidebar-gradient text-white fixed h-full z-[99999] flex flex-col pointer-events-auto shadow-2xl"
       role="navigation"
       aria-label="Main navigation sidebar"
       style={{ isolation: 'isolate' }}
     >
       <div className="p-6 flex-shrink-0">
         <div className="flex items-center space-x-3 mb-8 group animate-fade-in">
-          <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 border border-amber-400/30">
-            <Network className="text-amber-400" size={20} />
+          <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 border border-white/30">
+            <Network className="text-white" size={20} />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-amber-400">ProjectFund</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">ProjectFund</h1>
         </div>
         
-        <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-amber-400/20 hover:bg-white/15 transition-all duration-300 animate-slide-up">
+        <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 hover:bg-white/15 transition-all duration-300 animate-slide-up">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
               <Crown className="text-white" size={18} />
@@ -72,32 +72,32 @@ export default function Sidebar() {
             href="/" 
             className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
               isActive('/') 
-                ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                : 'hover:bg-white/10 hover:translate-x-1 text-white'
             }`}
             data-testid="link-dashboard"
           >
             <div className="flex items-center space-x-3">
-              <TrendingUp size={20} aria-hidden="true" className={isActive('/') ? 'text-amber-300' : 'text-amber-400/90'} />
+              <TrendingUp size={20} aria-hidden="true" className={isActive('/') ? 'text-white' : 'text-white/90'} />
               <span className="font-medium">Dashboard</span>
             </div>
-            {isActive('/') && <ChevronRight size={16} className="text-amber-400/70" />}
+            {isActive('/') && <ChevronRight size={16} className="text-white/70" />}
           </Link>
           
           <Link 
             href="/projects" 
             className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
               isActive('/projects') 
-                ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                : 'hover:bg-white/10 hover:translate-x-1 text-white'
             }`}
             data-testid="link-projects"
           >
             <div className="flex items-center space-x-3">
-              <Folder size={20} aria-hidden="true" className={isActive('/projects') ? 'text-amber-300' : 'text-amber-400/90'} />
+              <Folder size={20} aria-hidden="true" className={isActive('/projects') ? 'text-white' : 'text-white/90'} />
               <span className="font-medium">Projects</span>
             </div>
-            {isActive('/projects') && <ChevronRight size={16} className="text-amber-400/70" />}
+            {isActive('/projects') && <ChevronRight size={16} className="text-white/70" />}
           </Link>
           
           {canAccessFundAllocation() && (
@@ -105,16 +105,16 @@ export default function Sidebar() {
               href="/allocations" 
               className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 pointer-events-auto cursor-pointer ${
                 isActive('/allocations') 
-                  ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                  : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                  ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                  : 'hover:bg-white/10 hover:translate-x-1 text-white'
               }`}
               data-testid="link-allocations"
             >
               <div className="flex items-center space-x-3">
-                <Coins size={20} aria-hidden="true" className={isActive('/allocations') ? 'text-amber-300' : 'text-amber-400/90'} />
+                <Coins size={20} aria-hidden="true" className={isActive('/allocations') ? 'text-white' : 'text-white/90'} />
                 <span className="font-medium">Fund Allocation</span>
               </div>
-              {isActive('/allocations') && <ChevronRight size={16} className="text-amber-400/70" />}
+              {isActive('/allocations') && <ChevronRight size={16} className="text-white/70" />}
             </Link>
           )}
           
@@ -123,16 +123,16 @@ export default function Sidebar() {
               href="/cost-entry" 
               className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                 isActive('/cost-entry') 
-                  ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                  : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                  ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                  : 'hover:bg-white/10 hover:translate-x-1 text-white'
               }`}
               data-testid="link-cost-entry"
             >
               <div className="flex items-center space-x-3">
-                <Calculator size={20} aria-hidden="true" className={isActive('/cost-entry') ? 'text-amber-300' : 'text-amber-400/90'} />
+                <Calculator size={20} aria-hidden="true" className={isActive('/cost-entry') ? 'text-white' : 'text-white/90'} />
                 <span className="font-medium">Cost Entry</span>
               </div>
-              {isActive('/cost-entry') && <ChevronRight size={16} className="text-amber-400/70" />}
+              {isActive('/cost-entry') && <ChevronRight size={16} className="text-white/70" />}
             </Link>
           </ProtectedComponent>
           
@@ -141,16 +141,16 @@ export default function Sidebar() {
               href="/revenue-entry" 
               className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                 isActive('/revenue-entry') 
-                  ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                  : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                  ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                  : 'hover:bg-white/10 hover:translate-x-1 text-white'
               }`}
               data-testid="link-revenue-entry"
             >
               <div className="flex items-center space-x-3">
-                <Banknote size={20} aria-hidden="true" className={isActive('/revenue-entry') ? 'text-amber-300' : 'text-amber-400/90'} />
+                <Banknote size={20} aria-hidden="true" className={isActive('/revenue-entry') ? 'text-white' : 'text-white/90'} />
                 <span className="font-medium">Revenue Entry</span>
               </div>
-              {isActive('/revenue-entry') && <ChevronRight size={16} className="text-amber-400/70" />}
+              {isActive('/revenue-entry') && <ChevronRight size={16} className="text-white/70" />}
             </Link>
           </ProtectedComponent>
           
@@ -158,123 +158,123 @@ export default function Sidebar() {
             href="/project-costings" 
             className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
               isActive('/project-costings') 
-                ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                : 'hover:bg-white/10 hover:translate-x-1 text-white'
             }`}
             data-testid="link-project-costings"
           >
             <div className="flex items-center space-x-3">
-              <ClipboardList size={20} aria-hidden="true" className={isActive('/project-costings') ? 'text-amber-300' : 'text-amber-400/90'} />
+              <ClipboardList size={20} aria-hidden="true" className={isActive('/project-costings') ? 'text-white' : 'text-white/90'} />
               <span className="font-medium">Project Costings</span>
             </div>
-            {isActive('/project-costings') && <ChevronRight size={16} className="text-amber-400/70" />}
+            {isActive('/project-costings') && <ChevronRight size={16} className="text-white/70" />}
           </Link>
           
           <Link 
             href="/transactions" 
             className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
               isActive('/transactions') 
-                ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                : 'hover:bg-white/10 hover:translate-x-1 text-white'
             }`}
             data-testid="link-transactions"
           >
             <div className="flex items-center space-x-3">
-              <Receipt size={20} aria-hidden="true" className={isActive('/transactions') ? 'text-amber-300' : 'text-amber-400/90'} />
+              <Receipt size={20} aria-hidden="true" className={isActive('/transactions') ? 'text-white' : 'text-white/90'} />
               <span className="font-medium">Transactions</span>
             </div>
-            {isActive('/transactions') && <ChevronRight size={16} className="text-amber-400/70" />}
+            {isActive('/transactions') && <ChevronRight size={16} className="text-white/70" />}
           </Link>
           
           <Link 
             href="/analytics" 
             className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
               isActive('/analytics') 
-                ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                : 'hover:bg-white/10 hover:translate-x-1 text-white'
             }`}
             data-testid="link-analytics"
           >
             <div className="flex items-center space-x-3">
-              <BarChart3 size={20} aria-hidden="true" className={isActive('/analytics') ? 'text-amber-300' : 'text-amber-400/90'} />
+              <BarChart3 size={20} aria-hidden="true" className={isActive('/analytics') ? 'text-white' : 'text-white/90'} />
               <span className="font-medium">Analytics</span>
             </div>
-            {isActive('/analytics') && <ChevronRight size={16} className="text-amber-400/70" />}
+            {isActive('/analytics') && <ChevronRight size={16} className="text-white/70" />}
           </Link>
           
           <Link 
             href="/audit" 
             className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
               isActive('/audit') 
-                ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                : 'hover:bg-white/10 hover:translate-x-1 text-white'
             }`}
             data-testid="link-audit"
           >
             <div className="flex items-center space-x-3">
-              <ClipboardList size={20} aria-hidden="true" className={isActive('/audit') ? 'text-amber-300' : 'text-amber-400/90'} />
+              <ClipboardList size={20} aria-hidden="true" className={isActive('/audit') ? 'text-white' : 'text-white/90'} />
               <span className="font-medium">Audit Log</span>
             </div>
-            {isActive('/audit') && <ChevronRight size={16} className="text-amber-400/70" />}
+            {isActive('/audit') && <ChevronRight size={16} className="text-white/70" />}
           </Link>
         </nav>
         
-        <div className="mt-6 pt-6 border-t border-amber-400/20">
-          <h3 className="text-xs font-bold uppercase tracking-wider opacity-80 text-amber-300 mb-3 px-3">Configuration</h3>
+        <div className="mt-6 pt-6 border-t border-white/20">
+          <h3 className="text-xs font-bold uppercase tracking-wider opacity-80 text-white mb-3 px-3">Configuration</h3>
           <nav className="space-y-1.5" aria-label="Configuration">
             <Link 
               href="/line-items" 
               className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                 isActive('/line-items') 
-                  ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                  : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                  ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                  : 'hover:bg-white/10 hover:translate-x-1 text-white'
               }`}
               data-testid="link-line-items"
             >
               <div className="flex items-center space-x-3">
-                <List size={20} aria-hidden="true" className={isActive('/line-items') ? 'text-amber-300' : 'text-amber-400/90'} />
+                <List size={20} aria-hidden="true" className={isActive('/line-items') ? 'text-white' : 'text-white/90'} />
                 <span className="font-medium">Line Items</span>
               </div>
-              {isActive('/line-items') && <ChevronRight size={16} className="text-amber-400/70" />}
+              {isActive('/line-items') && <ChevronRight size={16} className="text-white/70" />}
             </Link>
             
             <Link 
               href="/materials" 
               className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                 isActive('/materials') 
-                  ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                  : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                  ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                  : 'hover:bg-white/10 hover:translate-x-1 text-white'
               }`}
               data-testid="link-materials"
             >
               <div className="flex items-center space-x-3">
-                <Package size={20} aria-hidden="true" className={isActive('/materials') ? 'text-amber-300' : 'text-amber-400/90'} />
+                <Package size={20} aria-hidden="true" className={isActive('/materials') ? 'text-white' : 'text-white/90'} />
                 <span className="font-medium">Materials</span>
               </div>
-              {isActive('/materials') && <ChevronRight size={16} className="text-amber-400/70" />}
+              {isActive('/materials') && <ChevronRight size={16} className="text-white/70" />}
             </Link>
           </nav>
         </div>
         
         <ProtectedComponent requiredPermission="canAccessUserManagement">
-          <div className="mt-6 pt-6 border-t border-amber-400/20">
-            <h3 className="text-xs font-bold uppercase tracking-wider opacity-80 text-amber-300 mb-3 px-3">Management</h3>
+          <div className="mt-6 pt-6 border-t border-white/20">
+            <h3 className="text-xs font-bold uppercase tracking-wider opacity-80 text-white mb-3 px-3">Management</h3>
             <nav className="space-y-1.5" aria-label="Management">
               <ProtectedComponent requiredPermission="canViewTeams">
                 <Link 
                   href="/teams" 
                   className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                     isActive('/teams') 
-                      ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                      : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                      ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                      : 'hover:bg-white/10 hover:translate-x-1 text-white'
                   }`}
                   data-testid="link-teams"
                 >
                   <div className="flex items-center space-x-3">
-                    <Network size={20} aria-hidden="true" className={isActive('/teams') ? 'text-amber-300' : 'text-amber-400/90'} />
+                    <Network size={20} aria-hidden="true" className={isActive('/teams') ? 'text-white' : 'text-white/90'} />
                     <span className="font-medium">Teams</span>
                   </div>
-                  {isActive('/teams') && <ChevronRight size={16} className="text-amber-400/70" />}
+                  {isActive('/teams') && <ChevronRight size={16} className="text-white/70" />}
                 </Link>
               </ProtectedComponent>
               
@@ -282,16 +282,16 @@ export default function Sidebar() {
                 href="/users" 
                 className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                   isActive('/users') 
-                    ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                    : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                    ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                    : 'hover:bg-white/10 hover:translate-x-1 text-white'
                 }`}
                 data-testid="link-users"
               >
                 <div className="flex items-center space-x-3">
-                  <Users size={20} aria-hidden="true" className={isActive('/users') ? 'text-amber-300' : 'text-amber-400/90'} />
+                  <Users size={20} aria-hidden="true" className={isActive('/users') ? 'text-white' : 'text-white/90'} />
                   <span className="font-medium">Team Members</span>
                 </div>
-                {isActive('/users') && <ChevronRight size={16} className="text-amber-400/70" />}
+                {isActive('/users') && <ChevronRight size={16} className="text-white/70" />}
               </Link>
               
               <ProtectedComponent requiredPermission="canAccessPermissions">
@@ -299,16 +299,16 @@ export default function Sidebar() {
                   href="/permissions" 
                   className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                     isActive('/permissions') 
-                      ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                      : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                      ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                      : 'hover:bg-white/10 hover:translate-x-1 text-white'
                   }`}
                   data-testid="link-permissions"
                 >
                   <div className="flex items-center space-x-3">
-                    <Shield size={20} aria-hidden="true" className={isActive('/permissions') ? 'text-amber-300' : 'text-amber-400/90'} />
+                    <Shield size={20} aria-hidden="true" className={isActive('/permissions') ? 'text-white' : 'text-white/90'} />
                     <span className="font-medium">Permissions</span>
                   </div>
-                  {isActive('/permissions') && <ChevronRight size={16} className="text-amber-400/70" />}
+                  {isActive('/permissions') && <ChevronRight size={16} className="text-white/70" />}
                 </Link>
               </ProtectedComponent>
             </nav>
@@ -316,29 +316,29 @@ export default function Sidebar() {
         </ProtectedComponent>
 
         <ProtectedComponent requiredPermission="canAccessCompanyManagement">
-          <div className="mt-6 pt-6 border-t border-amber-400/20">
-            <h3 className="text-xs font-bold uppercase tracking-wider opacity-80 text-amber-300 mb-3 px-3">Console Management</h3>
+          <div className="mt-6 pt-6 border-t border-white/20">
+            <h3 className="text-xs font-bold uppercase tracking-wider opacity-80 text-white mb-3 px-3">Console Management</h3>
             <nav className="space-y-1.5" aria-label="Console Management">
               <Link 
                 href="/companies" 
                 className={`group flex items-center justify-between p-3 rounded-xl transition-all duration-200 ${
                   isActive('/companies') 
-                    ? 'bg-white/25 backdrop-blur-sm text-amber-300 shadow-lg border border-amber-400/30' 
-                    : 'hover:bg-white/10 hover:translate-x-1 text-amber-400'
+                    ? 'bg-white/25 backdrop-blur-sm text-white shadow-lg border border-white/30' 
+                    : 'hover:bg-white/10 hover:translate-x-1 text-white'
                 }`}
                 data-testid="link-companies"
               >
                 <div className="flex items-center space-x-3">
-                  <Building2 size={20} aria-hidden="true" className={isActive('/companies') ? 'text-amber-300' : 'text-amber-400/90'} />
+                  <Building2 size={20} aria-hidden="true" className={isActive('/companies') ? 'text-white' : 'text-white/90'} />
                   <span className="font-medium">Company Management</span>
                 </div>
-                {isActive('/companies') && <ChevronRight size={16} className="text-amber-400/70" />}
+                {isActive('/companies') && <ChevronRight size={16} className="text-white/70" />}
               </Link>
             </nav>
           </div>
         </ProtectedComponent>
 
-        <div className="mt-6 pt-6 border-t border-amber-400/20">
+        <div className="mt-6 pt-6 border-t border-white/20">
           <button
             onClick={handleLogout}
             className="group flex items-center justify-between p-3 rounded-xl hover:bg-red-500/20 transition-all duration-200 w-full hover:translate-x-1 border border-transparent hover:border-red-400/30"
