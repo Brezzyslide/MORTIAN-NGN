@@ -1534,7 +1534,8 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Project not found');
     }
 
-    // Get total spent from both transactions and cost allocations
+    // Get total spent from transactions only (approved cost allocations create transactions automatically)
+    // NOTE: We don't add cost allocations separately because that would double count
     const [transactionSpent] = await db
       .select({
         amount: sum(transactions.amount),
@@ -1547,18 +1548,7 @@ export class DatabaseStorage implements IStorage {
         eq(transactions.type, "expense") // Only count expenses (NOT allocations - those are fund distributions)
       ));
 
-    const [costAllocationSpent] = await db
-      .select({
-        amount: sum(costAllocations.totalCost),
-      })
-      .from(costAllocations)
-      .where(and(
-        eq(costAllocations.projectId, projectId),
-        eq(costAllocations.tenantId, tenantId),
-        eq(costAllocations.status, "approved") // Only count approved cost allocations
-      ));
-
-    // Get detailed cost breakdown - labour vs materials
+    // Get detailed cost breakdown from cost allocations (for labour vs materials split)
     const costAllocationsWithMaterials = await db
       .select({
         costAllocation: costAllocations,
@@ -1568,33 +1558,28 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(materialAllocations, eq(costAllocations.id, materialAllocations.costAllocationId))
       .where(and(
         eq(costAllocations.projectId, projectId),
-        eq(costAllocations.tenantId, tenantId)
+        eq(costAllocations.tenantId, tenantId),
+        eq(costAllocations.status, "approved") // Only approved allocations
       ))
       .groupBy(costAllocations.id);
 
-    // Calculate cost breakdown
+    // Calculate cost breakdown from cost allocations
     let labourCost = 0;
     let materialsCost = 0;
-    let otherCost = 0;
 
     for (const allocation of costAllocationsWithMaterials) {
-      const allocationTotal = parseFloat(allocation.costAllocation.totalCost) || 0;
       const materials = parseFloat(allocation.materialTotal || "0") || 0;
       const labour = parseFloat(allocation.costAllocation.labourCost || "0") || 0;
       
       materialsCost += materials;
       labourCost += labour;
-      
-      // Other costs = total allocation cost - labour - materials
-      const other = allocationTotal - labour - materials;
-      if (other > 0) {
-        otherCost += other;
-      }
     }
 
-    // Add transaction expenses to "other" category
+    // Calculate total from transactions (single source of truth)
     const transactionAmount = parseFloat(transactionSpent?.amount || "0") || 0;
-    otherCost += transactionAmount;
+    
+    // "Other" is total expenses minus categorized labour and materials
+    const otherCost = transactionAmount - labourCost - materialsCost;
 
     const [revenueResult] = await db
       .select({
@@ -1608,8 +1593,7 @@ export class DatabaseStorage implements IStorage {
       ));
 
     const budget = parseFloat(project.budget) || 0;
-    const costAllocationAmount = parseFloat(costAllocationSpent?.amount || "0") || 0;
-    const totalSpent = transactionAmount + costAllocationAmount;
+    const totalSpent = transactionAmount; // Only count transactions (cost allocations create transactions when approved)
     const revenue = parseFloat(revenueResult?.totalRevenue || "0") || parseFloat(project.revenue || "0") || 0;
     const netProfit = revenue - totalSpent;
     const budgetUtilization = budget > 0 ? (totalSpent / budget) * 100 : 0;
