@@ -39,7 +39,7 @@ export default function Sidebar() {
       className="w-64 sidebar-gradient text-white fixed h-full z-[99999] flex flex-col pointer-events-auto shadow-2xl"
       role="navigation"
       aria-label="Main navigation sidebar"
-      style={{ isolation: 'isolate' }}
+      style={{ isolation: 'isolate', textShadow: '0 1px 3px rgba(0, 0, 0, 0.3)' }}
     >
       <div className="p-6 flex-shrink-0">
         <div className="flex items-center space-x-3 mb-8 group animate-fade-in">
