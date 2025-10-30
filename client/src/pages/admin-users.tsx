@@ -105,7 +105,7 @@ export default function AdminUsers() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    document.title = "User Management - ProjectFund";
+    document.title = "User Management - TrackIt Naija";
   }, []);
 
   // Get current user from auth context

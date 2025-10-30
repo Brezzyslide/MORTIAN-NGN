@@ -4,7 +4,7 @@ import { Link } from "wouter";
 
 export default function Home() {
   useEffect(() => {
-    document.title = "MORTIAN - Home";
+    document.title = "TrackIt Naija - Home";
   }, []);
 
   return (
@@ -23,7 +23,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Content - MORTIAN in the center */}
+      {/* Main Content - TrackIt Naija in the center */}
       <main className="flex items-center justify-center min-h-[calc(100vh-120px)]">
         <div className="text-center">
           <h1 
@@ -32,9 +32,9 @@ export default function Home() {
               textShadow: '0 0 40px rgba(0, 119, 255, 0.5)',
               fontFamily: 'system-ui, -apple-system, sans-serif'
             }}
-            data-testid="text-mortian"
+            data-testid="text-trackit-naija"
           >
-            MORTIAN
+            TrackIt Naija
           </h1>
           
           {/* Subtle subtitle */}

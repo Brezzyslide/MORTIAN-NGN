@@ -34,7 +34,7 @@ export default function Landing() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    document.title = "ProjectFund - Login";
+    document.title = "TrackIt Naija - Login";
   }, []);
 
   // Form setup
@@ -52,7 +52,7 @@ export default function Landing() {
     onSuccess: () => {
       toast({
         title: "Login Successful",
-        description: "Welcome to ProjectFund!",
+        description: "Welcome to TrackIt Naija!",
       });
       // Direct redirect to dashboard after successful login
       window.location.href = '/';
@@ -84,7 +84,7 @@ export default function Landing() {
             <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
               <Building2 className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-foreground">ProjectFund</h1>
+            <h1 className="text-4xl font-bold text-foreground">TrackIt Naija</h1>
           </div>
           <p className="text-xl text-muted-foreground">
             Multi-Tenant Hierarchical Budgeting System

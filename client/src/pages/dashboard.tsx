@@ -90,27 +90,27 @@ export default function Dashboard() {
 
   useEffect(() => {
     const titles = {
-      '/': 'Dashboard - ProjectFund',
-      '/projects': 'Projects - ProjectFund', 
-      '/allocations': 'Fund Allocation - ProjectFund',
-      '/cost-entry': 'Cost Entry - ProjectFund',
-      '/transactions': 'Transactions - ProjectFund',
-      '/analytics': 'Analytics - ProjectFund',
-      '/audit': 'Audit Log - ProjectFund',
-      '/users': 'Team Members - ProjectFund',
-      '/companies': 'Company Management - ProjectFund',
-      '/permissions': 'Permissions - ProjectFund',
-      '/budget-amendments': 'Budget Amendments - ProjectFund',
-      '/change-orders': 'Change Orders - ProjectFund',
-      '/budget-history': 'Budget History - ProjectFund',
-      '/project-costings': 'Project Costings - ProjectFund'
+      '/': 'Dashboard - TrackIt Naija',
+      '/projects': 'Projects - TrackIt Naija', 
+      '/allocations': 'Fund Allocation - TrackIt Naija',
+      '/cost-entry': 'Cost Entry - TrackIt Naija',
+      '/transactions': 'Transactions - TrackIt Naija',
+      '/analytics': 'Analytics - TrackIt Naija',
+      '/audit': 'Audit Log - TrackIt Naija',
+      '/users': 'Team Members - TrackIt Naija',
+      '/companies': 'Company Management - TrackIt Naija',
+      '/permissions': 'Permissions - TrackIt Naija',
+      '/budget-amendments': 'Budget Amendments - TrackIt Naija',
+      '/change-orders': 'Change Orders - TrackIt Naija',
+      '/budget-history': 'Budget History - TrackIt Naija',
+      '/project-costings': 'Project Costings - TrackIt Naija'
     };
     
     // Handle project-specific page title
     if (projectId) {
-      document.title = 'Project Analytics - ProjectFund';
+      document.title = 'Project Analytics - TrackIt Naija';
     } else {
-      document.title = titles[location as keyof typeof titles] || 'ProjectFund';
+      document.title = titles[location as keyof typeof titles] || 'TrackIt Naija';
     }
   }, [location, projectId]);
 

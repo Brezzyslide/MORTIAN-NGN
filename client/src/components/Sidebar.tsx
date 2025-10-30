@@ -46,7 +46,7 @@ export default function Sidebar() {
           <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 border border-white/30">
             <Network className="text-white" size={20} />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">ProjectFund</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">TrackIt Naija</h1>
         </div>
         
         <div className="mb-6 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 hover:bg-white/15 transition-all duration-300 animate-slide-up">

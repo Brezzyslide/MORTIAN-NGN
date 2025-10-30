@@ -34,7 +34,7 @@ export default function ChangePassword() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    document.title = "Change Password - ProjectFund";
+    document.title = "Change Password - TrackIt Naija";
     
     // Check if user has pending password change
     const pendingPasswordChange = sessionStorage.getItem('pendingPasswordChange');
@@ -104,7 +104,7 @@ export default function ChangePassword() {
             <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
               <Building2 className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">ProjectFund</h1>
+            <h1 className="text-2xl font-bold text-foreground">TrackIt Naija</h1>
           </div>
         </div>
 
