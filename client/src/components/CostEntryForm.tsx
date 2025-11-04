@@ -49,6 +49,17 @@ type CostEntryFormData = z.infer<typeof costEntrySchema>;
 
 // Category labels for line items
 const categoryLabels: Record<string, string> = {
+  utilities_setup: "Utilities Setup",
+  development_resources: "Development Resources",
+  property_development: "Property Development",
+  design_tools: "Design Tools",
+  testing_qa: "Testing & QA",
+  infrastructure: "Infrastructure",
+  marketing: "Marketing",
+  operations: "Operations",
+  legal_documentation: "Legal & Documentation",
+  property_management: "Property Management",
+  miscellaneous: "Miscellaneous",
   land_purchase: "Land Purchase",
   site_preparation: "Site Preparation", 
   foundation: "Foundation",
@@ -58,13 +69,6 @@ const categoryLabels: Record<string, string> = {
   plumbing: "Plumbing",
   finishing: "Finishing",
   external_works: "External Works",
-  development_resources: "Development Resources",
-  design_tools: "Design Tools",
-  testing_qa: "Testing & QA",
-  infrastructure: "Infrastructure",
-  marketing: "Marketing",
-  operations: "Operations",
-  miscellaneous: "Miscellaneous",
 };
 
 // Budget validation interface

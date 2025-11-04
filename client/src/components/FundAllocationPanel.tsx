@@ -41,13 +41,26 @@ const allocationSchema = z.object({
     message: "Amount must be a positive number",
   }),
   category: z.enum([
+    "utilities_setup",
     "development_resources",
+    "property_development",
     "design_tools",
     "testing_qa", 
     "infrastructure",
     "marketing",
     "operations",
-    "miscellaneous"
+    "legal_documentation",
+    "property_management",
+    "miscellaneous",
+    "land_purchase",
+    "site_preparation",
+    "foundation",
+    "structural",
+    "roofing",
+    "electrical",
+    "plumbing",
+    "finishing",
+    "external_works"
   ]),
   description: z.string().optional(),
 });
@@ -55,13 +68,26 @@ const allocationSchema = z.object({
 type AllocationFormData = z.infer<typeof allocationSchema>;
 
 const categoryLabels: Record<string, string> = {
+  utilities_setup: "Utilities Setup",
   development_resources: "Development Resources",
+  property_development: "Property Development",
   design_tools: "Design Tools", 
   testing_qa: "Testing & QA",
   infrastructure: "Infrastructure",
   marketing: "Marketing",
   operations: "Operations",
+  legal_documentation: "Legal & Documentation",
+  property_management: "Property Management",
   miscellaneous: "Miscellaneous",
+  land_purchase: "Land Purchase",
+  site_preparation: "Site Preparation",
+  foundation: "Foundation",
+  structural: "Structural",
+  roofing: "Roofing",
+  electrical: "Electrical",
+  plumbing: "Plumbing",
+  finishing: "Finishing",
+  external_works: "External Works",
 };
 
 // Helper function to format user display name
