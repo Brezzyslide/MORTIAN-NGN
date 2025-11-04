@@ -734,12 +734,19 @@ export default function CostEntryForm() {
                                             <SelectValue placeholder="Select material" />
                                           </SelectTrigger>
                                         </FormControl>
-                                        <SelectContent>
-                                          {materials && Array.isArray(materials) ? materials.map((material: any) => (
-                                            <SelectItem key={material.id} value={material.id}>
-                                              {material.name} ({material.unit})
-                                            </SelectItem>
-                                          )) : null}
+                                        <SelectContent className="max-h-[300px] overflow-y-auto">
+                                          {materials && Array.isArray(materials) ? (
+                                            <>
+                                              <div className="px-2 py-1.5 text-sm text-muted-foreground sticky top-0 bg-background border-b">
+                                                {materials.length} materials available (scroll to see all)
+                                              </div>
+                                              {materials.map((material: any) => (
+                                                <SelectItem key={material.id} value={material.id}>
+                                                  {material.name} ({material.unit})
+                                                </SelectItem>
+                                              ))}
+                                            </>
+                                          ) : null}
                                         </SelectContent>
                                       </Select>
                                       <FormMessage />
