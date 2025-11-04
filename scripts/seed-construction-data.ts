@@ -47,6 +47,49 @@ async function seedConstructionData() {
       description: string;
       tenantId: string;
     }> = [
+      // FOUNDATION - Core Submodules
+      { category: "foundation", name: "Excavation", description: "Foundation excavation works", tenantId: sampleTenantId },
+      { category: "foundation", name: "Filling", description: "Foundation filling and compaction", tenantId: sampleTenantId },
+      { category: "foundation", name: "Concrete", description: "Foundation concrete works", tenantId: sampleTenantId },
+      { category: "foundation", name: "Anti-termite", description: "Anti-termite treatment for foundation", tenantId: sampleTenantId },
+      
+      // STRUCTURAL (FRAME) - Core Submodules
+      { category: "structural", name: "Columns", description: "Structural columns and supports", tenantId: sampleTenantId },
+      { category: "structural", name: "Beams", description: "Structural beams and lintels", tenantId: sampleTenantId },
+      { category: "structural", name: "Reinforcement", description: "Steel reinforcement for structural elements", tenantId: sampleTenantId },
+      
+      // STRUCTURAL (WALLS) - Core Submodules
+      { category: "structural", name: "Masonry", description: "Blockwork and masonry walls", tenantId: sampleTenantId },
+      { category: "structural", name: "Lintels", description: "Lintels over openings", tenantId: sampleTenantId },
+      
+      // ROOFING - Core Submodules
+      { category: "roofing", name: "Trusses", description: "Roof trusses and timber work", tenantId: sampleTenantId },
+      { category: "roofing", name: "Aluminium", description: "Aluminium roofing sheets and accessories", tenantId: sampleTenantId },
+      { category: "roofing", name: "Waterproofing", description: "Roof waterproofing membrane and treatment", tenantId: sampleTenantId },
+      
+      // FINISHING - Core Submodules
+      { category: "finishing", name: "Plastering", description: "Wall and ceiling plastering works", tenantId: sampleTenantId },
+      { category: "finishing", name: "Painting", description: "Interior and exterior painting", tenantId: sampleTenantId },
+      { category: "finishing", name: "POP", description: "POP (Plaster of Paris) finishing and ceiling", tenantId: sampleTenantId },
+      { category: "finishing", name: "Flooring", description: "Floor tiles, screeding and finishing", tenantId: sampleTenantId },
+      
+      // ELECTRICAL - Core Submodules
+      { category: "electrical", name: "Panels", description: "Electrical distribution panels and switchboards", tenantId: sampleTenantId },
+      { category: "electrical", name: "Lighting", description: "Lighting fixtures and circuits", tenantId: sampleTenantId },
+      { category: "electrical", name: "Power", description: "Power circuits and socket outlets", tenantId: sampleTenantId },
+      { category: "electrical", name: "Fire Alarm", description: "Fire alarm and detection systems", tenantId: sampleTenantId },
+      
+      // PLUMBING - Core Submodules
+      { category: "plumbing", name: "Water Supply", description: "Water supply pipes and fittings", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Sanitary", description: "Sanitary fixtures and fittings", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Drainage", description: "Drainage and waste disposal systems", tenantId: sampleTenantId },
+      
+      // EXTERNAL WORKS - Core Submodules
+      { category: "external_works", name: "Fencing", description: "Perimeter fencing and boundary walls", tenantId: sampleTenantId },
+      { category: "external_works", name: "Gates", description: "Gates and entrance structures", tenantId: sampleTenantId },
+      { category: "external_works", name: "Borehole", description: "Borehole drilling and water systems", tenantId: sampleTenantId },
+      { category: "external_works", name: "Landscaping", description: "Landscaping and site development", tenantId: sampleTenantId },
+      
       // SITE PREPARATION & GROUNDWORK
       { category: "site_preparation", name: "Clearing of Site", description: "Clearing site of all trees, shrubs, bushes, grub up root and backfill void", tenantId: sampleTenantId },
       { category: "site_preparation", name: "Top Soil Excavation", description: "Top soil for preservation 150mm average depth", tenantId: sampleTenantId },
