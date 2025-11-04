@@ -3584,6 +3584,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Industry Templates - Populate for current tenant (Admin only)
+  app.post('/api/admin/populate-templates', isAuthenticated, authorize(['admin']), async (req: any, res) => {
+    try {
+      const { tenantId, userId } = await getUserData(req);
+      const { industry = 'Construction' } = req.body;
+      
+      // Populate industry templates for this tenant
+      const result = await storage.populateIndustryTemplates(tenantId, industry);
+      
+      // Create audit log
+      await storage.createAuditLog({
+        userId,
+        action: "templates_populated",
+        entityType: "system",
+        entityId: tenantId,
+        tenantId,
+        details: { industry, ...result },
+      }, tenantId);
+      
+      res.json({
+        message: "Templates populated successfully",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error populating templates:", error);
+      res.status(500).json({ message: "Failed to populate templates" });
+    }
+  });
+
   // Budget Alerts API endpoints
   app.get('/api/budget-alerts', isAuthenticated, authorize(['admin', 'team_leader']), async (req: any, res) => {
     try {

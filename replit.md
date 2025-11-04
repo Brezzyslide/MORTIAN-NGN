@@ -1,10 +1,32 @@
-# ProjectFund - Multi-Tenant Hierarchical Budgeting System
+# TrackIt Naija - Multi-Industry Project Analytics System
 
 ## Overview
 
-ProjectFund is a comprehensive multi-tenant project management and budgeting platform built with a modern full-stack architecture. The system implements hierarchical role-based access control with three distinct user levels: Managers, Team Leaders, and Users. It provides real-time analytics, fund allocation management, transaction tracking, and complete audit trails for project-based financial operations.
+TrackIt Naija is a comprehensive multi-tenant project management and budgeting platform specifically designed for Nigerian businesses, featuring hierarchical budget tracking in Nigerian Naira (₦). The system implements hierarchical role-based access control with three distinct user levels: Managers, Team Leaders, and Users. It provides real-time analytics, fund allocation management, transaction tracking, comprehensive construction BOQ (Bill of Quantities) data, business/operational categories, budget threshold approval workflow (80% warning, 95% critical), Excel/PDF export capabilities, and complete audit trails for project-based financial operations.
 
 The platform is designed to handle multiple tenants with isolated data, allowing organizations to manage their projects, allocate budgets, track expenses, and monitor financial performance through an intuitive dashboard interface.
+
+## Project Features
+
+### Comprehensive Construction Data
+- **284 Materials**: Includes construction materials (Cement, Sand, Blocks, Iron Rods, Roofing, Electrical, Plumbing, etc.) plus business materials (Marketing Brochures, Signage Boards, Access Gates, Site Fencing, Street Lighting)
+- **241 Line Items**: Covering 20 categories including construction-specific and business/operational categories
+- **20 Categories**:
+  - **Construction Categories (16)**: Site Preparation, Foundation, Structural, Roofing, Doors/Windows, Electrical, Plumbing, HVAC, Flooring, Wall Finishes, Painting, Ceiling, External Works, Landscaping, Fencing/Gates, Drainage
+  - **Business Categories (4)**: Utilities Setup, Property Development, Legal & Documentation, Property Management
+  
+### Budget Thresholds & Alerts
+- **80% Warning**: Alert when project budget reaches 80% utilization
+- **95% Critical**: Critical alert at 95% budget consumption
+- Auto-approval workflow based on budget impact thresholds
+- Real-time budget alerts with project-specific tracking
+
+### Industry Templates
+- Construction industry template with 284 materials and 241 line items
+- Real Estate template with business/operational focus
+- Manufacturing, Software Development, and Other industry templates
+- Automatic template population when new tenants are created
+- Admin API endpoint (`/api/admin/populate-templates`) for refreshing templates on existing tenants
 
 ## User Preferences
 
