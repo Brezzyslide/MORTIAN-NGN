@@ -365,8 +365,142 @@ async function seedConstructionData() {
       
       // PAINTING
       { name: "Dulux Emulsion Paint", unit: "m²", currentUnitPrice: "3250.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Meyer Emulsion Paint", unit: "m²", currentUnitPrice: "3250.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Wall Primer", unit: "litre", currentUnitPrice: "8500.00", supplier: "ColorMax", tenantId: sampleTenantId },
       { name: "Primer & Undercoat", unit: "litre", currentUnitPrice: "8500.00", supplier: "ColorMax", tenantId: sampleTenantId },
       { name: "Satin Paint Finish", unit: "litre", currentUnitPrice: "9500.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      
+      // ADDITIONAL FOUNDATION MATERIALS
+      { name: "Gravel", unit: "m³", currentUnitPrice: "22000.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Concrete Mix 1:3:6", unit: "m³", currentUnitPrice: "58900.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
+      { name: "Concrete Mix 1:2:4", unit: "m³", currentUnitPrice: "75000.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
+      { name: "Polythene Damp-Proof Membrane 1000g/m²", unit: "m²", currentUnitPrice: "220.00", supplier: "Building Materials Ltd", tenantId: sampleTenantId },
+      
+      // STRUCTURAL FRAME MATERIALS
+      { name: "Reinforced Concrete Grade 25", unit: "m³", currentUnitPrice: "111400.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
+      { name: "Reinforced Concrete Grade 25.5", unit: "m³", currentUnitPrice: "111400.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
+      
+      // WALLING MATERIALS
+      { name: "Hollow Sandcrete Blocks 225mm", unit: "m²", currentUnitPrice: "14400.00", supplier: "Block Industry", tenantId: sampleTenantId },
+      { name: "Water-Proof Cement Render (1:3)", unit: "m²", currentUnitPrice: "4800.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "Reinforcement Bars for Lintels", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      
+      // CARPENTRY & ROOF STRUCTURE
+      { name: "Treated Hardwood Purlins", unit: "m", currentUnitPrice: "970.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Treated Hardwood Rafters", unit: "m", currentUnitPrice: "1630.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Treated Hardwood Struts", unit: "m", currentUnitPrice: "1030.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Treated Hardwood Ties", unit: "m", currentUnitPrice: "3050.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Mild-Steel Roof Trusses", unit: "kg", currentUnitPrice: "1500.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Aluminium Long-Span Roofing Queensway Stucco 0.55mm", unit: "m²", currentUnitPrice: "14700.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "Bituminous Waterproofing SBS 4mm", unit: "m²", currentUnitPrice: "12500.00", supplier: "Waterproofing Systems", tenantId: sampleTenantId },
+      { name: "Polycarbonate Sheet Entrance Canopy", unit: "m²", currentUnitPrice: "18500.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      
+      // WINDOWS & DOORS - DETAILED
+      { name: "Anodised Aluminium Windows with 6mm Laminated Glass", unit: "m²", currentUnitPrice: "120000.00", supplier: "WindowWorks", tenantId: sampleTenantId },
+      { name: "Burglar Proof Bars", unit: "m²", currentUnitPrice: "25000.00", supplier: "Metal Fabricators", tenantId: sampleTenantId },
+      { name: "Flush Timber Doors Solid Core", unit: "Nr", currentUnitPrice: "320000.00", supplier: "DoorCraft", tenantId: sampleTenantId },
+      { name: "Steel Security Doors Single Leaf", unit: "Nr", currentUnitPrice: "566000.00", supplier: "Security Doors Ltd", tenantId: sampleTenantId },
+      { name: "Steel Security Doors Double Leaf", unit: "Nr", currentUnitPrice: "596000.00", supplier: "Security Doors Ltd", tenantId: sampleTenantId },
+      { name: "Sliding Aluminium Door Assembly", unit: "Nr", currentUnitPrice: "691200.00", supplier: "WindowWorks", tenantId: sampleTenantId },
+      { name: "Door Locks", unit: "Nr", currentUnitPrice: "12000.00", supplier: "Hardware Central", tenantId: sampleTenantId },
+      { name: "Door Handles", unit: "set", currentUnitPrice: "8500.00", supplier: "Hardware Central", tenantId: sampleTenantId },
+      { name: "Door Hinges", unit: "set", currentUnitPrice: "5000.00", supplier: "Hardware Central", tenantId: sampleTenantId },
+      
+      // WALL FINISHES - DETAILED
+      { name: "POP Screeding", unit: "m²", currentUnitPrice: "1560.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "Tyrolean Plaster Effect", unit: "m²", currentUnitPrice: "3500.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "Grooved Plaster Finish", unit: "m²", currentUnitPrice: "3500.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      
+      // FLOOR FINISHES - DETAILED  
+      { name: "Vitrified Porcelain Tiles Spanish Grade 1200x800mm", unit: "m²", currentUnitPrice: "48000.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      { name: "Granite Floor Tiles Treads", unit: "m²", currentUnitPrice: "69300.00", supplier: "Granite Masters", tenantId: sampleTenantId },
+      { name: "Granite Floor Tiles Risers", unit: "m", currentUnitPrice: "10400.00", supplier: "Granite Masters", tenantId: sampleTenantId },
+      { name: "Ceramic Tiles 300x300mm Anti-Slip", unit: "m²", currentUnitPrice: "48000.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      { name: "Cement Screed Bed 40mm", unit: "m²", currentUnitPrice: "2500.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "Skirting Tiles 100mm High", unit: "m", currentUnitPrice: "7200.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      
+      // CEILING FINISHES - DETAILED
+      { name: "Gypsum Board 600x600mm Mineral Fibre", unit: "m²", currentUnitPrice: "25000.00", supplier: "CeilingPro", tenantId: sampleTenantId },
+      { name: "Aluminium Ceiling Grid System", unit: "m²", currentUnitPrice: "8500.00", supplier: "CeilingPro", tenantId: sampleTenantId },
+      { name: "POP Cornices", unit: "m", currentUnitPrice: "1800.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "POP Angle Mouldings", unit: "m", currentUnitPrice: "1500.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "Ceiling Paint Finish", unit: "m²", currentUnitPrice: "2650.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      
+      // ELECTRICAL MATERIALS - DETAILED
+      { name: "NOCACO PVC/SWA Armoured Copper Cable 35mm²", unit: "m", currentUnitPrice: "36489.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "NOCACO PVC/SWA Armoured Copper Cable 16mm²", unit: "m", currentUnitPrice: "19271.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "NOCACO Copper Cable 2x1.5mm²", unit: "m", currentUnitPrice: "850.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "NOCACO Copper Cable 3x2.5mm²", unit: "m", currentUnitPrice: "1200.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "PVC Conduit 20mm", unit: "m", currentUnitPrice: "450.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "PVC Conduit 25mm", unit: "m", currentUnitPrice: "650.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "MCCB Distribution Panel", unit: "Nr", currentUnitPrice: "450000.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "MK Logic Switches", unit: "Nr", currentUnitPrice: "1050.00", supplier: "Philip", tenantId: sampleTenantId },
+      { name: "Philip Brand Switches", unit: "Nr", currentUnitPrice: "1050.00", supplier: "Philip", tenantId: sampleTenantId },
+      { name: "MK Logic Sockets", unit: "Nr", currentUnitPrice: "2000.00", supplier: "Philip", tenantId: sampleTenantId },
+      { name: "Thorn Spot Lighting", unit: "Nr", currentUnitPrice: "5800.00", supplier: "Thorn Lighting", tenantId: sampleTenantId },
+      { name: "Philip Spot Lighting", unit: "Nr", currentUnitPrice: "5800.00", supplier: "Philip Lighting", tenantId: sampleTenantId },
+      { name: "Bulkhead Lighting Fitting", unit: "Nr", currentUnitPrice: "4500.00", supplier: "Philip Lighting", tenantId: sampleTenantId },
+      { name: "Recessed Lighting Fitting", unit: "Nr", currentUnitPrice: "5500.00", supplier: "Philip Lighting", tenantId: sampleTenantId },
+      { name: "Ceiling Fan 3-Blade 1500mm", unit: "Nr", currentUnitPrice: "40000.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Copper Earthing Rods", unit: "Nr", currentUnitPrice: "5500.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Copper Earthing Tapes", unit: "m", currentUnitPrice: "4500.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Fire Alarm Detectors", unit: "Nr", currentUnitPrice: "18400.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "Fire Alarm Bells", unit: "Nr", currentUnitPrice: "24000.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "Fire Alarm Panel", unit: "Nr", currentUnitPrice: "550000.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "CO₂ Fire Extinguisher 6kg", unit: "Nr", currentUnitPrice: "42000.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "ABC Fire Extinguisher 5kg", unit: "Nr", currentUnitPrice: "33000.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      
+      // PLUMBING & MECHANICAL - DETAILED
+      { name: "Split Air-Conditioner 12000 BTU", unit: "Nr", currentUnitPrice: "520000.00", supplier: "HVAC Systems", tenantId: sampleTenantId },
+      { name: "Split Air-Conditioner 24000 BTU", unit: "Nr", currentUnitPrice: "850000.00", supplier: "HVAC Systems", tenantId: sampleTenantId },
+      { name: "High-Wall Expeller Fan Toilet", unit: "Nr", currentUnitPrice: "45000.00", supplier: "Xpelair", tenantId: sampleTenantId },
+      { name: "WC Close-Coupled Twyfords", unit: "Nr", currentUnitPrice: "620000.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Wash Basin Twyfords", unit: "Nr", currentUnitPrice: "125000.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Wall Mirrors", unit: "Nr", currentUnitPrice: "8000.00", supplier: "Glass Masters", tenantId: sampleTenantId },
+      { name: "Soap Dishes", unit: "Nr", currentUnitPrice: "3500.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Toilet Roll Holders", unit: "Nr", currentUnitPrice: "3500.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Stainless Steel Bidet Spray", unit: "Nr", currentUnitPrice: "6000.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "UPVC Pipes 13mm", unit: "m", currentUnitPrice: "950.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "UPVC Pipes 19mm", unit: "m", currentUnitPrice: "2000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "UPVC Pipes 25mm", unit: "m", currentUnitPrice: "3000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "UPVC Pipes 100mm", unit: "m", currentUnitPrice: "2500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "PPR Pipes 13-100mm", unit: "m", currentUnitPrice: "2200.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Pipe Elbow Fittings", unit: "Nr", currentUnitPrice: "600.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Pipe Tee Fittings", unit: "Nr", currentUnitPrice: "600.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Pipe Reducers", unit: "Nr", currentUnitPrice: "850.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Pipe Nipples", unit: "Nr", currentUnitPrice: "600.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Gate Valves", unit: "Nr", currentUnitPrice: "6500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Non-Return Valves", unit: "Nr", currentUnitPrice: "6000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Floor Drains", unit: "Nr", currentUnitPrice: "1500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Pipe Traps", unit: "Nr", currentUnitPrice: "2500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Tangit PVC Adhesive", unit: "tube", currentUnitPrice: "2500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Pipe Brackets", unit: "Nr", currentUnitPrice: "350.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Septic Tank Construction Materials", unit: "sum", currentUnitPrice: "850000.00", supplier: "Construction Services", tenantId: sampleTenantId },
+      { name: "Soakaway Construction Materials", unit: "sum", currentUnitPrice: "450000.00", supplier: "Construction Services", tenantId: sampleTenantId },
+      { name: "Borehole Equipment Complete", unit: "sum", currentUnitPrice: "800000.00", supplier: "Water Services", tenantId: sampleTenantId },
+      { name: "Submersible Pump", unit: "Nr", currentUnitPrice: "250000.00", supplier: "Water Services", tenantId: sampleTenantId },
+      { name: "Steel Stanchion for Tank", unit: "Nr", currentUnitPrice: "3000000.00", supplier: "Steel Structures Ltd", tenantId: sampleTenantId },
+      { name: "Water Storage Tank 5000L", unit: "Nr", currentUnitPrice: "1250000.00", supplier: "Tank Manufacturers", tenantId: sampleTenantId },
+      
+      // EXTERNAL WORKS & FENCING - DETAILED
+      { name: "Concrete for Fence Footings", unit: "m³", currentUnitPrice: "111400.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
+      { name: "Concrete for Fence Pillars", unit: "m³", currentUnitPrice: "111400.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
+      { name: "Steel Reinforcement for Fence", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Sandcrete Blocks 230mm for Fence", unit: "m²", currentUnitPrice: "14400.00", supplier: "Block Industry", tenantId: sampleTenantId },
+      { name: "Sandcrete Blocks 150mm for Fence", unit: "m²", currentUnitPrice: "11000.00", supplier: "Block Industry", tenantId: sampleTenantId },
+      { name: "Fence Rendering Materials", unit: "m²", currentUnitPrice: "4300.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "Fence Painting Materials", unit: "m²", currentUnitPrice: "3250.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Steel Sliding Gate Assembly", unit: "sum", currentUnitPrice: "1250000.00", supplier: "Metal Fabricators", tenantId: sampleTenantId },
+      { name: "Decorative Grooved Plaster for Fence", unit: "m²", currentUnitPrice: "3500.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      
+      // ANCILLARY MATERIALS
+      { name: "Screws", unit: "box", currentUnitPrice: "2500.00", supplier: "Hardware Central", tenantId: sampleTenantId },
+      { name: "Clips", unit: "box", currentUnitPrice: "1500.00", supplier: "Hardware Central", tenantId: sampleTenantId },
+      { name: "Pipe Hangers", unit: "Nr", currentUnitPrice: "500.00", supplier: "Hardware Central", tenantId: sampleTenantId },
+      { name: "Charcoal for Earthing", unit: "bag", currentUnitPrice: "3000.00", supplier: "Local Suppliers", tenantId: sampleTenantId },
+      { name: "Sealants", unit: "tube", currentUnitPrice: "2500.00", supplier: "Building Materials Ltd", tenantId: sampleTenantId },
+      { name: "Mastics", unit: "tube", currentUnitPrice: "2800.00", supplier: "Building Materials Ltd", tenantId: sampleTenantId },
+      { name: "Electrical Accessories Misc", unit: "set", currentUnitPrice: "15000.00", supplier: "ElectroMax", tenantId: sampleTenantId },
       
       // TILING & FLOORING
       { name: "Spanish Porcelain Tiles 1200x800mm", unit: "m²", currentUnitPrice: "48000.00", supplier: "TileWorld", tenantId: sampleTenantId },
