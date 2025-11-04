@@ -5,7 +5,7 @@ import { companies, lineItems, materials } from "../shared/schema";
 import { eq } from "drizzle-orm";
 
 async function seedConstructionData() {
-  console.log("🚀 Starting seed process for construction data...");
+  console.log("🚀 Starting seed process for construction data from BOQ...");
 
   // Create or find a sample company for seeding
   console.log("🏢 Setting up sample company...");
@@ -38,142 +38,416 @@ async function seedConstructionData() {
   const sampleTenantId = sampleCompany.id;
 
   try {
-    console.log("📦 Seeding line items...");
+    console.log("📦 Seeding line items from BOQ...");
     
-    // Comprehensive line items data - Construction lifecycle with existing categories  
+    // Comprehensive line items data - Based on MR AJAO TAYE PHILIPS BOQ
     const lineItemsData: Array<{
-      category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works" | "marketing";
+      category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works";
       name: string;
       description: string;
       tenantId: string;
     }> = [
-      // Land Purchase (includes Legal & Approvals)
-      { category: "land_purchase", name: "Land Purchase", description: "Acquisition of construction land", tenantId: sampleTenantId },
-      { category: "land_purchase", name: "Legal Fees", description: "Legal documentation and transfer fees", tenantId: sampleTenantId },
-      { category: "land_purchase", name: "Government Approvals", description: "Planning permits and government approvals", tenantId: sampleTenantId },
+      // SITE PREPARATION & GROUNDWORK
+      { category: "site_preparation", name: "Clearing of Site", description: "Clearing site of all trees, shrubs, bushes, grub up root and backfill void", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Top Soil Excavation", description: "Top soil for preservation 150mm average depth", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Trench Excavation", description: "Excavate trench for foundation, width > 0.30m maximum depth not exceeding 2.0m", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Pits Excavation", description: "Excavate pits for column bases 2m maximum depth", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Backfilling", description: "Backfilling with selected excavated material around foundation", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Disposal of Excavated Material", description: "Removal of surplus excavated material away from site", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Laterite Filling", description: "Filling to make up level over 250mm average thick obtained off site", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Hardcore Filling", description: "Stone boulders filling to make up levels not exceeding 150mm average thick", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Anti-Termite Treatment", description: "Apply Dieldrex anti-termite solution to sides and bottom of excavation", tenantId: sampleTenantId },
+      { category: "site_preparation", name: "Level and Compact", description: "Level and compact the bottom of excavation to receive concrete", tenantId: sampleTenantId },
       
-      // Site Preparation
-      { category: "site_preparation", name: "Site Clearing", description: "Clearing vegetation and debris from site", tenantId: sampleTenantId },
-      { category: "site_preparation", name: "Soil Test", description: "Soil testing and analysis", tenantId: sampleTenantId },
-      { category: "site_preparation", name: "Survey & Pegging", description: "Site surveying and boundary pegging", tenantId: sampleTenantId },
-      { category: "site_preparation", name: "Temporary Structures", description: "Site offices and temporary facilities", tenantId: sampleTenantId },
-      { category: "site_preparation", name: "Site Fencing", description: "Temporary site security fencing", tenantId: sampleTenantId },
+      // FOUNDATION
+      { category: "foundation", name: "Blinding Concrete", description: "Plain In-situ Concrete (1:3:6) 50mm thick blinding bed poured on earth or hardcore", tenantId: sampleTenantId },
+      { category: "foundation", name: "Column Base Blinding", description: "50mm thick blinding beneath column bases", tenantId: sampleTenantId },
+      { category: "foundation", name: "Column Base Concrete", description: "Reinforced Insitu Concrete Grade 25.5 for column bases", tenantId: sampleTenantId },
+      { category: "foundation", name: "Foundation Bed", description: "150mm thick reinforced concrete bed and steps", tenantId: sampleTenantId },
+      { category: "foundation", name: "Foundation Footing", description: "Reinforced concrete foundation footing", tenantId: sampleTenantId },
+      { category: "foundation", name: "Foundation Reinforcement", description: "High yield steel reinforcement bars 10-16mm diameter to BS 4449 grade 250", tenantId: sampleTenantId },
+      { category: "foundation", name: "Fabric Mesh", description: "Fabric mesh type A142; weight 2.22kg/m2 with 300mm lap at joints", tenantId: sampleTenantId },
+      { category: "foundation", name: "Column Base Formwork", description: "Marine plywood formwork for sides of column bases", tenantId: sampleTenantId },
+      { category: "foundation", name: "Damp Proof Course", description: "Cement and Sand (1:1) damp proof course 50mm x 230mm wide", tenantId: sampleTenantId },
+      { category: "foundation", name: "DPM", description: "1000mm gauge polythene sheet damp proof membrane laid on blinding", tenantId: sampleTenantId },
       
-      // Foundation
-      { category: "foundation", name: "Excavation", description: "Foundation excavation and earthworks", tenantId: sampleTenantId },
-      { category: "foundation", name: "Blinding Concrete", description: "Blinding concrete for foundation base", tenantId: sampleTenantId },
-      { category: "foundation", name: "Footings", description: "Foundation footings and strip foundations", tenantId: sampleTenantId },
-      { category: "foundation", name: "Damp Proof Course", description: "Damp proof course installation", tenantId: sampleTenantId },
-      { category: "foundation", name: "Reinforcement", description: "Steel reinforcement for foundation", tenantId: sampleTenantId },
+      // STRUCTURAL
+      { category: "structural", name: "Columns", description: "Reinforced Insitu Concrete Grade 25.5 for columns generally", tenantId: sampleTenantId },
+      { category: "structural", name: "Beams", description: "Reinforced Concrete Grade 25.5 for beams", tenantId: sampleTenantId },
+      { category: "structural", name: "Column Formwork", description: "Marine plywood formwork for sides of columns", tenantId: sampleTenantId },
+      { category: "structural", name: "Beam Formwork", description: "Marine plywood formwork for sides and soffit of beams", tenantId: sampleTenantId },
+      { category: "structural", name: "Structural Reinforcement", description: "High yield reinforcement bars 20-8mm diameter to BS 4449 grade 410", tenantId: sampleTenantId },
+      { category: "structural", name: "Floor Slab", description: "Reinforced Concrete Grade 25.5 slabs not exceeding 150mm thick", tenantId: sampleTenantId },
+      { category: "structural", name: "Slab Formwork", description: "Marine plywood formwork for soffit of suspended slab", tenantId: sampleTenantId },
+      { category: "structural", name: "Slab Edge Formwork", description: "Formwork for edges of suspended slabs not exceeding 150mm high", tenantId: sampleTenantId },
+      { category: "structural", name: "Slab Reinforcement", description: "High yield reinforcement bars 12mm-10mm diameter for slabs", tenantId: sampleTenantId },
+      { category: "structural", name: "Blockwork 230mm", description: "Hollow sandcrete blockwork 230mm thick in cement mortar (1:6) laid in stretcher bond", tenantId: sampleTenantId },
+      { category: "structural", name: "Blockwork 150mm", description: "Hollow sandcrete blockwork 150mm thick in cement mortar (1:6) laid in stretcher bond", tenantId: sampleTenantId },
+      { category: "structural", name: "Lintels", description: "Reinforced Concrete Grade 25 lintels generally", tenantId: sampleTenantId },
+      { category: "structural", name: "Lintel Formwork", description: "Marine plywood formwork for lintels rectangular sides and soffit", tenantId: sampleTenantId },
+      { category: "structural", name: "Lintel Reinforcement", description: "High yield reinforcement bars 10-12mm nominal size for lintels", tenantId: sampleTenantId },
+      { category: "structural", name: "Parapet Wall", description: "Hollow sandcrete blockwork 230mm thick for parapet wall", tenantId: sampleTenantId },
       
-      // Structural (includes Blockwork & Decking)
-      { category: "structural", name: "Block Molding", description: "Concrete block molding and preparation", tenantId: sampleTenantId },
-      { category: "structural", name: "Block Laying", description: "Wall construction with concrete blocks", tenantId: sampleTenantId },
-      { category: "structural", name: "Columns", description: "Concrete column construction", tenantId: sampleTenantId },
-      { category: "structural", name: "Lintels", description: "Lintel installation above openings", tenantId: sampleTenantId },
-      { category: "structural", name: "Scaffolding", description: "Scaffolding for construction", tenantId: sampleTenantId },
-      { category: "structural", name: "Formwork", description: "Formwork for concrete decking", tenantId: sampleTenantId },
-      { category: "structural", name: "Concrete Casting", description: "Concrete casting for deck slabs", tenantId: sampleTenantId },
+      // ROOFING
+      { category: "roofing", name: "Roof Beam", description: "Reinforced Concrete Grade 25.5 roof beam", tenantId: sampleTenantId },
+      { category: "roofing", name: "Ribbed Slab", description: "Reinforced concrete ribbed slab", tenantId: sampleTenantId },
+      { category: "roofing", name: "Copping", description: "Reinforced concrete copping", tenantId: sampleTenantId },
+      { category: "roofing", name: "Concrete Facia", description: "Reinforced concrete facia", tenantId: sampleTenantId },
+      { category: "roofing", name: "Roof Beam Formwork", description: "Marine plywood formwork for sides of roof beam", tenantId: sampleTenantId },
+      { category: "roofing", name: "Ribbed Slab Formwork", description: "Marine plywood formwork for sides and soffits of ribbed slab", tenantId: sampleTenantId },
+      { category: "roofing", name: "Copping Formwork", description: "Marine plywood formwork for sides and soffits of copping", tenantId: sampleTenantId },
+      { category: "roofing", name: "Facia Formwork", description: "Marine plywood formwork for side and soffits of concrete facia", tenantId: sampleTenantId },
+      { category: "roofing", name: "Roof Reinforcement", description: "High yield reinforcement bars 16-8mm diameter for roof", tenantId: sampleTenantId },
+      { category: "roofing", name: "Aluminium Roofing Sheet", description: "0.55mm gauge Queensway long span stucco aluminium roofing sheets", tenantId: sampleTenantId },
+      { category: "roofing", name: "Flashings", description: "Aluminium flashings 600mm girth", tenantId: sampleTenantId },
+      { category: "roofing", name: "Entrance Canopy", description: "Steel pergola with polycarbonate roofing over entrance door", tenantId: sampleTenantId },
+      { category: "roofing", name: "Purlins", description: "Treated hardwood 50x75mm purlins", tenantId: sampleTenantId },
+      { category: "roofing", name: "Rafters", description: "Treated hardwood 50x150mm rafters", tenantId: sampleTenantId },
+      { category: "roofing", name: "Struts", description: "Treated hardwood 50x100mm struts", tenantId: sampleTenantId },
+      { category: "roofing", name: "Ties", description: "Treated hardwood 100x150mm ties", tenantId: sampleTenantId },
+      { category: "roofing", name: "Waterproofing Membrane", description: "4mm thick Scudoplast TNT waterproofing membrane on 50mm cement sand screed", tenantId: sampleTenantId },
       
-      // Roofing
-      { category: "roofing", name: "Trusses", description: "Roof truss installation", tenantId: sampleTenantId },
-      { category: "roofing", name: "Roof Covering", description: "Roof covering installation", tenantId: sampleTenantId },
-      { category: "roofing", name: "Fascia & Soffit", description: "Fascia board and soffit installation", tenantId: sampleTenantId },
-      { category: "roofing", name: "Gutters", description: "Gutter and downpipe installation", tenantId: sampleTenantId },
+      // STAIRS
+      { category: "structural", name: "Staircases", description: "Reinforced Concrete Grade 25 staircases generally", tenantId: sampleTenantId },
+      { category: "structural", name: "Staircase Formwork", description: "Marine plywood formwork for sides and soffits of staircase", tenantId: sampleTenantId },
+      { category: "structural", name: "Riser Formwork", description: "Formwork for faces of riser 150mm high", tenantId: sampleTenantId },
+      { category: "structural", name: "Staircase Reinforcement", description: "High yield reinforcement bars 16mm - 10mm diameter for stairs", tenantId: sampleTenantId },
+      { category: "finishing", name: "Steel Handrails", description: "Steel handrails 40mm diameter top and bottom rails, 1200mm high", tenantId: sampleTenantId },
+      { category: "finishing", name: "Guard Rails", description: "Steel guard rails at balcony and kitchenette", tenantId: sampleTenantId },
+      { category: "finishing", name: "Stair Treads Tiling", description: "20mm thick polished granite floor tiles on stair treads", tenantId: sampleTenantId },
+      { category: "finishing", name: "Stair Risers Tiling", description: "Polished granite tiles for faces of risers 150mm high", tenantId: sampleTenantId },
       
-      // Electrical
-      { category: "electrical", name: "Electrical Rough-in", description: "Electrical rough-in installation", tenantId: sampleTenantId },
-      { category: "electrical", name: "Electrical Final Fix", description: "Final electrical connections and testing", tenantId: sampleTenantId },
-      { category: "electrical", name: "Panel Installation", description: "Electrical panel and distribution setup", tenantId: sampleTenantId },
-      { category: "electrical", name: "Lighting Fixtures", description: "Installation of lighting fixtures", tenantId: sampleTenantId },
+      // FINISHING - WALLS
+      { category: "finishing", name: "Wall Rendering", description: "Cement and sand (1:3) rendering over 300mm wide to concrete or blockwork", tenantId: sampleTenantId },
+      { category: "finishing", name: "Reveal Rendering", description: "Cement and sand (1:3) rendering for reveals not exceeding 300mm wide", tenantId: sampleTenantId },
+      { category: "finishing", name: "Decorative Plaster", description: "Grooving, tyrolean and plaster effect decoration to rendered walls", tenantId: sampleTenantId },
+      { category: "finishing", name: "Burnt Brick Tiling", description: "Burnt brick tiles laid in stretcher bond on external walls", tenantId: sampleTenantId },
+      { category: "finishing", name: "Wall Painting", description: "Emulsion paint - prepare, float, prime, one undercoat and two finishing coats", tenantId: sampleTenantId },
+      { category: "finishing", name: "POP Floating Walls", description: "POP floating screeding to surface of rendered wall internally and externally", tenantId: sampleTenantId },
       
-      // Plumbing
-      { category: "plumbing", name: "Plumbing Rough-in", description: "Plumbing rough-in installation", tenantId: sampleTenantId },
-      { category: "plumbing", name: "Septic Tank", description: "Septic tank installation", tenantId: sampleTenantId },
-      { category: "plumbing", name: "Borehole", description: "Water borehole drilling and setup", tenantId: sampleTenantId },
-      { category: "plumbing", name: "Plumbing Final Fix", description: "Final plumbing connections and testing", tenantId: sampleTenantId },
+      // FINISHING - WINDOWS & DOORS
+      { category: "finishing", name: "Curtain Wall 1500x1800mm", description: "Anodised aluminium curtain wall window 1500x1800mm with 6mm laminated glass", tenantId: sampleTenantId },
+      { category: "finishing", name: "Curtain Wall 1000x1800mm", description: "Anodised aluminium curtain wall window 1000x1800mm with 6mm laminated glass", tenantId: sampleTenantId },
+      { category: "finishing", name: "Curtain Wall 1000x1500mm", description: "Anodised aluminium curtain wall window 1000x1500mm with 6mm laminated glass", tenantId: sampleTenantId },
+      { category: "finishing", name: "Curtain Wall 500x1800mm", description: "Anodised aluminium curtain wall window 500x1800mm with 6mm laminated glass", tenantId: sampleTenantId },
+      { category: "finishing", name: "Window 750x900mm", description: "Anodised aluminium window 750x900mm with glass and insect screen", tenantId: sampleTenantId },
+      { category: "finishing", name: "Window 600x900mm", description: "Anodised aluminium window 600x900mm with glass and insect screen", tenantId: sampleTenantId },
+      { category: "finishing", name: "Sliding Door 2400x2400mm", description: "Aluminium sliding door 2400x2400mm with laminated glass", tenantId: sampleTenantId },
+      { category: "finishing", name: "Flush Door 900x2400mm", description: "38mm solid core flush door 900x2400mm complete with ironmongery", tenantId: sampleTenantId },
+      { category: "finishing", name: "Flush Door 750x2400mm", description: "38mm solid core flush door 750x2400mm complete with ironmongery", tenantId: sampleTenantId },
+      { category: "finishing", name: "Security Door Double 1200x2400mm", description: "Purpose made steel double leaf security door 1200x2400mm with accessories", tenantId: sampleTenantId },
+      { category: "finishing", name: "Security Door Single 900x2400mm", description: "Purpose made steel single leaf security door 900x2400mm with accessories", tenantId: sampleTenantId },
       
-      // Finishing
-      { category: "finishing", name: "Plastering", description: "Wall and ceiling plastering", tenantId: sampleTenantId },
-      { category: "finishing", name: "Screeding", description: "Floor screeding and leveling", tenantId: sampleTenantId },
-      { category: "finishing", name: "Windows", description: "Window installation", tenantId: sampleTenantId },
-      { category: "finishing", name: "Doors", description: "Door installation", tenantId: sampleTenantId },
-      { category: "finishing", name: "Tiling", description: "Floor and wall tiling", tenantId: sampleTenantId },
-      { category: "finishing", name: "Ceiling", description: "Ceiling installation and finishing", tenantId: sampleTenantId },
-      { category: "finishing", name: "Painting", description: "Interior and exterior painting", tenantId: sampleTenantId },
-      { category: "finishing", name: "Cabinetry", description: "Kitchen and bathroom cabinetry", tenantId: sampleTenantId },
-      { category: "finishing", name: "Sanitary", description: "Sanitary ware installation", tenantId: sampleTenantId },
+      // FINISHING - FLOORS
+      { category: "finishing", name: "Porcelain Floor Tiles", description: "1200x800x10mm Spanish grade glazed porcelain floor tiles on screeded bed", tenantId: sampleTenantId },
+      { category: "finishing", name: "Skirting", description: "100mm high porcelain skirting", tenantId: sampleTenantId },
+      { category: "finishing", name: "Granite Floor Tiles", description: "20mm thick polished granite floor tiles laid on 40mm screeded bed", tenantId: sampleTenantId },
+      { category: "finishing", name: "Ceramic Floor Tiles", description: "300x300x10mm non-slip vitrified ceramic floor tiles for toilets", tenantId: sampleTenantId },
       
-      // External Works
-      { category: "external_works", name: "Driveway", description: "Driveway construction", tenantId: sampleTenantId },
-      { category: "external_works", name: "Perimeter Fence & Gate", description: "Perimeter fencing and gate installation", tenantId: sampleTenantId },
-      { category: "external_works", name: "Landscaping", description: "Site landscaping and gardening", tenantId: sampleTenantId },
-      { category: "external_works", name: "Drainage", description: "Site drainage system", tenantId: sampleTenantId },
+      // FINISHING - CEILING
+      { category: "finishing", name: "Suspended Ceiling", description: "600x600x13mm thick mineral fibre acoustic suspended ceiling on metal stud", tenantId: sampleTenantId },
+      { category: "finishing", name: "Ceiling Painting", description: "Emulsion paint to surfaces of ceiling finishes", tenantId: sampleTenantId },
+      { category: "finishing", name: "POP Ceiling", description: "POP floating complete with angle cornice to soffit of suspended slab", tenantId: sampleTenantId },
       
-      // Marketing (includes Close-out activities)
-      { category: "marketing", name: "Marketing Collateral", description: "Marketing materials and brochures", tenantId: sampleTenantId },
-      { category: "marketing", name: "Agent Commission", description: "Sales agent commission payments", tenantId: sampleTenantId },
-      { category: "marketing", name: "Final Cleaning", description: "Construction cleanup and final inspection", tenantId: sampleTenantId },
-      { category: "marketing", name: "Occupancy Certificate", description: "Final approvals and occupancy certificate", tenantId: sampleTenantId },
+      // ELECTRICAL
+      { category: "electrical", name: "PHCN Connection", description: "Connection to PHCN mains including HT poles and aluminium conductor", tenantId: sampleTenantId },
+      { category: "electrical", name: "Main Distribution Panel", description: "120A 4ways TP&N MCCB main distribution panel", tenantId: sampleTenantId },
+      { category: "electrical", name: "Changeover Switch", description: "120A TP&N changeover switch", tenantId: sampleTenantId },
+      { category: "electrical", name: "Armoured Cable 35mm", description: "4C x 35mm2 PVC/SWA/PVC armoured copper cable", tenantId: sampleTenantId },
+      { category: "electrical", name: "Armoured Cable 16mm", description: "4C x 16mm2 PVC/SWA/PVC armoured copper cable", tenantId: sampleTenantId },
+      { category: "electrical", name: "Lighting Circuit", description: "Conduiting and wiring for lighting using 20mm PVC conduit and 2x1.5mm2 cable", tenantId: sampleTenantId },
+      { category: "electrical", name: "Spot Light 30W", description: "1x30W ceiling mounted spot lighting fitting", tenantId: sampleTenantId },
+      { category: "electrical", name: "Recessed Light 25W", description: "1x25W ceiling mounted recessed lighting fitting", tenantId: sampleTenantId },
+      { category: "electrical", name: "Spot Light 18W", description: "1x18W ceiling mounted spot lighting fitting", tenantId: sampleTenantId },
+      { category: "electrical", name: "Bulkhead Light 40W", description: "1x40W bulkhead fittings", tenantId: sampleTenantId },
+      { category: "electrical", name: "Ceiling Fan", description: "3-blades ceiling fan 1500mm sweep complete with regulator", tenantId: sampleTenantId },
+      { category: "electrical", name: "Switch 1-Gang", description: "10A 1-way 1-gang switch", tenantId: sampleTenantId },
+      { category: "electrical", name: "Switch 2-Gang", description: "10A 2-way 2-gang switch", tenantId: sampleTenantId },
+      { category: "electrical", name: "Power Circuit", description: "Conduiting and wiring for power using 25mm PVC conduit and 3x2.5mm2 cable", tenantId: sampleTenantId },
+      { category: "electrical", name: "AC Conduit", description: "Conduiting for air conditioning using 25mm PVC conduit", tenantId: sampleTenantId },
+      { category: "electrical", name: "Socket Outlet 13A", description: "Twin 13A switch socket outlet", tenantId: sampleTenantId },
+      { category: "electrical", name: "AC Switch 15A", description: "15A neon switch for AC", tenantId: sampleTenantId },
+      { category: "electrical", name: "TV Outlet", description: "TV outlet connection point", tenantId: sampleTenantId },
+      { category: "electrical", name: "TV Circuit", description: "Conduiting and wiring for TV using 20mm PVC conduit and shielded coaxial cable", tenantId: sampleTenantId },
+      { category: "electrical", name: "Earthing System", description: "Earthing of building and equipment complete with copper spike, earth mat, copper tape", tenantId: sampleTenantId },
+      { category: "electrical", name: "Earth Mat", description: "Earth mat for grounding system", tenantId: sampleTenantId },
+      { category: "electrical", name: "Copper Tape", description: "10mm x 3mm copper tape for earthing", tenantId: sampleTenantId },
+      { category: "electrical", name: "Earth Test Clamp", description: "Screw down copper test clamp", tenantId: sampleTenantId },
+      { category: "electrical", name: "Earth Electrode", description: "2.4m earth electrode", tenantId: sampleTenantId },
+      { category: "electrical", name: "Fire Alarm System", description: "Complete fire alarm system with optical smoke detectors and control panel", tenantId: sampleTenantId },
+      { category: "electrical", name: "Smoke Detector", description: "Optical smoke detector", tenantId: sampleTenantId },
+      { category: "electrical", name: "Heat Detector", description: "Optical heat detector", tenantId: sampleTenantId },
+      { category: "electrical", name: "Fire Break Glass", description: "Fire break glass alarming system", tenantId: sampleTenantId },
+      { category: "electrical", name: "Fire Alarm Bell", description: "Fire alarm bell", tenantId: sampleTenantId },
+      { category: "electrical", name: "Fire Control Panel", description: "3 zones fire alarm control panel with 24V DC power unit", tenantId: sampleTenantId },
+      { category: "electrical", name: "CO2 Fire Extinguisher", description: "6kg CO2 fire extinguisher", tenantId: sampleTenantId },
+      { category: "electrical", name: "ABC Fire Extinguisher", description: "5kg ABC fire extinguisher", tenantId: sampleTenantId },
+      
+      // PLUMBING - MECHANICAL
+      { category: "plumbing", name: "Split AC 12000 BTU", description: "Split unit air conditioner capacity 12,000 BTU/HR", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Split AC 24000 BTU", description: "Split unit air conditioner capacity 24,000 BTU/HR", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Exhaust Fan", description: "High wall-mounted expeller fan with 360m3/hr extract capacity", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Water Closet", description: "Close coupled water closet complete with seat, cistern and push-button", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Wash Basin", description: "Wall mounted wash basin with chrome plated tap and p-trap", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Wall Mirror", description: "Pilkington silvered coated glass mirror screw to wall", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Toilet Roll Holder", description: "Chrome plated toilet roll dispenser with hood", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Soap Dish", description: "Chrome-plated soap dish with concealed screws", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Anal Spray", description: "Stainless steel hand held anal spray complete with fittings", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Floor Drain", description: "50mm floor drain", tenantId: sampleTenantId },
+      { category: "plumbing", name: "UPVC Pipe 25mm", description: "25mmΦ UPVC cold water supply pipes", tenantId: sampleTenantId },
+      { category: "plumbing", name: "UPVC Pipe 19mm", description: "19mmΦ UPVC cold water supply pipes", tenantId: sampleTenantId },
+      { category: "plumbing", name: "UPVC Pipe 13mm", description: "13mmΦ UPVC cold water supply pipes", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Tee Fitting 25x25x19", description: "UPVC tee fitting 25x25x19", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Tee Fitting 19x19x13", description: "UPVC tee fitting 19x19x13", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Elbow 25mm", description: "25mmΦ UPVC elbow", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Elbow 20mm", description: "20mmΦ UPVC elbow", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Elbow 15mm", description: "15mmΦ UPVC elbow", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Nipples 25mm", description: "25mmΦ UPVC nipples", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Socket 25mm", description: "25mmΦ UPVC socket", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Reducer 19x13mm", description: "19x13mmΦ UPVC reducer", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Gate Valve 25mm", description: "25mmΦ bronze gate valve screwed", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Non Return Valve 25mm", description: "25mmΦ non return valve screwed", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Gate Valve 15mm", description: "15mmΦ bronze gate valve screwed", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Flexible Connector 15mm", description: "15mmΦ flexible connector", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Waste Pipe 100mm", description: "100mmΦ UPVC soil and waste drainage pipes", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Waste Pipe 50mm", description: "50mmΦ UPVC soil and waste drainage pipes", tenantId: sampleTenantId },
+      { category: "plumbing", name: "UPVC Bend 100mm", description: "100mmΦ UPVC bend x 90 degrees", tenantId: sampleTenantId },
+      { category: "plumbing", name: "UPVC Bend 50mm", description: "50mmΦ UPVC bend x 90 degrees", tenantId: sampleTenantId },
+      { category: "plumbing", name: "UPVC Tee 100mm", description: "100mmΦ UPVC equal tee", tenantId: sampleTenantId },
+      { category: "plumbing", name: "WC Pan Connector", description: "100mmΦ UPVC WC pan connector", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Access Plug 100mm", description: "100mmΦ UPVC access plug", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Bottle Trap 32mm", description: "32mmΦ PVC bottle trap", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Vent Cowl 100mm", description: "100mmΦ PVC vent cowl", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Inspection Chamber", description: "Manhole/Inspection chamber 600x600x600mm with concrete base and blockwork sides", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Soakaway Pit", description: "Soakaway pit 2000x2000x2000mm with blockwork sides and concrete cover", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Septic Tank", description: "Septic tank 2500x2000x2000mm with blockwork and concrete cover slab", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Borehole Drilling", description: "Drilling of borehole including geophysical survey, yield test and submersible pump", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Water Storage Tank", description: "Pressed steel elevated water storage tank 5,000 litres capacity", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Tank Stanchion", description: "12m high structural steel stanchion complete with reinforced concrete base", tenantId: sampleTenantId },
+      { category: "plumbing", name: "Water Reticulation", description: "Reticulation of pipes from tank to main building", tenantId: sampleTenantId },
+      
+      // EXTERNAL WORKS - FENCING
+      { category: "external_works", name: "Fencing Foundation", description: "Reinforced Concrete Grade 25 footing for fence", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Pillars", description: "Reinforced concrete pillars for fence", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Formwork", description: "Marine plywood formwork for fence footings and pillars", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Reinforcement", description: "High yield reinforcement bars 16mm-10mm for fence", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Blockwork 230mm", description: "Hollow sandcrete blockwork 230mm thick for fence walls", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Blockwork 150mm", description: "Hollow sandcrete blockwork 150mm thick for fence", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Rendering", description: "Cement and sand (1:3) rendering for fence walls", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Painting", description: "Emulsion paint for fence walls", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence POP Floating", description: "POP floating for fence walls", tenantId: sampleTenantId },
+      { category: "external_works", name: "Fence Decoration", description: "Grooving, tyrolean and plaster effect decoration for fence", tenantId: sampleTenantId },
+      { category: "external_works", name: "Steel Sliding Gate", description: "Fabrication and installation of steel sliding gate", tenantId: sampleTenantId },
     ];
 
-    // Insert line items
-    await db.insert(lineItems).values(lineItemsData);
-    console.log(`✅ Inserted ${lineItemsData.length} line items`);
+    // Get existing line items to avoid duplicates
+    const existingLineItems = await db.select().from(lineItems).where(eq(lineItems.tenantId, sampleTenantId));
+    const existingLineItemNames = new Set(existingLineItems.map(item => `${item.category}:${item.name}`));
+    
+    // Filter out items that already exist
+    const newLineItems = lineItemsData.filter(item => 
+      !existingLineItemNames.has(`${item.category}:${item.name}`)
+    );
+    
+    // Insert new line items only
+    if (newLineItems.length > 0) {
+      await db.insert(lineItems).values(newLineItems);
+      console.log(`✅ Inserted ${newLineItems.length} new line items from BOQ (${existingLineItems.length} already existed)`);
+    } else {
+      console.log(`ℹ️  All ${lineItemsData.length} line items already exist`);
+    }
 
-    console.log("🏗️ Seeding materials...");
+    console.log("🏗️ Seeding materials from BOQ...");
 
-    // Comprehensive materials data - Construction materials with proper units
+    // Comprehensive materials data from BOQ
     const materialsData = [
-      // Basic construction materials
-      { name: "Cement", unit: "bag", currentUnitPrice: "12.50", supplier: "CemCorp Ltd", tenantId: sampleTenantId },
-      { name: "Sharp Sand", unit: "m³", currentUnitPrice: "45.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
-      { name: "Granite", unit: "m³", currentUnitPrice: "55.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
-      { name: "Laterite", unit: "m³", currentUnitPrice: "35.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
-      { name: "Water", unit: "tanker", currentUnitPrice: "85.00", supplier: "Water Services", tenantId: sampleTenantId },
+      // CONCRETE & AGGREGATES
+      { name: "Cement", unit: "bag", currentUnitPrice: "6500.00", supplier: "Dangote Cement", tenantId: sampleTenantId },
+      { name: "Sharp Sand", unit: "m³", currentUnitPrice: "18000.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Granite (All-in Aggregate)", unit: "m³", currentUnitPrice: "24000.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Laterite Fill", unit: "m³", currentUnitPrice: "4260.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Stone Boulders Hardcore", unit: "m³", currentUnitPrice: "12600.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },
+      { name: "Water", unit: "tanker", currentUnitPrice: "35000.00", supplier: "Water Services", tenantId: sampleTenantId },
+      { name: "Concrete Grade 15", unit: "m³", currentUnitPrice: "58900.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
+      { name: "Concrete Grade 25.5", unit: "m³", currentUnitPrice: "111400.00", supplier: "Ready-Mix Concrete", tenantId: sampleTenantId },
       
-      // Reinforcement materials
-      { name: "Reinforcement Rod", unit: "kg", currentUnitPrice: "4.20", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
-      { name: "Binding Wire", unit: "roll", currentUnitPrice: "25.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
-      { name: "Timber", unit: "pcs", currentUnitPrice: "15.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
-      { name: "Nails", unit: "kg", currentUnitPrice: "3.50", supplier: "Hardware Central", tenantId: sampleTenantId },
+      // REINFORCEMENT
+      { name: "High Yield Steel Bars 8mm", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "High Yield Steel Bars 10mm", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "High Yield Steel Bars 12mm", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "High Yield Steel Bars 16mm", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "High Yield Steel Bars 20mm", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Fabric Mesh A142", unit: "m²", currentUnitPrice: "2860.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "BRC Mesh No. 65", unit: "m²", currentUnitPrice: "3200.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Binding Wire", unit: "roll", currentUnitPrice: "12000.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
       
-      // Roofing materials
-      { name: "Aluminium Roofing Sheet", unit: "m²", currentUnitPrice: "28.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
-      { name: "Fascia Board", unit: "pcs", currentUnitPrice: "45.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
-      { name: "PVC Soffit", unit: "m²", currentUnitPrice: "22.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      // FORMWORK & CARPENTRY
+      { name: "Marine Plywood Formwork", unit: "m²", currentUnitPrice: "12100.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Treated Hardwood 50x75mm", unit: "m", currentUnitPrice: "970.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Treated Hardwood 50x100mm", unit: "m", currentUnitPrice: "1030.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Treated Hardwood 50x150mm", unit: "m", currentUnitPrice: "1630.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Treated Hardwood 100x150mm", unit: "m", currentUnitPrice: "3050.00", supplier: "Forest Products Ltd", tenantId: sampleTenantId },
+      { name: "Nails (Assorted)", unit: "kg", currentUnitPrice: "1500.00", supplier: "Hardware Central", tenantId: sampleTenantId },
       
-      // Electrical materials
-      { name: "Electrical Conduit", unit: "length", currentUnitPrice: "4.50", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "Cables", unit: "roll", currentUnitPrice: "125.00", supplier: "ElectroMax", tenantId: sampleTenantId },
-      { name: "Switches & Sockets", unit: "pcs", currentUnitPrice: "8.50", supplier: "ElectroMax", tenantId: sampleTenantId },
+      // BLOCKWORK & MASONRY
+      { name: "Hollow Sandcrete Blocks 150mm", unit: "m²", currentUnitPrice: "11000.00", supplier: "Block Industry", tenantId: sampleTenantId },
+      { name: "Hollow Sandcrete Blocks 230mm", unit: "m²", currentUnitPrice: "14400.00", supplier: "Block Industry", tenantId: sampleTenantId },
+      { name: "Cement Mortar (1:6)", unit: "m³", currentUnitPrice: "28000.00", supplier: "Ready-Mix", tenantId: sampleTenantId },
       
-      // Plumbing materials
-      { name: "Plumbing Pipe", unit: "length", currentUnitPrice: "18.50", supplier: "PlumbPro", tenantId: sampleTenantId },
-      { name: "Plumbing Fittings", unit: "pcs", currentUnitPrice: "5.50", supplier: "PlumbPro", tenantId: sampleTenantId },
+      // WATERPROOFING & DPM
+      { name: "Polythene DPM 1000 gauge", unit: "m²", currentUnitPrice: "220.00", supplier: "Building Materials Ltd", tenantId: sampleTenantId },
+      { name: "Dieldrex Anti-Termite Solution", unit: "m²", currentUnitPrice: "250.00", supplier: "ChemTech", tenantId: sampleTenantId },
+      { name: "Scudoplast Waterproofing 4mm", unit: "m²", currentUnitPrice: "12500.00", supplier: "Waterproofing Systems", tenantId: sampleTenantId },
+      { name: "SBS Bituminous Membrane", unit: "m²", currentUnitPrice: "8500.00", supplier: "Waterproofing Systems", tenantId: sampleTenantId },
       
-      // Finishing materials
-      { name: "Paint", unit: "bucket", currentUnitPrice: "35.00", supplier: "ColorMax", tenantId: sampleTenantId },
-      { name: "Floor Tiles", unit: "m²", currentUnitPrice: "42.00", supplier: "TileWorld", tenantId: sampleTenantId },
-      { name: "Ceiling Boards", unit: "m²", currentUnitPrice: "25.00", supplier: "CeilingPro", tenantId: sampleTenantId },
+      // ROOFING MATERIALS
+      { name: "Aluminium Roofing Sheet 0.55mm", unit: "m²", currentUnitPrice: "14700.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "Aluminium Flashings", unit: "m", currentUnitPrice: "8820.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "Polycarbonate Roofing Sheet", unit: "m²", currentUnitPrice: "18500.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "Fascia Board", unit: "m", currentUnitPrice: "6500.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
+      { name: "PVC Soffit", unit: "m²", currentUnitPrice: "5200.00", supplier: "RoofTech Ltd", tenantId: sampleTenantId },
       
-      // Fixtures and fittings
-      { name: "Doors", unit: "pcs", currentUnitPrice: "280.00", supplier: "DoorCraft", tenantId: sampleTenantId },
-      { name: "Windows", unit: "pcs", currentUnitPrice: "350.00", supplier: "WindowWorks", tenantId: sampleTenantId },
-      { name: "Kitchen Sink", unit: "pcs", currentUnitPrice: "150.00", supplier: "KitchenPro", tenantId: sampleTenantId },
-      { name: "WC Set", unit: "pcs", currentUnitPrice: "280.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
-      { name: "Paving Stones", unit: "m²", currentUnitPrice: "42.00", supplier: "StoneCraft", tenantId: sampleTenantId },
+      // WINDOWS & DOORS
+      { name: "Anodised Aluminium Curtain Wall", unit: "m²", currentUnitPrice: "120000.00", supplier: "WindowWorks", tenantId: sampleTenantId },
+      { name: "6mm Laminated Glass", unit: "m²", currentUnitPrice: "28000.00", supplier: "Glass Masters", tenantId: sampleTenantId },
+      { name: "Insect Screen", unit: "m²", currentUnitPrice: "4500.00", supplier: "WindowWorks", tenantId: sampleTenantId },
+      { name: "38mm Solid Core Flush Door", unit: "Nr", currentUnitPrice: "320000.00", supplier: "DoorCraft", tenantId: sampleTenantId },
+      { name: "Steel Security Door", unit: "Nr", currentUnitPrice: "566000.00", supplier: "Security Doors Ltd", tenantId: sampleTenantId },
+      { name: "Door Ironmongery Set", unit: "set", currentUnitPrice: "35000.00", supplier: "Hardware Central", tenantId: sampleTenantId },
+      
+      // RENDERING & PLASTERING
+      { name: "Cement Sand Render (1:3)", unit: "m²", currentUnitPrice: "4300.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "POP (Plaster of Paris)", unit: "m²", currentUnitPrice: "1560.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      { name: "Screeding Mix", unit: "m³", currentUnitPrice: "15000.00", supplier: "Finishing Masters", tenantId: sampleTenantId },
+      
+      // PAINTING
+      { name: "Dulux Emulsion Paint", unit: "m²", currentUnitPrice: "3250.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Primer & Undercoat", unit: "litre", currentUnitPrice: "8500.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      { name: "Satin Paint Finish", unit: "litre", currentUnitPrice: "9500.00", supplier: "ColorMax", tenantId: sampleTenantId },
+      
+      // TILING & FLOORING
+      { name: "Spanish Porcelain Tiles 1200x800mm", unit: "m²", currentUnitPrice: "48000.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      { name: "Polished Granite Tiles 20mm", unit: "m²", currentUnitPrice: "69300.00", supplier: "Granite Masters", tenantId: sampleTenantId },
+      { name: "Ceramic Floor Tiles 300x300mm", unit: "m²", currentUnitPrice: "48000.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      { name: "Burnt Brick Tiles", unit: "m²", currentUnitPrice: "18500.00", supplier: "Brick Works", tenantId: sampleTenantId },
+      { name: "Tile Adhesive", unit: "bag", currentUnitPrice: "4500.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      { name: "White Cement Grout", unit: "kg", currentUnitPrice: "850.00", supplier: "TileWorld", tenantId: sampleTenantId },
+      
+      // CEILING
+      { name: "Mineral Fibre Acoustic Ceiling 600x600mm", unit: "m²", currentUnitPrice: "25000.00", supplier: "CeilingPro", tenantId: sampleTenantId },
+      { name: "Gypsum Board 13mm", unit: "m²", currentUnitPrice: "6500.00", supplier: "CeilingPro", tenantId: sampleTenantId },
+      { name: "Metal Stud & Grid", unit: "m²", currentUnitPrice: "8500.00", supplier: "CeilingPro", tenantId: sampleTenantId },
+      { name: "Aluminium Grid", unit: "m", currentUnitPrice: "3200.00", supplier: "CeilingPro", tenantId: sampleTenantId },
+      
+      // ELECTRICAL MATERIALS
+      { name: "4C x 35mm² Armoured Cable", unit: "m", currentUnitPrice: "36489.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "4C x 16mm² Armoured Cable", unit: "m", currentUnitPrice: "19271.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "2 x 1.5mm² Copper Cable", unit: "m", currentUnitPrice: "850.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "3 x 2.5mm² Copper Cable", unit: "m", currentUnitPrice: "1200.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "20mm PVC Conduit", unit: "m", currentUnitPrice: "450.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "25mm PVC Conduit", unit: "m", currentUnitPrice: "650.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Main Distribution Panel 120A", unit: "Nr", currentUnitPrice: "450000.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Changeover Switch 120A", unit: "Nr", currentUnitPrice: "90000.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "30W Spot Light Fitting", unit: "Nr", currentUnitPrice: "5800.00", supplier: "Philip Lighting", tenantId: sampleTenantId },
+      { name: "25W Recessed Light Fitting", unit: "Nr", currentUnitPrice: "5500.00", supplier: "Philip Lighting", tenantId: sampleTenantId },
+      { name: "18W Spot Light Fitting", unit: "Nr", currentUnitPrice: "4800.00", supplier: "Philip Lighting", tenantId: sampleTenantId },
+      { name: "40W Bulkhead Fitting", unit: "Nr", currentUnitPrice: "4500.00", supplier: "Philip Lighting", tenantId: sampleTenantId },
+      { name: "Ceiling Fan 1500mm", unit: "Nr", currentUnitPrice: "40000.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "10A 1-Gang Switch", unit: "Nr", currentUnitPrice: "1050.00", supplier: "Philip", tenantId: sampleTenantId },
+      { name: "10A 2-Gang Switch", unit: "Nr", currentUnitPrice: "1500.00", supplier: "Philip", tenantId: sampleTenantId },
+      { name: "13A Socket Outlet", unit: "Nr", currentUnitPrice: "2000.00", supplier: "Philip", tenantId: sampleTenantId },
+      { name: "15A AC Switch", unit: "Nr", currentUnitPrice: "2500.00", supplier: "Philip", tenantId: sampleTenantId },
+      { name: "TV Outlet", unit: "Nr", currentUnitPrice: "1800.00", supplier: "ABB", tenantId: sampleTenantId },
+      { name: "Coaxial Cable (Shielded)", unit: "m", currentUnitPrice: "950.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Earth Electrode 2.4m", unit: "Nr", currentUnitPrice: "5500.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Copper Tape 10x3mm", unit: "m", currentUnitPrice: "4500.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Earth Test Clamp", unit: "Nr", currentUnitPrice: "6500.00", supplier: "ElectroMax", tenantId: sampleTenantId },
+      { name: "Optical Smoke Detector", unit: "Nr", currentUnitPrice: "18400.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "Heat Detector", unit: "Nr", currentUnitPrice: "18400.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "Fire Alarm Control Panel 3-Zone", unit: "Nr", currentUnitPrice: "550000.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "6kg CO2 Fire Extinguisher", unit: "Nr", currentUnitPrice: "42000.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      { name: "5kg ABC Fire Extinguisher", unit: "Nr", currentUnitPrice: "33000.00", supplier: "Fire Safety Ltd", tenantId: sampleTenantId },
+      
+      // PLUMBING MATERIALS
+      { name: "25mm UPVC Pipe", unit: "m", currentUnitPrice: "3000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "19mm UPVC Pipe", unit: "m", currentUnitPrice: "2000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "13mm UPVC Pipe", unit: "m", currentUnitPrice: "950.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "100mm UPVC Drainage Pipe", unit: "m", currentUnitPrice: "2500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "50mm UPVC Drainage Pipe", unit: "m", currentUnitPrice: "1400.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "UPVC Tee Fittings", unit: "Nr", currentUnitPrice: "600.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "UPVC Elbow Fittings", unit: "Nr", currentUnitPrice: "600.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "UPVC Sockets", unit: "Nr", currentUnitPrice: "600.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Bronze Gate Valve 25mm", unit: "Nr", currentUnitPrice: "6500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Non-Return Valve 25mm", unit: "Nr", currentUnitPrice: "6000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Flexible Connector 15mm", unit: "Nr", currentUnitPrice: "3500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "WC Pan Connector 100mm", unit: "Nr", currentUnitPrice: "1500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Bottle Trap 32mm", unit: "Nr", currentUnitPrice: "2500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Vent Cowl 100mm", unit: "Nr", currentUnitPrice: "1000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      { name: "Tangit Gum & Adhesives", unit: "Item", currentUnitPrice: "15000.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      
+      // SANITARY FIXTURES
+      { name: "Close Coupled WC (Twyford)", unit: "Nr", currentUnitPrice: "620000.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Wall Mounted Wash Basin (Twyford)", unit: "Nr", currentUnitPrice: "125000.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Chrome Basin Pillar Tap", unit: "Nr", currentUnitPrice: "15000.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Chrome P-Trap 32mm", unit: "Nr", currentUnitPrice: "5500.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Wall Mirror Silvered Glass", unit: "Nr", currentUnitPrice: "8000.00", supplier: "Glass Masters", tenantId: sampleTenantId },
+      { name: "Toilet Roll Holder Chrome", unit: "Nr", currentUnitPrice: "3500.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Chrome Soap Dish", unit: "Nr", currentUnitPrice: "3500.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Stainless Steel Anal Spray", unit: "Nr", currentUnitPrice: "6000.00", supplier: "SanitaryWare Co", tenantId: sampleTenantId },
+      { name: "Floor Drain 50mm", unit: "Nr", currentUnitPrice: "1500.00", supplier: "PlumbPro", tenantId: sampleTenantId },
+      
+      // MECHANICAL/HVAC
+      { name: "Split AC Unit 12000 BTU", unit: "Nr", currentUnitPrice: "520000.00", supplier: "HVAC Systems", tenantId: sampleTenantId },
+      { name: "Split AC Unit 24000 BTU", unit: "Nr", currentUnitPrice: "850000.00", supplier: "HVAC Systems", tenantId: sampleTenantId },
+      { name: "Wall Mounted Exhaust Fan 360m³/hr", unit: "Nr", currentUnitPrice: "45000.00", supplier: "Xpelair", tenantId: sampleTenantId },
+      
+      // METAL WORKS
+      { name: "Steel Reinforcement Bars", unit: "kg", currentUnitPrice: "1290.00", supplier: "SteelWorks Inc", tenantId: sampleTenantId },
+      { name: "Steel Handrails 40mm Diameter", unit: "m", currentUnitPrice: "65000.00", supplier: "Metal Fabricators", tenantId: sampleTenantId },
+      { name: "Steel Pergola Structure", unit: "sum", currentUnitPrice: "750000.00", supplier: "Metal Fabricators", tenantId: sampleTenantId },
+      { name: "Steel Sliding Gate", unit: "sum", currentUnitPrice: "1250000.00", supplier: "Metal Fabricators", tenantId: sampleTenantId },
+      { name: "Steel Stanchion 12m", unit: "Nr", currentUnitPrice: "3000000.00", supplier: "Steel Structures Ltd", tenantId: sampleTenantId },
+      
+      // WATER SYSTEMS
+      { name: "Borehole Drilling Complete", unit: "Nr", currentUnitPrice: "800000.00", supplier: "Water Services", tenantId: sampleTenantId },
+      { name: "Submersible Water Pump", unit: "Nr", currentUnitPrice: "250000.00", supplier: "Water Services", tenantId: sampleTenantId },
+      { name: "Water Storage Tank 5000L", unit: "Nr", currentUnitPrice: "1250000.00", supplier: "Tank Manufacturers", tenantId: sampleTenantId },
+      
+      // DRAINAGE
+      { name: "Manhole Construction 600x600x600mm", unit: "Nr", currentUnitPrice: "35000.00", supplier: "Construction Services", tenantId: sampleTenantId },
+      { name: "Soakaway Pit 2000x2000x2000mm", unit: "Nr", currentUnitPrice: "450000.00", supplier: "Construction Services", tenantId: sampleTenantId },
+      { name: "Septic Tank 2500x2000x2000mm", unit: "Nr", currentUnitPrice: "850000.00", supplier: "Construction Services", tenantId: sampleTenantId },
+      { name: "Cast Iron Manhole Cover", unit: "Nr", currentUnitPrice: "45000.00", supplier: "Metal Works", tenantId: sampleTenantId },
+      
+      // MISCELLANEOUS
+      { name: "Cow Dung for Earthing", unit: "bag", currentUnitPrice: "2000.00", supplier: "Local Suppliers", tenantId: sampleTenantId },
+      { name: "Charcoal for Earthing", unit: "bag", currentUnitPrice: "3000.00", supplier: "Local Suppliers", tenantId: sampleTenantId },
+      { name: "Industrial Salt", unit: "kg", currentUnitPrice: "500.00", supplier: "Chemical Suppliers", tenantId: sampleTenantId },
     ];
 
-    // Insert materials
-    await db.insert(materials).values(materialsData);
-    console.log(`✅ Inserted ${materialsData.length} materials`);
+    // Get existing materials to avoid duplicates
+    const existingMaterials = await db.select().from(materials).where(eq(materials.tenantId, sampleTenantId));
+    const existingMaterialNames = new Set(existingMaterials.map(item => item.name));
+    
+    // Filter out materials that already exist
+    const newMaterials = materialsData.filter(item => 
+      !existingMaterialNames.has(item.name)
+    );
+    
+    // Insert new materials only
+    if (newMaterials.length > 0) {
+      await db.insert(materials).values(newMaterials);
+      console.log(`✅ Inserted ${newMaterials.length} new materials from BOQ (${existingMaterials.length} already existed)`);
+    } else {
+      console.log(`ℹ️  All ${materialsData.length} materials already exist`);
+    }
 
     console.log("🎉 Seed data creation completed successfully!");
     console.log(`📊 Summary:`);
     console.log(`   • Company: ${sampleCompany.name} (${sampleTenantId})`);
-    console.log(`   • Line Items: ${lineItemsData.length} items across construction lifecycle`);
-    console.log(`   • Materials: ${materialsData.length} construction materials with realistic pricing`);
+    console.log(`   • Line Items: ${lineItemsData.length} items from comprehensive BOQ`);
+    console.log(`   • Materials: ${materialsData.length} construction materials with BOQ pricing`);
+    console.log(`   • Source: MR AJAO TAYE PHILIPS BOQ - Residential Development`);
 
   } catch (error) {
     console.error("❌ Error during seeding:", error);
