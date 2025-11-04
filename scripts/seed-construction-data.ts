@@ -40,13 +40,73 @@ async function seedConstructionData() {
   try {
     console.log("📦 Seeding line items from BOQ...");
     
-    // Comprehensive line items data - Based on MR AJAO TAYE PHILIPS BOQ
+    // Comprehensive line items data - Based on MR AJAO TAYE PHILIPS BOQ + Property Development
     const lineItemsData: Array<{
-      category: "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works";
+      category: "utilities_setup" | "development_resources" | "property_development" | "design_tools" | "testing_qa" | "infrastructure" | "marketing" | "operations" | "legal_documentation" | "property_management" | "miscellaneous" | "land_purchase" | "site_preparation" | "foundation" | "structural" | "roofing" | "electrical" | "plumbing" | "finishing" | "external_works";
       name: string;
       description: string;
       tenantId: string;
     }> = [
+      // UTILITIES SETUP
+      { category: "utilities_setup", name: "Water Connection", description: "Municipal water connection and setup", tenantId: sampleTenantId },
+      { category: "utilities_setup", name: "Electricity Connection", description: "Electrical grid connection and meter installation", tenantId: sampleTenantId },
+      { category: "utilities_setup", name: "Gas Installation", description: "Natural gas line installation", tenantId: sampleTenantId },
+      { category: "utilities_setup", name: "Internet & Telecom", description: "Internet and telecommunication setup", tenantId: sampleTenantId },
+      { category: "utilities_setup", name: "Waste Management", description: "Waste disposal and management setup", tenantId: sampleTenantId },
+      
+      // DEVELOPMENT RESOURCES
+      { category: "development_resources", name: "Project Planning", description: "Project planning and resource allocation", tenantId: sampleTenantId },
+      { category: "development_resources", name: "Technical Staff", description: "Technical staff and contractors", tenantId: sampleTenantId },
+      { category: "development_resources", name: "Equipment Rental", description: "Construction equipment and machinery rental", tenantId: sampleTenantId },
+      { category: "development_resources", name: "Site Supervision", description: "On-site supervision and management", tenantId: sampleTenantId },
+      
+      // PROPERTY DEVELOPMENT
+      { category: "property_development", name: "Feasibility Study", description: "Property feasibility and viability study", tenantId: sampleTenantId },
+      { category: "property_development", name: "Architectural Design", description: "Architectural design and planning", tenantId: sampleTenantId },
+      { category: "property_development", name: "Structural Engineering", description: "Structural engineering services", tenantId: sampleTenantId },
+      { category: "property_development", name: "MEP Design", description: "Mechanical, Electrical, and Plumbing design", tenantId: sampleTenantId },
+      { category: "property_development", name: "Interior Design", description: "Interior design and fit-out", tenantId: sampleTenantId },
+      
+      // INFRASTRUCTURE
+      { category: "infrastructure", name: "Road Construction", description: "Internal road network construction", tenantId: sampleTenantId },
+      { category: "infrastructure", name: "Drainage System", description: "Storm water drainage infrastructure", tenantId: sampleTenantId },
+      { category: "infrastructure", name: "Street Lighting", description: "Street lighting installation", tenantId: sampleTenantId },
+      { category: "infrastructure", name: "Sidewalks & Pathways", description: "Pedestrian walkways and sidewalks", tenantId: sampleTenantId },
+      { category: "infrastructure", name: "Parking Facilities", description: "Parking lot and garage construction", tenantId: sampleTenantId },
+      
+      // MARKETING
+      { category: "marketing", name: "Marketing & Sales", description: "Marketing and sales activities", tenantId: sampleTenantId },
+      { category: "marketing", name: "Branding & Design", description: "Brand identity and marketing materials", tenantId: sampleTenantId },
+      { category: "marketing", name: "Digital Marketing", description: "Online and digital marketing campaigns", tenantId: sampleTenantId },
+      { category: "marketing", name: "Signage", description: "Property signage and wayfinding", tenantId: sampleTenantId },
+      { category: "marketing", name: "Show Unit Setup", description: "Model unit setup and staging", tenantId: sampleTenantId },
+      
+      // OPERATIONS
+      { category: "operations", name: "Project Management", description: "Overall project management and coordination", tenantId: sampleTenantId },
+      { category: "operations", name: "Quality Control", description: "Quality assurance and control", tenantId: sampleTenantId },
+      { category: "operations", name: "Safety & Security", description: "Site safety and security measures", tenantId: sampleTenantId },
+      { category: "operations", name: "Insurance", description: "Project insurance and coverage", tenantId: sampleTenantId },
+      
+      // LEGAL & DOCUMENTATION
+      { category: "legal_documentation", name: "Legal & Documentation", description: "Legal services and documentation", tenantId: sampleTenantId },
+      { category: "legal_documentation", name: "Permits & Approvals", description: "Government permits and approvals", tenantId: sampleTenantId },
+      { category: "legal_documentation", name: "Title Registration", description: "Property title registration", tenantId: sampleTenantId },
+      { category: "legal_documentation", name: "Contract Preparation", description: "Legal contract drafting and review", tenantId: sampleTenantId },
+      { category: "legal_documentation", name: "Due Diligence", description: "Legal due diligence services", tenantId: sampleTenantId },
+      
+      // PROPERTY MANAGEMENT
+      { category: "property_management", name: "Facility Management", description: "Property facility management services", tenantId: sampleTenantId },
+      { category: "property_management", name: "Maintenance Services", description: "Property maintenance and repairs", tenantId: sampleTenantId },
+      { category: "property_management", name: "Tenant Relations", description: "Tenant management and relations", tenantId: sampleTenantId },
+      { category: "property_management", name: "Estate Administration", description: "Estate administration and oversight", tenantId: sampleTenantId },
+      
+      // LAND PURCHASE
+      { category: "land_purchase", name: "Land Acquisition", description: "Land purchase and acquisition costs", tenantId: sampleTenantId },
+      { category: "land_purchase", name: "Survey & Valuation", description: "Land survey and property valuation", tenantId: sampleTenantId },
+      { category: "land_purchase", name: "Land Documentation", description: "Land title and deed documentation", tenantId: sampleTenantId },
+      { category: "land_purchase", name: "Stamp Duty & Fees", description: "Government stamp duty and registration fees", tenantId: sampleTenantId },
+      
+
       // FOUNDATION - Core Submodules
       { category: "foundation", name: "Excavation", description: "Foundation excavation works", tenantId: sampleTenantId },
       { category: "foundation", name: "Filling", description: "Foundation filling and compaction", tenantId: sampleTenantId },
@@ -304,6 +364,62 @@ async function seedConstructionData() {
 
     // Comprehensive materials data from BOQ
     const materialsData = [
+      // UTILITIES & INFRASTRUCTURE MATERIALS
+      { name: "Water Meter", unit: "unit", currentUnitPrice: "45000.00", supplier: "Utility Providers", tenantId: sampleTenantId },
+      { name: "Electricity Meter 3-Phase", unit: "unit", currentUnitPrice: "85000.00", supplier: "Utility Providers", tenantId: sampleTenantId },
+      { name: "Gas Pipes & Fittings", unit: "set", currentUnitPrice: "125000.00", supplier: "Gas Suppliers", tenantId: sampleTenantId },
+      { name: "Fiber Optic Cable", unit: "m", currentUnitPrice: "2500.00", supplier: "Telecom Suppliers", tenantId: sampleTenantId },
+      { name: "Street Lighting", unit: "unit", currentUnitPrice: "185000.00", supplier: "Lighting Solutions", tenantId: sampleTenantId },
+      { name: "Drainage Channels", unit: "m", currentUnitPrice: "12500.00", supplier: "Infrastructure Ltd", tenantId: sampleTenantId },
+      { name: "Road Asphalt", unit: "m²", currentUnitPrice: "8500.00", supplier: "Road Contractors", tenantId: sampleTenantId },
+      { name: "Concrete Paving Blocks", unit: "m²", currentUnitPrice: "6500.00", supplier: "Block Industry", tenantId: sampleTenantId },
+      
+      // MARKETING & SIGNAGE MATERIALS
+      { name: "Marketing Brochures", unit: "pack", currentUnitPrice: "25000.00", supplier: "Print Media Co", tenantId: sampleTenantId },
+      { name: "Signage Boards", unit: "piece", currentUnitPrice: "45000.00", supplier: "SignCraft Nigeria", tenantId: sampleTenantId },
+      { name: "Banner Stands", unit: "unit", currentUnitPrice: "35000.00", supplier: "Display Solutions", tenantId: sampleTenantId },
+      { name: "LED Display Boards", unit: "unit", currentUnitPrice: "850000.00", supplier: "Digital Displays", tenantId: sampleTenantId },
+      { name: "Site Hoarding", unit: "m²", currentUnitPrice: "15000.00", supplier: "Construction Signs", tenantId: sampleTenantId },
+      { name: "Directional Signs", unit: "unit", currentUnitPrice: "28000.00", supplier: "SignCraft Nigeria", tenantId: sampleTenantId },
+      
+      // EXTERNAL WORKS & SITE MATERIALS
+      { name: "Site Fencing", unit: "meter", currentUnitPrice: "18500.00", supplier: "Fencing Solutions", tenantId: sampleTenantId },
+      { name: "Access Gates", unit: "unit", currentUnitPrice: "650000.00", supplier: "Metal Fabricators", tenantId: sampleTenantId },
+      { name: "Automated Sliding Gate", unit: "unit", currentUnitPrice: "1250000.00", supplier: "Gate Automation", tenantId: sampleTenantId },
+      { name: "CCTV Cameras", unit: "unit", currentUnitPrice: "185000.00", supplier: "Security Systems", tenantId: sampleTenantId },
+      { name: "Guard House Cabin", unit: "unit", currentUnitPrice: "950000.00", supplier: "Prefab Structures", tenantId: sampleTenantId },
+      { name: "Speed Bumps", unit: "unit", currentUnitPrice: "45000.00", supplier: "Road Safety Co", tenantId: sampleTenantId },
+      { name: "Parking Bollards", unit: "unit", currentUnitPrice: "28000.00", supplier: "Traffic Equipment", tenantId: sampleTenantId },
+      
+      // LANDSCAPING MATERIALS
+      { name: "Topsoil", unit: "m³", currentUnitPrice: "8500.00", supplier: "Landscaping Co", tenantId: sampleTenantId },
+      { name: "Grass Lawn Turf", unit: "m²", currentUnitPrice: "3500.00", supplier: "Landscaping Co", tenantId: sampleTenantId },
+      { name: "Ornamental Plants", unit: "unit", currentUnitPrice: "5000.00", supplier: "Garden Center", tenantId: sampleTenantId },
+      { name: "Palm Trees", unit: "unit", currentUnitPrice: "85000.00", supplier: "Garden Center", tenantId: sampleTenantId },
+      { name: "Irrigation System", unit: "set", currentUnitPrice: "450000.00", supplier: "Irrigation Systems", tenantId: sampleTenantId },
+      { name: "Garden Furniture", unit: "set", currentUnitPrice: "250000.00", supplier: "Outdoor Furniture", tenantId: sampleTenantId },
+      
+      // PROFESSIONAL SERVICES MATERIALS
+      { name: "Architectural Drawings", unit: "set", currentUnitPrice: "2500000.00", supplier: "Architects Inc", tenantId: sampleTenantId },
+      { name: "Structural Drawings", unit: "set", currentUnitPrice: "1850000.00", supplier: "Engineers Ltd", tenantId: sampleTenantId },
+      { name: "Surveying Services", unit: "sum", currentUnitPrice: "450000.00", supplier: "Survey Associates", tenantId: sampleTenantId },
+      { name: "Soil Investigation Report", unit: "report", currentUnitPrice: "850000.00", supplier: "Geotechnical Lab", tenantId: sampleTenantId },
+      { name: "Environmental Impact Assessment", unit: "report", currentUnitPrice: "1500000.00", supplier: "Environmental Consultants", tenantId: sampleTenantId },
+      
+      // LEGAL & DOCUMENTATION MATERIALS
+      { name: "Legal Fees", unit: "sum", currentUnitPrice: "500000.00", supplier: "Law Firm", tenantId: sampleTenantId },
+      { name: "Building Permit", unit: "permit", currentUnitPrice: "750000.00", supplier: "Government Authority", tenantId: sampleTenantId },
+      { name: "Survey Plan", unit: "document", currentUnitPrice: "250000.00", supplier: "Licensed Surveyor", tenantId: sampleTenantId },
+      { name: "Certificate of Occupancy", unit: "document", currentUnitPrice: "1250000.00", supplier: "Land Registry", tenantId: sampleTenantId },
+      { name: "Title Documents", unit: "set", currentUnitPrice: "350000.00", supplier: "Land Registry", tenantId: sampleTenantId },
+      
+      // EQUIPMENT RENTAL & MACHINERY
+      { name: "Excavator Rental", unit: "day", currentUnitPrice: "185000.00", supplier: "Equipment Hire", tenantId: sampleTenantId },
+      { name: "Concrete Mixer", unit: "day", currentUnitPrice: "45000.00", supplier: "Equipment Hire", tenantId: sampleTenantId },
+      { name: "Scaffolding", unit: "m²/month", currentUnitPrice: "2500.00", supplier: "Scaffolding Co", tenantId: sampleTenantId },
+      { name: "Generator 20KVA", unit: "day", currentUnitPrice: "35000.00", supplier: "Power Solutions", tenantId: sampleTenantId },
+      { name: "Water Tanker", unit: "trip", currentUnitPrice: "35000.00", supplier: "Water Services", tenantId: sampleTenantId },
+      
       // CONCRETE & AGGREGATES
       { name: "Cement", unit: "bag", currentUnitPrice: "6500.00", supplier: "Dangote Cement", tenantId: sampleTenantId },
       { name: "Sharp Sand", unit: "m³", currentUnitPrice: "18000.00", supplier: "Quarry Supplies", tenantId: sampleTenantId },

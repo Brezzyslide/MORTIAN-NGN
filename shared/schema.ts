@@ -101,14 +101,19 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Line item categories enum - Extended for construction
+// Line item categories enum - Extended for construction and property development
 export const lineItemCategoryEnum = pgEnum("line_item_category", [
+  // Property Development & Business Operations
+  "utilities_setup",
   "development_resources",
+  "property_development",
   "design_tools", 
   "testing_qa",
   "infrastructure",
   "marketing",
   "operations",
+  "legal_documentation",
+  "property_management",
   "miscellaneous",
   // Construction categories - Existing database structure
   "land_purchase",
